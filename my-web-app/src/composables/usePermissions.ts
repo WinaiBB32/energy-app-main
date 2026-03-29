@@ -1,0 +1,37 @@
+import { computed } from 'vue'
+import { useAuthStore } from '@/stores/auth'
+
+/** คีย์สั้นในโค้ด (saraban, ipphone, …) → รหัสใน Firestore / UserManagement (system5, …) */
+const MODULE_TO_SYSTEM_ID: Record<string, string> = {
+  electricity: 'system1',
+  water: 'system2',
+  fuel: 'system3',
+  telephone: 'system4',
+  saraban: 'system5',
+  ipphone: 'system6',
+  postal: 'system7',
+  meeting: 'system8',
+}
+
+export function usePermissions() {
+  const authStore = useAuthStore()
+  const currentUserRole = computed(() => authStore.userProfile?.role)
+  const adminSystems = computed(() => authStore.userProfile?.adminSystems ?? [])
+
+  const isSuperAdmin = computed(() => currentUserRole.value === 'superadmin')
+
+  function isSystemAdmin(system: string): boolean {
+    if (isSuperAdmin.value) return true
+    if (currentUserRole.value === 'admin') return true
+    const systemId = MODULE_TO_SYSTEM_ID[system] ?? system
+    const sys = adminSystems.value
+    return sys.includes(systemId) || sys.includes(system)
+  }
+
+  return {
+    isSuperAdmin,
+    isSystemAdmin,
+    currentUserRole,
+    adminSystems,
+  }
+}

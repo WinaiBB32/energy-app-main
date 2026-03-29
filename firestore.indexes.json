@@ -1,0 +1,71 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "fuel_records",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "departmentId", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "telephone_records",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "departmentId", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "saraban_records",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "departmentId", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "water_records",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "departmentId", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "energy_records",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "type", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "energy_records",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "departmentId", "order": "ASCENDING" },
+        { "fieldPath": "type", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "postal_records",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "departmentId", "order": "ASCENDING" },
+        { "fieldPath": "recordMonth", "order": "DESCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "meeting_records",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "departmentId", "order": "ASCENDING" },
+        { "fieldPath": "recordMonthTs", "order": "DESCENDING" }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}

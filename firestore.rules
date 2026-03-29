@@ -1,0 +1,242 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ─── Helper Functions ────────────────────────────────────────────────────
+
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function getUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() && getUserData().role in ['admin', 'superadmin'];
+    }
+
+    function isSuperAdmin() {
+      return isAuthenticated() && getUserData().role == 'superadmin';
+    }
+
+    function hasSystemAccess(system) {
+      let u = getUserData();
+      return isAuthenticated()
+        && u.status == 'active'
+        && (u.role in ['admin', 'superadmin']
+            || system in u.accessibleSystems
+            || ('adminSystems' in u && system in u.adminSystems));
+    }
+
+    // ─── Users ───────────────────────────────────────────────────────────────
+    // อ่าน: ทุก authenticated user (admin view / user mapping ต้องการ)
+    // อัปเดตตัวเอง: ได้ แต่ห้ามแก้ role / status / accessibleSystems
+    // อัปเดตคนอื่น / สร้าง / ลบ: admin/superadmin เท่านั้น
+    match /users/{userId} {
+      allow read: if isAuthenticated();
+
+      allow update: if isAuthenticated()
+        && request.auth.uid == userId
+        && !('role'              in request.resource.data.diff(resource.data).affectedKeys())
+        && !('status'            in request.resource.data.diff(resource.data).affectedKeys())
+        && !('accessibleSystems' in request.resource.data.diff(resource.data).affectedKeys());
+
+      // user ใหม่สร้าง profile ตัวเองได้ แต่บังคับ role='user' และ status='pending' เท่านั้น
+      allow create: if isAuthenticated()
+        && request.auth.uid == userId
+        && request.resource.data.role == 'user'
+        && request.resource.data.status == 'pending';
+
+      // admin เขียนได้ แต่ห้ามยกระดับ role เป็น superadmin
+      allow create, delete: if isAdmin();
+      allow update: if isAdmin()
+        && !(request.resource.data.role == 'superadmin' && getUserData().role != 'superadmin');
+    }
+
+    // ─── Audit Logs ──────────────────────────────────────────────────────────
+    // สร้าง: authenticated user ทุกคน | อ่าน: admin/superadmin เท่านั้น
+    // ห้ามแก้ไข/ลบ: immutable
+    match /audit_logs/{logId} {
+      allow read:             if isAdmin();
+      allow create:           if isAuthenticated();
+      allow update, delete:   if false;
+    }
+
+    // ─── Reference Data (admin write, authenticated read) ────────────────────
+    match /buildings/{docId} {
+      allow read:  if true; // อนุญาตให้อ่านสาธารณะเพื่อแสดงผลใน Dashboard iframe
+      allow write: if isAdmin();
+    }
+
+    match /departments/{docId} {
+      allow read:  if isAuthenticated();
+      allow write: if isAdmin();
+    }
+
+    match /fuel_types/{docId} {
+      allow read:  if isAuthenticated();
+      allow write: if isAdmin();
+    }
+
+    // ─── System 1: ไฟฟ้า ─────────────────────────────────────────────────────
+    match /energy_records/{docId} {
+      allow read: if true;
+      allow write: if hasSystemAccess('system1');
+    }
+
+    // ─── System 2: น้ำประปา ──────────────────────────────────────────────────
+    // บังคับ: totalAmount ต้องเท่ากับผลรวมของค่าบริการทุกรายการ
+    match /water_records/{docId} {
+      allow read: if true;
+      allow create: if hasSystemAccess('system2')
+        && request.resource.data.totalAmount ==
+           (request.resource.data.rawWaterCharge +
+            request.resource.data.waterAmount +
+            request.resource.data.monthlyServiceFee +
+            request.resource.data.vatAmount);
+      allow update: if hasSystemAccess('system2')
+        && request.resource.data.totalAmount ==
+           (request.resource.data.rawWaterCharge +
+            request.resource.data.waterAmount +
+            request.resource.data.monthlyServiceFee +
+            request.resource.data.vatAmount);
+      allow delete: if hasSystemAccess('system2');
+    }
+
+    // ─── System 3: น้ำมัน ────────────────────────────────────────────────────
+    match /fuel_records/{docId} {
+      allow read: if true;
+      allow write: if hasSystemAccess('system3');
+    }
+
+    match /fuel_receipts/{docId} {
+      allow read: if true;
+      allow write: if hasSystemAccess('system3');
+    }
+
+    // ─── System 4: ค่าโทรศัพท์ ───────────────────────────────────────────────
+    // บังคับ: vatAmount ต้องเท่ากับ 7% ของ subTotal และ totalAmount ต้องถูกต้อง
+    match /telephone_records/{docId} {
+      allow read: if true;
+      allow create: if hasSystemAccess('system4')
+        && request.resource.data.vatAmount ==
+           math.round((request.resource.data.adslCost +
+                        request.resource.data.sipTrunkCost +
+                        request.resource.data.otherCost) * 7) / 100
+        && request.resource.data.totalAmount ==
+           (request.resource.data.adslCost +
+            request.resource.data.sipTrunkCost +
+            request.resource.data.otherCost +
+            request.resource.data.vatAmount);
+      allow update: if hasSystemAccess('system4')
+        && request.resource.data.vatAmount ==
+           math.round((request.resource.data.adslCost +
+                        request.resource.data.sipTrunkCost +
+                        request.resource.data.otherCost) * 7) / 100
+        && request.resource.data.totalAmount ==
+           (request.resource.data.adslCost +
+            request.resource.data.sipTrunkCost +
+            request.resource.data.otherCost +
+            request.resource.data.vatAmount);
+      allow delete: if hasSystemAccess('system4');
+    }
+
+    // ─── System 5: สารบรรณ ───────────────────────────────────────────────────
+    match /saraban_records/{docId} {
+      allow read: if true;
+      allow write: if hasSystemAccess('system5');
+    }
+
+    // เล่มทะเบียน: อ่านได้ทุกคนที่เข้าระบบ, เขียน/ลบได้เฉพาะ superadmin
+    match /saraban_books/{docId} {
+      allow read: if isAuthenticated();
+      allow write: if isSuperAdmin();
+    }
+
+    // ─── System 6: IP-Phone Directory ────────────────────────────────────────
+    // อ่าน: authenticated ทุกคน (PortalView / UserSupportView ใช้)
+    // เขียน: system6 หรือ admin
+    match /ipphone_directory/{docId} {
+      allow read:  if isAuthenticated();
+      allow write: if hasSystemAccess('system6');
+
+      // messages subcollection — immutable หลังสร้าง
+      match /messages/{msgId} {
+        allow read:           if isAuthenticated();
+        allow create:         if isAuthenticated();
+        allow update, delete: if false;
+      }
+    }
+
+    match /ipphone_monthly_stats/{docId} {
+      allow read:  if true;
+      allow write: if isSuperAdmin();
+    }
+
+    match /ipphone_call_logs/{docId} {
+      allow read:  if true;
+      allow write: if isSuperAdmin();
+    }
+
+    // ─── System 6: Service Requests ──────────────────────────────────────────
+    // อ่าน: เจ้าของ request หรือ admin
+    // สร้าง: authenticated ทุกคน | อัปเดต: admin | ลบ: ห้าม
+    match /ipphone_service_requests/{docId} {
+      allow read: if isAuthenticated()
+        && (resource.data.requesterEmail == request.auth.token.email || isAdmin());
+      allow create:         if isAuthenticated();
+      allow update:         if isAdmin();
+      allow delete:         if false;
+
+      match /messages/{msgId} {
+        allow read:           if isAuthenticated();
+        allow create:         if isAuthenticated();
+        allow update, delete: if false;
+      }
+    }
+
+    // ─── Monthly Summaries ────────────────────────────────────────────────────
+    // อ่าน: authenticated ทุกคน (Dashboard ใช้)
+    // เขียน: authenticated ทุกคน (Client ทำ batch write พร้อมกับบันทึกบิล)
+    // ป้องกันการแก้ไขโดยตรง: ใช้ได้แค่ set (merge:true) ไม่ใช่ delete
+    match /monthly_summaries/{monthId} {
+      allow read:   if isAuthenticated();
+      allow create, update: if isAuthenticated();
+      allow delete: if false;
+    }
+
+    // ─── System 7: ไปรษณีย์ ─────────────────────────────────────────────────────
+    match /postal_records/{docId} {
+      allow read: if true;
+      // เขียนได้ถ้ามีสิทธิ์ system7 และ ผลรวมคณิตศาสตร์ต้องถูกต้องเท่านั้น (กันการแฮกตัวเลข)
+      allow write: if hasSystemAccess('system7')
+        && request.resource.data.totalMail == (
+          request.resource.data.normalMail + 
+          request.resource.data.registeredMail + 
+          request.resource.data.emsMail
+        );
+    }
+
+    // ─── Aggregation Summaries (ยอดรวมรายเดือนของทุกระบบ) ────────────────────────
+    match /monthly_summaries/{docId} {
+      allow read: if true;
+      // ให้ผู้ใช้ที่ล็อกอินและสถานะ Active สามารถให้ระบบนำยอดมาบวกสะสมได้ (ผ่านคำสั่ง increment)
+      allow write: if isAuthenticated() && getUserData().status == 'active';
+    }
+    
+    // ─── System 8: สถิติห้องประชุมส่วนกลาง ─────────────────────────────────────────
+    // Superadmin จัดการรายชื่อห้อง
+    match /meeting_rooms/{docId} {
+      allow read: if isAuthenticated();
+      allow write: if isSuperAdmin();
+    }
+
+    // Admin ขึ้นไป บันทึกสถิติได้
+    match /meeting_records/{docId} {
+      allow read: if true;
+      allow write: if hasSystemAccess('system8');
+    }
+  }
+}
+
