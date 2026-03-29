@@ -59,7 +59,8 @@ const fetchFuelTypes = async () => {
   isLoading.value = true
   try {
     const res = await api.get('/FuelType')
-    fuelTypes.value = res.data
+    // ป้องกัน error is not iterable โดยเช็คว่าเป็น Array หรือไม่ก่อนนำไปใช้งาน
+    fuelTypes.value = Array.isArray(res.data) ? res.data : (res.data?.data || [])
   } catch (err) {
     toast.fromError(err, 'ไม่สามารถโหลดข้อมูลประเภทน้ำมันได้')
   } finally {
@@ -187,21 +188,13 @@ const getSeverityLabel = (val: string) => severityOptions.find((o) => o.value ==
           เพิ่ม แก้ไข ลบ ประเภทน้ำมันที่ใช้ในระบบบันทึกน้ำมันเชื้อเพลิง
         </p>
       </div>
-      <Button
-        label="เพิ่มประเภทน้ำมัน"
-        icon="pi pi-plus"
-        severity="danger"
-        @click="openNewDialog"
-      />
+      <Button label="เพิ่มประเภทน้ำมัน" icon="pi pi-plus" severity="danger" @click="openNewDialog" />
     </div>
 
     <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
-      <div
-        class="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 flex items-center gap-4"
-      >
+      <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 flex items-center gap-4">
         <div
-          class="w-12 h-12 rounded-xl bg-linear-to-br from-red-400 to-rose-500 flex items-center justify-center text-white shadow-sm"
-        >
+          class="w-12 h-12 rounded-xl bg-linear-to-br from-red-400 to-rose-500 flex items-center justify-center text-white shadow-sm">
           <i class="pi pi-gauge text-xl"></i>
         </div>
         <div>
@@ -213,15 +206,8 @@ const getSeverityLabel = (val: string) => severityOptions.find((o) => o.value ==
 
     <Card class="shadow-sm border-none overflow-hidden">
       <template #content>
-        <DataTable
-          :value="fuelTypes"
-          :loading="isLoading"
-          paginator
-          :rows="10"
-          stripedRows
-          responsiveLayout="scroll"
-          emptyMessage="ยังไม่มีประเภทน้ำมัน — กดปุ่ม 'เพิ่มประเภทน้ำมัน' เพื่อเริ่มต้น"
-        >
+        <DataTable :value="fuelTypes" :loading="isLoading" paginator :rows="10" stripedRows responsiveLayout="scroll"
+          emptyMessage="ยังไม่มีประเภทน้ำมัน — กดปุ่ม 'เพิ่มประเภทน้ำมัน' เพื่อเริ่มต้น">
           <Column header="#" style="width: 3.5rem">
             <template #body="sp">
               <span class="text-gray-400 text-sm font-mono">{{ sp.index + 1 }}</span>
@@ -231,12 +217,8 @@ const getSeverityLabel = (val: string) => severityOptions.find((o) => o.value ==
           <Column header="ชื่อประเภทน้ำมัน">
             <template #body="sp">
               <div class="flex items-center gap-3">
-                <Tag
-                  :value="sp.data.name"
-                  :severity="sp.data.severity || 'secondary'"
-                  rounded
-                  class="text-sm font-bold"
-                />
+                <Tag :value="sp.data.name" :severity="sp.data.severity || 'secondary'" rounded
+                  class="text-sm font-bold" />
               </div>
             </template>
           </Column>
@@ -250,20 +232,9 @@ const getSeverityLabel = (val: string) => severityOptions.find((o) => o.value ==
           <Column header="จัดการ" style="width: 8rem">
             <template #body="sp">
               <div class="flex gap-1">
-                <Button
-                  icon="pi pi-pencil"
-                  severity="secondary"
-                  text
-                  rounded
-                  @click="openEditDialog(sp.data)"
-                />
-                <Button
-                  icon="pi pi-trash"
-                  severity="danger"
-                  text
-                  rounded
-                  @click="deleteFuelType(sp.data.id, sp.data.name)"
-                />
+                <Button icon="pi pi-pencil" severity="secondary" text rounded @click="openEditDialog(sp.data)" />
+                <Button icon="pi pi-trash" severity="danger" text rounded
+                  @click="deleteFuelType(sp.data.id, sp.data.name)" />
               </div>
             </template>
           </Column>
@@ -271,13 +242,8 @@ const getSeverityLabel = (val: string) => severityOptions.find((o) => o.value ==
       </template>
     </Card>
 
-    <Dialog
-      v-model:visible="dialogVisible"
-      modal
-      :header="isEditMode ? 'แก้ไขประเภทน้ำมัน' : 'เพิ่มประเภทน้ำมันใหม่'"
-      :style="{ width: '440px' }"
-      :draggable="false"
-    >
+    <Dialog v-model:visible="dialogVisible" modal :header="isEditMode ? 'แก้ไขประเภทน้ำมัน' : 'เพิ่มประเภทน้ำมันใหม่'"
+      :style="{ width: '440px' }" :draggable="false">
       <Message v-if="successMessage" severity="success" :closable="false" class="mb-4">{{
         successMessage
       }}</Message>
@@ -290,56 +256,35 @@ const getSeverityLabel = (val: string) => severityOptions.find((o) => o.value ==
           <label class="font-semibold text-sm text-gray-700">
             ชื่อประเภทน้ำมัน <span class="text-red-500">*</span>
           </label>
-          <InputText
-            v-model="currentFuelType.name"
-            placeholder="เช่น ดีเซล B7, แก๊สโซฮอล์ 91"
-            autofocus
-            @keyup.enter="saveFuelType"
-            class="w-full"
-          />
+          <InputText v-model="currentFuelType.name" placeholder="เช่น ดีเซล B7, แก๊สโซฮอล์ 91" autofocus
+            @keyup.enter="saveFuelType" class="w-full" />
         </div>
 
         <div class="flex flex-col gap-2">
-          <label class="font-semibold text-sm text-gray-700"
-            >สีแสดงผล (Tag) <span class="text-red-500">*</span></label
-          >
+          <label class="font-semibold text-sm text-gray-700">สีแสดงผล (Tag) <span class="text-red-500">*</span></label>
           <div class="flex flex-wrap gap-2">
-            <button
-              v-for="opt in severityOptions"
-              :key="opt.value"
-              type="button"
-              @click="currentFuelType.severity = opt.value"
-              :class="[
+            <button v-for="opt in severityOptions" :key="opt.value" type="button"
+              @click="currentFuelType.severity = opt.value" :class="[
                 'px-3 py-2 rounded-lg border text-sm font-semibold transition-all',
                 opt.color,
                 currentFuelType.severity === opt.value
                   ? 'ring-2 ring-offset-1 ring-gray-400 shadow-sm scale-105'
                   : 'opacity-60 hover:opacity-100',
-              ]"
-            >
+              ]">
               {{ opt.label }}
             </button>
           </div>
           <div class="mt-1 flex items-center gap-2 text-sm text-gray-500">
             ตัวอย่าง:
-            <Tag
-              :value="currentFuelType.name || 'ตัวอย่าง'"
-              :severity="currentFuelType.severity"
-              rounded
-            />
+            <Tag :value="currentFuelType.name || 'ตัวอย่าง'" :severity="currentFuelType.severity" rounded />
           </div>
         </div>
       </div>
 
       <template #footer>
         <Button label="ยกเลิก" severity="secondary" text @click="dialogVisible = false" />
-        <Button
-          :label="isEditMode ? 'บันทึกการแก้ไข' : 'เพิ่มประเภทน้ำมัน'"
-          icon="pi pi-check"
-          severity="danger"
-          :loading="isSaving"
-          @click="saveFuelType"
-        />
+        <Button :label="isEditMode ? 'บันทึกการแก้ไข' : 'เพิ่มประเภทน้ำมัน'" icon="pi pi-check" severity="danger"
+          :loading="isSaving" @click="saveFuelType" />
       </template>
     </Dialog>
   </div>

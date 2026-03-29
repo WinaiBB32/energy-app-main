@@ -44,7 +44,8 @@ const fetchBuildings = async () => {
   isLoading.value = true
   try {
     const res = await api.get('/Building')
-    buildings.value = res.data
+    // ป้องกัน error is not iterable โดยเช็คว่าเป็น Array หรือไม่ก่อนนำไปใช้งาน
+    buildings.value = Array.isArray(res.data) ? res.data : (res.data?.data || [])
   } catch (err) {
     toast.fromError(err, 'ไม่สามารถโหลดข้อมูลอาคารได้')
   } finally {
@@ -178,12 +179,9 @@ const deleteBuilding = async (id: string, name: string) => {
     </div>
 
     <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
-      <div
-        class="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 flex items-center gap-4"
-      >
+      <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 flex items-center gap-4">
         <div
-          class="w-12 h-12 rounded-xl bg-linear-to-br from-yellow-400 to-orange-500 flex items-center justify-center text-white shadow-sm"
-        >
+          class="w-12 h-12 rounded-xl bg-linear-to-br from-yellow-400 to-orange-500 flex items-center justify-center text-white shadow-sm">
           <i class="pi pi-building text-xl"></i>
         </div>
         <div>
@@ -195,15 +193,8 @@ const deleteBuilding = async (id: string, name: string) => {
 
     <Card class="shadow-sm border-none overflow-hidden">
       <template #content>
-        <DataTable
-          :value="buildings"
-          :loading="isLoading"
-          paginator
-          :rows="10"
-          stripedRows
-          responsiveLayout="scroll"
-          emptyMessage="ยังไม่มีข้อมูลอาคาร — กดปุ่ม 'เพิ่มอาคาร / มิเตอร์' เพื่อเริ่มต้น"
-        >
+        <DataTable :value="buildings" :loading="isLoading" paginator :rows="10" stripedRows responsiveLayout="scroll"
+          emptyMessage="ยังไม่มีข้อมูลอาคาร — กดปุ่ม 'เพิ่มอาคาร / มิเตอร์' เพื่อเริ่มต้น">
           <Column header="#" style="width: 3.5rem">
             <template #body="sp">
               <span class="text-gray-400 text-sm font-mono">{{ sp.index + 1 }}</span>
@@ -214,8 +205,7 @@ const deleteBuilding = async (id: string, name: string) => {
             <template #body="sp">
               <div class="flex items-center gap-3">
                 <div
-                  class="w-9 h-9 rounded-lg bg-yellow-50 border border-yellow-100 flex items-center justify-center shrink-0"
-                >
+                  class="w-9 h-9 rounded-lg bg-yellow-50 border border-yellow-100 flex items-center justify-center shrink-0">
                   <i class="pi pi-building text-yellow-500"></i>
                 </div>
                 <div>
@@ -240,20 +230,9 @@ const deleteBuilding = async (id: string, name: string) => {
           <Column header="จัดการ" style="width: 8rem">
             <template #body="sp">
               <div class="flex gap-1">
-                <Button
-                  icon="pi pi-pencil"
-                  severity="secondary"
-                  text
-                  rounded
-                  @click="openEditDialog(sp.data)"
-                />
-                <Button
-                  icon="pi pi-trash"
-                  severity="danger"
-                  text
-                  rounded
-                  @click="deleteBuilding(sp.data.id, sp.data.name)"
-                />
+                <Button icon="pi pi-pencil" severity="secondary" text rounded @click="openEditDialog(sp.data)" />
+                <Button icon="pi pi-trash" severity="danger" text rounded
+                  @click="deleteBuilding(sp.data.id, sp.data.name)" />
               </div>
             </template>
           </Column>
@@ -261,13 +240,9 @@ const deleteBuilding = async (id: string, name: string) => {
       </template>
     </Card>
 
-    <Dialog
-      v-model:visible="dialogVisible"
-      modal
-      :header="isEditMode ? 'แก้ไขอาคาร / มิเตอร์' : 'เพิ่มอาคาร / มิเตอร์ใหม่'"
-      :style="{ width: '440px' }"
-      :draggable="false"
-    >
+    <Dialog v-model:visible="dialogVisible" modal
+      :header="isEditMode ? 'แก้ไขอาคาร / มิเตอร์' : 'เพิ่มอาคาร / มิเตอร์ใหม่'" :style="{ width: '440px' }"
+      :draggable="false">
       <Message v-if="successMessage" severity="success" :closable="false" class="mb-4">{{
         successMessage
       }}</Message>
@@ -280,33 +255,20 @@ const deleteBuilding = async (id: string, name: string) => {
           <label class="font-semibold text-sm text-gray-700">
             ชื่ออาคาร / จุดติดตั้ง <span class="text-red-500">*</span>
           </label>
-          <InputText
-            v-model="currentBuilding.name"
-            placeholder="เช่น อาคารสำนักงานใหญ่, โรงงานผลิต"
-            autofocus
-            @keyup.enter="saveBuilding"
-            class="w-full"
-          />
+          <InputText v-model="currentBuilding.name" placeholder="เช่น อาคารสำนักงานใหญ่, โรงงานผลิต" autofocus
+            @keyup.enter="saveBuilding" class="w-full" />
         </div>
         <div class="flex flex-col gap-2">
           <label class="font-semibold text-sm text-gray-700">คำอธิบายเพิ่มเติม</label>
-          <Textarea
-            v-model="currentBuilding.description"
-            placeholder="เช่น มิเตอร์หมายเลข 3-025, ชั้น 1-3 เท่านั้น"
-            rows="2"
-            class="w-full"
-          />
+          <Textarea v-model="currentBuilding.description" placeholder="เช่น มิเตอร์หมายเลข 3-025, ชั้น 1-3 เท่านั้น"
+            rows="2" class="w-full" />
         </div>
       </div>
 
       <template #footer>
         <Button label="ยกเลิก" severity="secondary" text @click="dialogVisible = false" />
-        <Button
-          :label="isEditMode ? 'บันทึกการแก้ไข' : 'เพิ่มอาคาร'"
-          icon="pi pi-check"
-          :loading="isSaving"
-          @click="saveBuilding"
-        />
+        <Button :label="isEditMode ? 'บันทึกการแก้ไข' : 'เพิ่มอาคาร'" icon="pi pi-check" :loading="isSaving"
+          @click="saveBuilding" />
       </template>
     </Dialog>
   </div>

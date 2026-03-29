@@ -3,6 +3,7 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useAuth } from '@/composables/useAuth'
+import api from '@/services/api'
 
 
 import { usePermissions } from '@/composables/usePermissions'
@@ -36,9 +37,8 @@ onMounted(async () => {
   const email = authStore.user?.email
   if (!email) return
   try {
-    // TODO: เรียก API .NET เพื่อดึงข้อมูลเบอร์โทรศัพท์ที่ผูกกับ user
-    // ตัวอย่าง: const response = await api.get('/ipphone/my-extensions')
-    // myLinkedExtensions.value = response.data
+    const response = await api.get('/ipphone/my-extensions')
+    myLinkedExtensions.value = Array.isArray(response.data) ? response.data : (response.data?.data || [])
   } catch (error) {
     console.error('Failed to load linked extensions:', error)
   }
@@ -243,8 +243,7 @@ const visibleAdminTools = computed(() =>
       <div class="shrink-0 border-t border-slate-700/50"
         :class="sidebarOpen || isMobile ? 'p-4' : 'py-3 flex justify-center'">
         <Button v-if="sidebarOpen || isMobile" label="ออกจากระบบ" icon="pi pi-sign-out" text
-          class="w-full text-slate-400! hover:text-red-400! hover:bg-red-500/10! justify-start"
-          @click="logout" />
+          class="w-full text-slate-400! hover:text-red-400! hover:bg-red-500/10! justify-start" @click="logout" />
         <button v-else @click="logout"
           class="p-2 rounded-lg text-slate-400 hover:text-red-400 hover:bg-red-500/10 transition-colors"
           v-tooltip.right="'ออกจากระบบ'">
