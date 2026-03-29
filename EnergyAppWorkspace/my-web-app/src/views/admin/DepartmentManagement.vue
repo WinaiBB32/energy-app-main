@@ -1,13 +1,10 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue'
-// Firebase Removed
-// Firebase Removed
+import { ref, onMounted } from 'vue'
 import { useAuthStore } from '@/stores/auth'
 import { logAudit } from '@/utils/auditLogger'
 import { useAppToast } from '@/composables/useAppToast'
-
-const authStore = useAuthStore()
-const toast = useAppToast()
+import api from '@/services/api' // <--- เปลี่ยนมาใช้ API ของเรา
+import axios from 'axios'
 
 import Card from 'primevue/card'
 import DataTable from 'primevue/datatable'
@@ -17,17 +14,18 @@ import Dialog from 'primevue/dialog'
 import InputText from 'primevue/inputtext'
 import Message from 'primevue/message'
 
+const authStore = useAuthStore()
+const toast = useAppToast()
+
 // 1. Interface
 interface Department {
     id: string
     name: string
-    createdAt?: Timestamp
 }
 
 // 2. State
 const departments = ref<Department[]>([])
 const isLoading = ref<boolean>(true)
-let unsubscribeSnapshot: () => void
 
 const dialogVisible = ref<boolean>(false)
 const isSaving = ref<boolean>(false)
@@ -36,27 +34,23 @@ const isEditMode = ref<boolean>(false)
 const successMessage = ref<string>('')
 const errorMessage = ref<string>('')
 
-const currentDept = ref<{ id: string; name: string }>({ id: '', name: '' })
+const currentDept = ref<Department>({ id: '', name: '' })
 
-// 3. ดึงข้อมูลแบบ Real-time
-onMounted(() => {
-    const q = query(collection(db, 'departments'), orderBy('createdAt', 'asc'))
-
-    unsubscribeSnapshot = onSnapshot(q, (snapshot) => {
-        const fetched: Department[] = []
-        snapshot.forEach((doc) => {
-            fetched.push({ id: doc.id, ...doc.data() } as Department)
-        })
-        departments.value = fetched
-        isLoading.value = false
-    }, (error: unknown) => {
+// 3. ดึงข้อมูลจาก .NET API
+const fetchDepartments = async () => {
+    isLoading.value = true
+    try {
+        const response = await api.get('/Department/all')
+        departments.value = response.data
+    } catch (error) {
         toast.fromError(error, 'ไม่สามารถโหลดข้อมูลหน่วยงานได้')
+    } finally {
         isLoading.value = false
-    })
-})
+    }
+}
 
-onUnmounted(() => {
-    if (unsubscribeSnapshot) unsubscribeSnapshot()
+onMounted(() => {
+    fetchDepartments()
 })
 
 // 4. ฟังก์ชันเปิดหน้าต่าง
@@ -76,7 +70,7 @@ const openEditDialog = (dept: Department) => {
     dialogVisible.value = true
 }
 
-// 5. บันทึกข้อมูล (สร้างใหม่ หรือ แก้ไข)
+// 5. บันทึกข้อมูล (สร้างใหม่ หรือ แก้ไข) ไปหา .NET
 const saveDepartment = async () => {
     if (!currentDept.value.name.trim()) {
         errorMessage.value = 'กรุณากรอกชื่อหน่วยงาน'
@@ -87,27 +81,35 @@ const saveDepartment = async () => {
         isSaving.value = true
         errorMessage.value = ''
 
-        const actor = { uid: authStore.user?.uid ?? '', displayName: authStore.userProfile?.displayName ?? authStore.user?.email ?? '', email: authStore.user?.email ?? '', role: authStore.userProfile?.role ?? 'user' }
+        const actor = {
+            uid: authStore.user?.id ?? '',
+            displayName: authStore.user?.firstName ?? authStore.user?.email ?? '',
+            email: authStore.user?.email ?? '',
+            role: authStore.user?.role ?? 'User'
+        }
+
         if (isEditMode.value) {
-            // โหมดแก้ไข
-            const deptRef = doc(db, 'departments', currentDept.value.id)
-            await updateDoc(deptRef, { name: currentDept.value.name })
+            // PUT: โหมดแก้ไข
+            await api.put(`/Department/${currentDept.value.id}`, { name: currentDept.value.name })
             logAudit(actor, 'UPDATE', 'DepartmentManagement', `แก้ไขหน่วยงาน: ${currentDept.value.name}`)
             successMessage.value = 'แก้ไขชื่อหน่วยงานสำเร็จ'
         } else {
-            // โหมดสร้างใหม่
-            await addDoc(collection(db, 'departments'), {
-                name: currentDept.value.name,
-                createdAt: serverTimestamp()
-            })
+            // POST: โหมดสร้างใหม่
+            await api.post('/Department', { name: currentDept.value.name })
             logAudit(actor, 'CREATE', 'DepartmentManagement', `เพิ่มหน่วยงาน: ${currentDept.value.name}`)
             successMessage.value = 'เพิ่มหน่วยงานใหม่สำเร็จ'
         }
 
+        // รีเฟรชตารางหลังเซฟเสร็จ
+        await fetchDepartments()
         setTimeout(() => { dialogVisible.value = false }, 1000)
 
     } catch (error: unknown) {
-        errorMessage.value = error instanceof Error ? `Error: ${error.message}` : 'เกิดข้อผิดพลาด'
+        if (axios.isAxiosError(error)) {
+            errorMessage.value = error.response?.data?.message || 'เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์'
+        } else {
+            errorMessage.value = 'เกิดข้อผิดพลาดที่ไม่ทราบสาเหตุ'
+        }
     } finally {
         isSaving.value = false
     }
@@ -117,14 +119,27 @@ const saveDepartment = async () => {
 const deleteDepartment = async (id: string, name: string) => {
     if (confirm(`คุณแน่ใจหรือไม่ว่าต้องการลบหน่วยงาน "${name}" ?\n(การกระทำนี้ไม่สามารถย้อนกลับได้)`)) {
         try {
-            await deleteDoc(doc(db, 'departments', id))
-            logAudit(
-              { uid: authStore.user?.uid ?? '', displayName: authStore.userProfile?.displayName ?? authStore.user?.email ?? '', email: authStore.user?.email ?? '', role: authStore.userProfile?.role ?? 'user' },
-              'DELETE', 'DepartmentManagement', `ลบหน่วยงาน: ${name}`,
-            )
-        } catch (error) {
-            toast.fromError(error, 'ไม่สามารถลบหน่วยงานได้')
-            alert("เกิดข้อผิดพลาดในการลบข้อมูล")
+            await api.delete(`/Department/${id}`)
+
+            const actor = {
+                uid: authStore.user?.id ?? '',
+                displayName: authStore.user?.firstName ?? authStore.user?.email ?? '',
+                email: authStore.user?.email ?? '',
+                role: authStore.user?.role ?? 'User'
+            }
+            logAudit(actor, 'DELETE', 'DepartmentManagement', `ลบหน่วยงาน: ${name}`)
+
+            // รีเฟรชตารางหลังลบ
+            await fetchDepartments()
+            toast.success('ลบหน่วยงานสำเร็จ')
+
+        } catch (error: unknown) {
+            if (axios.isAxiosError(error) && error.response?.status === 400) {
+                // แจ้งเตือนกรณีมี User อยู่ใน Department แล้วลบไม่ได้ (ดักจับจาก Backend)
+                toast.warn(error.response.data.message)
+            } else {
+                toast.fromError(error, 'ไม่สามารถลบหน่วยงานได้')
+            }
         }
     }
 }
@@ -148,7 +163,8 @@ const deleteDepartment = async (id: string, name: string) => {
 
                     <Column header="รหัสอ้างอิง (ID)" class="w-1/4">
                         <template #body="sp">
-                            <span class="text-xs text-gray-400 font-mono">{{ sp.data.id }}</span>
+                            <span class="text-xs text-gray-400 font-mono" :title="sp.data.id">{{ sp.data.id.substring(0,
+                                8) }}...</span>
                         </template>
                     </Column>
 

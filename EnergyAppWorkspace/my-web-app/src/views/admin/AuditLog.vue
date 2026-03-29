@@ -1,14 +1,6 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue'
-import {
-  collection,
-  query,
-  orderBy,
-  limit,
-  onSnapshot,
-  Timestamp,
-} from 'firebase/firestore'
-// Firebase Removed
+import { ref, computed, onMounted } from 'vue'
+import api from '@/services/api' // <--- ใช้ API ของเรา
 import type { AuditAction } from '@/utils/auditLogger'
 import { useAppToast } from '@/composables/useAppToast'
 
@@ -35,36 +27,33 @@ interface AuditLog {
   detail: string
   ipAddress: string
   browser: string
-  createdAt: Timestamp | null
+  createdAt: string | null // .NET จะส่งมาเป็น ISO String (ไม่ใช่ Timestamp ของ Firebase แล้ว)
 }
 
 // ─── State ────────────────────────────────────────────────────────────────────
 const toast = useAppToast()
 const logs = ref<AuditLog[]>([])
 const isLoading = ref(true)
-let unsubLogs: () => void
 
 const searchQuery = ref('')
 const selectedAction = ref<AuditAction | null>(null)
 const selectedDate = ref<Date | null>(null)
 
 // ─── Fetch ────────────────────────────────────────────────────────────────────
-onMounted(() => {
-  unsubLogs = onSnapshot(
-    query(collection(db, 'audit_logs'), orderBy('createdAt', 'desc'), limit(1000)),
-    (snap) => {
-      logs.value = snap.docs.map((d) => ({ id: d.id, ...d.data() } as AuditLog))
-      isLoading.value = false
-    },
-    (err) => {
-      toast.fromError(err, 'ไม่สามารถโหลดข้อมูล Audit Log ได้')
-      isLoading.value = false
-    },
-  )
-})
+const fetchLogs = async () => {
+  isLoading.value = true
+  try {
+    const response = await api.get('/Audit')
+    logs.value = response.data
+  } catch (err) {
+    toast.fromError(err, 'ไม่สามารถโหลดข้อมูล Audit Log ได้')
+  } finally {
+    isLoading.value = false
+  }
+}
 
-onUnmounted(() => {
-  if (unsubLogs) unsubLogs()
+onMounted(() => {
+  fetchLogs()
 })
 
 // ─── Filter ───────────────────────────────────────────────────────────────────
@@ -75,10 +64,10 @@ const filteredLogs = computed(() => {
     const q = searchQuery.value.toLowerCase()
     list = list.filter(
       (l) =>
-        l.displayName.toLowerCase().includes(q) ||
-        l.email.toLowerCase().includes(q) ||
-        l.ipAddress.includes(q) ||
-        l.detail.toLowerCase().includes(q),
+        (l.displayName || '').toLowerCase().includes(q) ||
+        (l.email || '').toLowerCase().includes(q) ||
+        (l.ipAddress || '').includes(q) ||
+        (l.detail || '').toLowerCase().includes(q),
     )
   }
   if (selectedAction.value) {
@@ -88,7 +77,7 @@ const filteredLogs = computed(() => {
     const d = selectedDate.value
     list = list.filter((l) => {
       if (!l.createdAt) return false
-      const logDate = l.createdAt.toDate()
+      const logDate = new Date(l.createdAt) // แปลง String เป็น Date
       return (
         logDate.getFullYear() === d.getFullYear() &&
         logDate.getMonth() === d.getMonth() &&
@@ -104,7 +93,7 @@ const todayLogs = computed(() => {
   const today = new Date()
   return logs.value.filter((l) => {
     if (!l.createdAt) return false
-    const d = l.createdAt.toDate()
+    const d = new Date(l.createdAt)
     return (
       d.getFullYear() === today.getFullYear() &&
       d.getMonth() === today.getMonth() &&
@@ -135,7 +124,7 @@ const actionOptions = [
 ]
 
 const actionSeverity = (action: AuditAction) => {
-  const map: Record<AuditAction, string> = {
+  const map: Record<string, string> = {
     LOGIN: 'success',
     LOGOUT: 'secondary',
     CREATE: 'info',
@@ -151,14 +140,14 @@ const actionSeverity = (action: AuditAction) => {
 }
 
 const roleSeverity = (role: string) => {
-  if (role === 'superadmin') return 'danger'
-  if (role === 'admin') return 'warn'
+  if (role === 'SuperAdmin') return 'danger'
+  if (role === 'Admin') return 'warn'
   return 'info'
 }
 
-const formatDateTime = (ts: Timestamp | null | undefined): string => {
-  if (!ts) return '-'
-  return ts.toDate().toLocaleString('th-TH', {
+const formatDateTime = (isoString: string | null | undefined): string => {
+  if (!isoString) return '-'
+  return new Date(isoString).toLocaleString('th-TH', {
     year: 'numeric',
     month: 'short',
     day: '2-digit',
@@ -177,17 +166,19 @@ const clearFilters = () => {
 
 <template>
   <div class="max-w-7xl mx-auto pb-10">
-    <!-- Header -->
-    <div class="mb-6">
-      <h2 class="text-3xl font-bold text-gray-900">
-        <i class="pi pi-shield text-indigo-600 mr-2"></i>Audit Log
-      </h2>
-      <p class="text-gray-400 mt-1">ตรวจสอบกิจกรรมของผู้ใช้งานทั้งหมดในระบบแบบ Real-time</p>
+    <div class="mb-6 flex justify-between items-end">
+      <div>
+        <h2 class="text-3xl font-bold text-gray-900">
+          <i class="pi pi-shield text-indigo-600 mr-2"></i>Audit Log
+        </h2>
+        <p class="text-gray-400 mt-1">ตรวจสอบกิจกรรมของผู้ใช้งานทั้งหมดในระบบ</p>
+      </div>
+      <Button icon="pi pi-refresh" label="รีเฟรชข้อมูล" severity="secondary" outlined size="small" @click="fetchLogs"
+        :loading="isLoading" />
     </div>
 
-    <!-- Stats -->
     <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-      <div class="bg-white rounded-2xl border border-gray-100 p-5 flex items-center gap-4">
+      <div class="bg-white rounded-2xl border border-gray-100 p-5 flex items-center gap-4 shadow-sm">
         <div class="w-12 h-12 bg-indigo-50 rounded-xl flex items-center justify-center">
           <i class="pi pi-list text-indigo-600 text-xl"></i>
         </div>
@@ -197,7 +188,7 @@ const clearFilters = () => {
         </div>
       </div>
 
-      <div class="bg-white rounded-2xl border border-gray-100 p-5 flex items-center gap-4">
+      <div class="bg-white rounded-2xl border border-gray-100 p-5 flex items-center gap-4 shadow-sm">
         <div class="w-12 h-12 bg-emerald-50 rounded-xl flex items-center justify-center">
           <i class="pi pi-users text-emerald-600 text-xl"></i>
         </div>
@@ -207,7 +198,7 @@ const clearFilters = () => {
         </div>
       </div>
 
-      <div class="bg-white rounded-2xl border border-gray-100 p-5 flex items-center gap-4">
+      <div class="bg-white rounded-2xl border border-gray-100 p-5 flex items-center gap-4 shadow-sm">
         <div class="w-12 h-12 rounded-xl flex items-center justify-center"
           :class="dangerActionsToday > 0 ? 'bg-red-50' : 'bg-gray-50'">
           <i class="pi pi-exclamation-triangle text-xl"
@@ -222,7 +213,6 @@ const clearFilters = () => {
       </div>
     </div>
 
-    <!-- Filters -->
     <Card class="shadow-sm border-none mb-4">
       <template #content>
         <div class="flex flex-wrap gap-3 items-end">
@@ -236,14 +226,8 @@ const clearFilters = () => {
 
           <div class="w-48">
             <label class="text-xs font-semibold text-gray-500 mb-1 block">ประเภทการกระทำ</label>
-            <Select
-              v-model="selectedAction"
-              :options="actionOptions"
-              optionLabel="label"
-              optionValue="value"
-              class="w-full"
-              placeholder="ทั้งหมด"
-            />
+            <Select v-model="selectedAction" :options="actionOptions" optionLabel="label" optionValue="value"
+              class="w-full" placeholder="ทั้งหมด" />
           </div>
 
           <div class="w-44">
@@ -251,13 +235,7 @@ const clearFilters = () => {
             <DatePicker v-model="selectedDate" placeholder="เลือกวันที่" class="w-full" showIcon />
           </div>
 
-          <Button
-            icon="pi pi-times"
-            label="ล้างตัวกรอง"
-            severity="secondary"
-            text
-            @click="clearFilters"
-          />
+          <Button icon="pi pi-times" label="ล้างตัวกรอง" severity="secondary" text @click="clearFilters" />
 
           <div class="ml-auto">
             <Tag :value="`${filteredLogs.length} รายการ`" severity="info" rounded />
@@ -266,20 +244,10 @@ const clearFilters = () => {
       </template>
     </Card>
 
-    <!-- Table -->
     <Card class="shadow-sm border-none">
       <template #content>
-        <DataTable
-          :value="filteredLogs"
-          :loading="isLoading"
-          paginator
-          :rows="25"
-          :rowsPerPageOptions="[25, 50, 100]"
-          stripedRows
-          responsiveLayout="scroll"
-          emptyMessage="ไม่พบประวัติการใช้งาน"
-          size="small"
-        >
+        <DataTable :value="filteredLogs" :loading="isLoading" paginator :rows="25" :rowsPerPageOptions="[25, 50, 100]"
+          stripedRows responsiveLayout="scroll" emptyMessage="ไม่พบประวัติการใช้งาน" size="small">
           <Column header="เวลา" style="min-width: 160px">
             <template #body="{ data }">
               <span class="text-xs text-gray-500 font-mono">{{ formatDateTime(data.createdAt) }}</span>
