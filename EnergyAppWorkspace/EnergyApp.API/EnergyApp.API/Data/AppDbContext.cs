@@ -13,5 +13,16 @@ namespace EnergyApp.API.Data
         public DbSet<AuditLog> AuditLogs { get; set; }
         public DbSet<FuelType> FuelTypes { get; set; }
         public DbSet<MeetingRoom> MeetingRooms { get; set; }
+        public DbSet<ElectricityRecord> ElectricityRecords { get; set; }
+        public DbSet<WaterRecord> WaterRecords { get; set; }
+        public DbSet<FuelRecord> FuelRecords { get; set; }
+        public DbSet<FuelReceipt> FuelReceipts { get; set; }
+        public DbSet<TelephoneRecord> TelephoneRecords { get; set; }
+        public DbSet<SarabanRecord> SarabanRecords { get; set; }
+        public DbSet<IPPhoneDirectory> IPPhoneDirectories { get; set; }
+        public DbSet<ServiceRequest> ServiceRequests { get; set; }
+        public DbSet<ChatMessage> ChatMessages { get; set; }
+        public DbSet<PostalRecord> PostalRecords { get; set; }
+        public DbSet<MeetingRecord> MeetingRecords { get; set; }
     }
 }

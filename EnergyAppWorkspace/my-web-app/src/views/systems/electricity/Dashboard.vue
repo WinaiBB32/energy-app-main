@@ -1,11 +1,9 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
+import api from '@/services/api'
 
 defineOptions({ name: 'ElectricityDashboard' })
-// Firebase Removed
-// Firebase Removed
 import { useAppToast } from '@/composables/useAppToast'
-import { toMonthKey } from '@/utils/monthlySummary'
 
 import Card from 'primevue/card'
 import Chart from 'primevue/chart'
@@ -20,28 +18,18 @@ import Select from 'primevue/select'
 
 // ฟังก์ชันสำหรับส่งสัญญาณไปบอกหน้าจอหลัก (Parent Window)
 function notifySignage() {
-  // ตรวจสอบว่าหน้านี้ถูกเปิดอยู่ข้างใน Iframe หรือไม่
   if (window.parent && window.parent !== window) {
-    // ส่งข้อความรหัส 'user_is_touching' ทะลุกรอบ Iframe ออกไป
     window.parent.postMessage('user_is_touching', '*')
   }
 }
 
-// สั่งให้ดักจับการกระทำต่างๆ ของผู้ใช้บนหน้า Dashboard
-document.addEventListener('touchstart', notifySignage) // ดักจับตอนเอานิ้วแตะจอ
-document.addEventListener('touchmove', notifySignage) // ดักจับตอนเอานิ้วปัด/เลื่อนจอ
-document.addEventListener('click', notifySignage) // ดักจับการคลิก (เผื่อใช้เมาส์)
-document.addEventListener('wheel', notifySignage) // ดักจับการกลิ้งลูกกลิ้งเมาส์
-
-// 1. Interfaces แบบ Type-Safe
-interface MonthlySummary {
-  electricity?: {
-    totalAmount?: number
-    count?: number
-  }
-}
+document.addEventListener('touchstart', notifySignage)
+document.addEventListener('touchmove', notifySignage)
+document.addEventListener('click', notifySignage)
+document.addEventListener('wheel', notifySignage)
 
 interface FetchedRecord {
+  id?: string
   type: 'PEA_BILL' | 'SOLAR_PRODUCTION'
   buildingId?: string
   peaAmount?: number
@@ -57,8 +45,8 @@ interface FetchedRecord {
   fromGridWh?: number
   fromSolarWh?: number
 
-  billingCycle?: Timestamp
-  recordDate?: Timestamp
+  billingCycle?: string
+  recordDate?: string
 }
 
 interface MonthlyAggregatedData {
@@ -79,15 +67,14 @@ const buildingOptions = computed(() => [{ id: null, name: 'ทุกอาคา
 const getBuildingName = (id: string): string => buildings.value.find((x) => x.id === id)?.name || id
 
 const rawRecords = ref<FetchedRecord[]>([])
-const monthlySummaries = ref<Record<string, MonthlySummary>>({})
 
 // 2. State สำหรับตัวเลขสรุป (KPIs & Insights)
 const totalExpense = ref<number>(0)
 const totalPeaUnit = ref<number>(0)
 const totalSolarUnit = ref<number>(0)
-const avgCostPerUnit = ref<number>(0) // ค่าไฟเฉลี่ยต่อหน่วย (บาท/kWh)
-const solarSavings = ref<number>(0) // ประหยัดเงินไปได้ (บาท)
-const carbonSaved = ref<number>(0) // ลดคาร์บอน (kgCO2e)
+const avgCostPerUnit = ref<number>(0)
+const solarSavings = ref<number>(0)
+const carbonSaved = ref<number>(0)
 
 // ข้อมูลเชิงลึกของ Solar
 const sumConsumptionKwh = ref<number>(0)
@@ -148,7 +135,7 @@ const overviewChartOptions = ref()
 const toast = useAppToast()
 const isLoading = ref<boolean>(true)
 
-// 4. ดึงข้อมูลแบบ One-time (ลด Reads)
+// 4. ดึงข้อมูลจาก REST API
 const fetchData = async (): Promise<void> => {
   isLoading.value = true
   try {
@@ -156,36 +143,21 @@ const fetchData = async (): Promise<void> => {
     const endDate = selectedDateRange.value?.[1] ? new Date(selectedDateRange.value[1]) : null
     if (endDate) endDate.setHours(23, 59, 59, 999)
 
-    const startMonthKey = startDate ? toMonthKey(startDate) : null
-    const endMonthKey = endDate ? toMonthKey(endDate) : null
+    const params: Record<string, unknown> = { take: 500 }
+    if (startDate) params.fromDate = startDate.toISOString()
+    if (endDate) params.toDate = endDate.toISOString()
 
-    // 1. ดึงข้อมูลเบื้องต้น
-    const buildingSnap = await getDocs(query(collection(db, 'buildings'), orderBy('createdAt', 'asc')))
-    buildings.value = buildingSnap.docs.map((d) => ({ id: d.id, name: d.data().name as string }))
-
-    // 2. ดึงข้อมูล Summary (ประหยัด Read)
-    const summaryRef = collection(db, 'monthly_summaries')
-    const summaryConstraints = []
-    if (startMonthKey) summaryConstraints.push(where('__name__', '>=', startMonthKey))
-    if (endMonthKey) summaryConstraints.push(where('__name__', '<=', endMonthKey))
-
-    // 3. ดึงข้อมูล Raw เฉพาะที่จำเป็น (เช่น Solar รายละเอียด)
-    const energyRef = collection(db, 'energy_records')
-    const energyConstraints = []
-    if (startDate && endDate) {
-      energyConstraints.push(where('billingCycle', '>=', Timestamp.fromDate(startDate)))
-      energyConstraints.push(where('billingCycle', '<=', Timestamp.fromDate(endDate)))
-    }
-
-    const [summarySnap, energySnap] = await Promise.all([
-      getDocs(query(summaryRef, ...summaryConstraints)),
-      getDocs(query(energyRef, ...energyConstraints)),
+    const [buildingsRes, peaRes, solarRes] = await Promise.all([
+      api.get('/Building'),
+      api.get('/ElectricityRecord', { params: { ...params, type: 'PEA_BILL' } }),
+      api.get('/ElectricityRecord', { params: { ...params, type: 'SOLAR_PRODUCTION' } }),
     ])
 
-    monthlySummaries.value = Object.fromEntries(
-      summarySnap.docs.map((doc) => [doc.id, doc.data() as MonthlySummary]),
-    )
-    rawRecords.value = energySnap.docs.map((d) => ({ id: d.id, ...d.data() }) as unknown as FetchedRecord)
+    buildings.value = buildingsRes.data.map((b: { id: string; name: string }) => ({ id: b.id, name: b.name }))
+    rawRecords.value = [
+      ...(peaRes.data as FetchedRecord[]),
+      ...(solarRes.data as FetchedRecord[]),
+    ]
 
     processDashboardData()
   } catch (error: unknown) {
@@ -197,9 +169,8 @@ const fetchData = async (): Promise<void> => {
 
 onMounted(() => fetchData())
 
-watch([selectedDateRange, selectedBuildingFilter], () => {
-  processDashboardData()
-})
+watch([selectedDateRange], () => fetchData())
+watch([selectedBuildingFilter], () => processDashboardData())
 
 const clearDateFilter = (): void => {
   selectedDateRange.value = getLastMonthRange()
@@ -220,26 +191,14 @@ const processDashboardData = (): void => {
     tFromSolar = 0
 
   const monthlyData: Record<string, MonthlyAggregatedData> = {}
-  const buildingExpenses: Record<string, number> = {} // เก็บค่าไฟแยกตามอาคาร
+  const buildingExpenses: Record<string, number> = {}
 
-  // 1. ประมวลผลจาก Summary (สำหรับค่าไฟรวม)
-  Object.entries(monthlySummaries.value).forEach(([monthKey, summary]) => {
-    if (summary.electricity) {
-      const amount = summary.electricity.totalAmount || 0
-      sumExpense += amount
-      if (!monthlyData[monthKey]) monthlyData[monthKey] = { expense: 0, peaUnit: 0, solar: 0 }
-      monthlyData[monthKey].expense += amount
-    }
-  })
-
-  // 2. ประมวลผลจาก Raw Records (สำหรับ Solar และรายละเอียดแยกอาคาร)
   rawRecords.value.forEach((data) => {
     let recordDateObj: Date | null = null
-    if (data.type === 'PEA_BILL' && data.billingCycle) recordDateObj = data.billingCycle.toDate()
-    else if (data.type === 'SOLAR_PRODUCTION' && data.recordDate)
-      recordDateObj = data.recordDate.toDate()
+    if (data.type === 'PEA_BILL' && data.billingCycle) recordDateObj = new Date(data.billingCycle)
+    else if (data.type === 'SOLAR_PRODUCTION' && data.recordDate) recordDateObj = new Date(data.recordDate)
 
-    if (!recordDateObj) return
+    if (!recordDateObj || isNaN(recordDateObj.getTime())) return
     if (selectedBuildingFilter.value && data.buildingId !== selectedBuildingFilter.value) return
 
     const year = recordDateObj.getFullYear()
@@ -250,13 +209,11 @@ const processDashboardData = (): void => {
 
     if (data.type === 'PEA_BILL') {
       const amount = data.peaAmount || 0
-      // หมายเหตุ: sumExpense และ monthlyData[sortKey].expense ถูกนับจาก Summary แล้ว 
-      // เพื่อความแม่นยำกรณีดึงข้อมูลย้อนหลังนานๆ
-
+      sumExpense += amount
+      monthlyData[sortKey].expense += amount
       sumPeaUnit += data.peaUnitUsed || 0
       monthlyData[sortKey].peaUnit += data.peaUnitUsed || 0
 
-      // รวมค่าไฟแยกตามอาคาร (ยังต้องใช้ Raw Data เพราะ Summary ไม่ได้แยกอาคาร)
       const bId = data.buildingId || 'Unknown'
       if (!buildingExpenses[bId]) buildingExpenses[bId] = 0
       buildingExpenses[bId] += amount
@@ -265,7 +222,6 @@ const processDashboardData = (): void => {
       sumSolar += solarUnit
       monthlyData[sortKey].solar += solarUnit
 
-      // คำนวณข้อมูล Solar เชิงลึก
       tConsumption += (data.consumptionWh || 0) / 1000
       tFromGrid += (data.fromGridWh || 0) / 1000
       tToGrid += (data.toGridWh || 0) / 1000
@@ -276,7 +232,6 @@ const processDashboardData = (): void => {
     }
   })
 
-  // อัปเดตตัวเลข Cards และคำนวณ KPIs
   totalExpense.value = sumExpense
   totalPeaUnit.value = sumPeaUnit
   totalSolarUnit.value = sumSolar
@@ -289,13 +244,8 @@ const processDashboardData = (): void => {
   sumToBatteryKwh.value = tToBat
   sumFromSolarKwh.value = tFromSolar
 
-  // ค่าไฟเฉลี่ย = เงินรวม / หน่วยรวม
   avgCostPerUnit.value = sumPeaUnit > 0 ? sumExpense / sumPeaUnit : 0
-
-  // ประหยัดเงิน = หน่วย Solar * ค่าไฟเฉลี่ย
   solarSavings.value = sumSolar * avgCostPerUnit.value
-
-  // ลดคาร์บอน (1 kWh = ~0.5 kgCO2e)
   carbonSaved.value = sumSolar * 0.5
 
   setupCharts(monthlyData, sumPeaUnit, sumSolar, buildingExpenses)
@@ -330,7 +280,6 @@ const setupCharts = (
   const sortedKeys = Object.keys(monthlyData).sort()
   const labels = sortedKeys.map((key) => formatChartLabel(key))
 
-  // --- กราฟ 1 & 2: รายเดือน (เหมือนเดิม) ---
   expenseChartData.value = {
     labels,
     datasets: [
@@ -361,13 +310,12 @@ const setupCharts = (
   }
   solarChartOptions.value = getChartOptions('พลังงาน Solar (kWh)')
 
-  // --- กราฟ 3: สัดส่วนพลังงาน (Energy Mix - Doughnut) ---
   mixChartData.value = {
     labels: ['ซื้อไฟฟ้า (กฟภ.)', 'ผลิตเอง (Solar)'],
     datasets: [
       {
         data: [totalPea, totalSolar],
-        backgroundColor: ['#3b82f6', '#22c55e'], // น้ำเงิน, เขียว
+        backgroundColor: ['#3b82f6', '#22c55e'],
         hoverBackgroundColor: ['#2563eb', '#16a34a'],
         borderWidth: 0,
       },
@@ -379,19 +327,17 @@ const setupCharts = (
     maintainAspectRatio: false,
   }
 
-  // --- กราฟ Solar Usage (Demand Pipeline) ---
   solarUsageChartData.value = {
     labels: ['ดึงจากสายส่ง (From Grid)', 'พลังงานแสงอาทิตย์ (Solar)', 'พลังงานในแบต (Battery)'],
     datasets: [
       {
         data: [sumFromGridKwh.value, sumFromSolarKwh.value, sumFromBatteryKwh.value],
-        backgroundColor: ['#f43f5e', '#10b981', '#f59e0b'], // Rose, Emerald, Amber
+        backgroundColor: ['#f43f5e', '#10b981', '#f59e0b'],
         borderWidth: 0,
       },
     ],
   }
 
-  // --- กราฟ Overview (Mixed) ---
   overviewChartData.value = {
     labels,
     datasets: [
@@ -421,20 +367,17 @@ const setupCharts = (
     },
   }
 
-  // --- กราฟ Solar Breakdown (Supply Pipeline) ---
   solarBreakdownChartData.value = {
     labels: ['ใช้ในอาคาร (To Home)', 'ส่งขายคืนสายส่ง (To Grid)', 'ชาร์จแบตฯ (To Battery)'],
     datasets: [
       {
         data: [sumToHomeKwh.value, sumToGridKwh.value, sumToBatteryKwh.value],
-        backgroundColor: ['#3b82f6', '#8b5cf6', '#14b8a6'], // Blue, Violet, Teal
+        backgroundColor: ['#3b82f6', '#8b5cf6', '#14b8a6'],
         borderWidth: 0,
       },
     ],
   }
 
-  // --- กราฟ 4: จัดอันดับอาคาร (Top Consumers - Horizontal Bar) ---
-  // เรียงลำดับอาคารที่กินไฟเยอะสุดไปน้อยสุด
   const sortedBuildings = Object.entries(buildingExpenses).sort((a, b) => b[1] - a[1])
   buildingChartData.value = {
     labels: sortedBuildings.map((item) => getBuildingName(item[0])),
@@ -442,13 +385,13 @@ const setupCharts = (
       {
         label: 'ค่าไฟฟ้าสะสม (บาท)',
         data: sortedBuildings.map((item) => item[1]),
-        backgroundColor: '#f97316', // สีส้ม
+        backgroundColor: '#f97316',
         borderRadius: 4,
       },
     ],
   }
   buildingChartOptions.value = {
-    indexAxis: 'y', // ทำให้เป็นกราฟแนวนอน
+    indexAxis: 'y',
     maintainAspectRatio: false,
     aspectRatio: 0.8,
     plugins: { legend: { display: false } },
@@ -462,7 +405,7 @@ const setupCharts = (
 const getChartOptions = (yAxisTitle: string) => ({
   maintainAspectRatio: false,
   aspectRatio: 0.8,
-  plugins: { legend: { display: false } }, // ซ่อน Legend เพราะหัวการ์ดบอกอยู่แล้ว
+  plugins: { legend: { display: false } },
   scales: {
     x: { ticks: { color: '#6b7280' }, grid: { display: false } },
     y: {
@@ -521,7 +464,7 @@ const formatCurrency = (val: number): string =>
       </TabList>
 
       <TabPanels class="px-0 py-4">
-        <!-- 🌐 Tab: ภาพรวมทั้งหมด (Overview) -->
+        <!-- Tab: ภาพรวมทั้งหมด (Overview) -->
         <TabPanel value="0">
           <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
             <Card class="shadow-sm border-t-4 border-blue-500 bg-blue-50/20">
@@ -644,7 +587,7 @@ const formatCurrency = (val: number): string =>
           </div>
         </TabPanel>
 
-        <!-- ⚡ Tab: ค่าไฟฟ้า (PEA) -->
+        <!-- Tab: ค่าไฟฟ้า (PEA) -->
         <TabPanel value="1">
           <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-4 mb-6">
             <Card class="shadow-sm border-t-4 border-blue-500">
@@ -735,10 +678,9 @@ const formatCurrency = (val: number): string =>
           </div>
         </TabPanel>
 
-        <!-- ☀️ Tab: Solar -->
+        <!-- Tab: Solar -->
         <TabPanel value="2">
           <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6 mt-2">
-            <!-- 1. การผลิตทั้งหมด -->
             <Card class="shadow-sm border-t-4 border-emerald-500 bg-emerald-50/20">
               <template #content>
                 <div class="flex justify-between items-start">
@@ -758,7 +700,6 @@ const formatCurrency = (val: number): string =>
               </template>
             </Card>
 
-            <!-- 2. การใช้พลังงานรวม -->
             <Card class="shadow-sm border-t-4 border-indigo-500 bg-indigo-50/20">
               <template #content>
                 <div class="flex justify-between items-start">
@@ -780,7 +721,6 @@ const formatCurrency = (val: number): string =>
               </template>
             </Card>
 
-            <!-- 3. ซื้อเพิ่มเติมจากการไฟฟ้า -->
             <Card class="shadow-sm border-t-4 border-rose-500 bg-rose-50/20">
               <template #content>
                 <div class="flex justify-between items-start">
@@ -800,7 +740,6 @@ const formatCurrency = (val: number): string =>
               </template>
             </Card>
 
-            <!-- 4. ส่งกลับให้การไฟฟ้า -->
             <Card class="shadow-sm border-t-4 border-amber-500 bg-amber-50/20">
               <template #content>
                 <div class="flex justify-between items-start">

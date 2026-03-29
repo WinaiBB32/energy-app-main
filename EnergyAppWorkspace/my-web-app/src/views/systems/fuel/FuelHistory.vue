@@ -1,22 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
-import {
-  collection,
-  query,
-  orderBy,
-  where,
-  getDocs,
-  limit,
-  startAfter,
-  Timestamp,
-  doc,
-  updateDoc,
-  deleteDoc,
-  writeBatch,
-  type QueryConstraint,
-  type QueryDocumentSnapshot
-} from 'firebase/firestore'
-// Firebase Removed
+import api from '@/services/api'
 import { useAuthStore } from '@/stores/auth'
 import { useAppToast } from '@/composables/useAppToast'
 
@@ -35,20 +19,19 @@ import Dialog from 'primevue/dialog'
 interface FetchedFuelRecord {
   id: string
   departmentId: string
-  refuelDate: Timestamp | null
+  refuelDate: string | null
   documentType: string
   documentNumber: string
   vehiclePlate: string
   vehicleProvince: string
   purchaserName: string
-  fuelType: string
+  fuelTypeName: string
   liters: number | null
   totalAmount: number | null
   gasStationCompany: string
   note: string
-  recordedByName: string
-  recordedByUid: string
-  createdAt: Timestamp
+  recordedBy: string
+  createdAt: string
 }
 
 interface Department { id: string; name: string }
@@ -79,12 +62,11 @@ const clearFilters = () => {
   filterDateTo.value = null
   filterDeptId.value = ''
   filterFuelType.value = ''
-  // Watcher will trigger refetch
 }
 
-// ─── Firestore Pagination & Query ──────────────────────────────────────────
+// ─── Pagination ────────────────────────────────────────────────────────────
 const PAGE_SIZE = 20
-const lastVisible = ref<QueryDocumentSnapshot | null>(null)
+const skip = ref(0)
 const hasMore = ref(true)
 
 const fetchRecords = async (loadMore = false) => {
@@ -92,57 +74,51 @@ const fetchRecords = async (loadMore = false) => {
   isLoading.value = true
 
   try {
-    const fuelRef = collection(db, 'fuel_records')
-    const constraints: QueryConstraint[] = [orderBy('createdAt', 'desc')]
+    const params: Record<string, string | number> = {
+      skip: loadMore ? skip.value : 0,
+      take: PAGE_SIZE,
+    }
 
-    // Apply filters
     if (currentUserRole.value !== 'superadmin') {
-      constraints.push(where('departmentId', '==', currentUserDepartment.value))
+      params.departmentId = currentUserDepartment.value
     } else if (filterDeptId.value) {
-      constraints.push(where('departmentId', '==', filterDeptId.value))
+      params.departmentId = filterDeptId.value
     }
-    if (filterFuelType.value) {
-      constraints.push(where('fuelType', '==', filterFuelType.value))
-    }
+
     if (filterDateFrom.value) {
-      const from = new Date(filterDateFrom.value); from.setHours(0, 0, 0, 0)
-      constraints.push(where('refuelDate', '>=', Timestamp.fromDate(from)))
+      const from = new Date(filterDateFrom.value)
+      from.setHours(0, 0, 0, 0)
+      params.fromDate = from.toISOString()
     }
     if (filterDateTo.value) {
-      const to = new Date(filterDateTo.value); to.setHours(23, 59, 59, 999)
-      constraints.push(where('refuelDate', '<=', Timestamp.fromDate(to)))
+      const to = new Date(filterDateTo.value)
+      to.setHours(23, 59, 59, 999)
+      params.toDate = to.toISOString()
     }
 
-    // Apply pagination
-    if (loadMore && lastVisible.value) {
-      constraints.push(startAfter(lastVisible.value))
-    }
-    constraints.push(limit(PAGE_SIZE))
-
-    const q = query(fuelRef, ...constraints)
-    const recordsSnap = await getDocs(q)
-    
-    const newRecords = recordsSnap.docs.map((d) => ({ id: d.id, ...d.data() } as FetchedFuelRecord))
+    const response = await api.get('/FuelRecord', { params })
+    const newRecords: FetchedFuelRecord[] = response.data
 
     if (loadMore) {
       historyRecords.value.push(...newRecords)
+      skip.value += newRecords.length
     } else {
       historyRecords.value = newRecords
+      skip.value = newRecords.length
     }
 
-    lastVisible.value = recordsSnap.docs[recordsSnap.docs.length - 1] || null
     hasMore.value = newRecords.length === PAGE_SIZE
 
   } catch (error: unknown) {
     toast.fromError(error, 'ไม่สามารถโหลดประวัติการเติมน้ำมันได้')
-    hasMore.value = false // Stop trying on error
+    hasMore.value = false
   } finally {
     isLoading.value = false
   }
 }
 
 const handleFilterChange = () => {
-  lastVisible.value = null
+  skip.value = 0
   hasMore.value = true
   historyRecords.value = []
   fetchRecords(false)
@@ -151,19 +127,15 @@ const handleFilterChange = () => {
 watch([filterDateFrom, filterDateTo, filterDeptId, filterFuelType], handleFilterChange)
 
 onMounted(async () => {
-  // Initial fetch
   handleFilterChange()
 
-  // Fetch static data
   try {
-    const [deptsSnap, fuelTypesSnap] = await Promise.all([
-      getDocs(query(collection(db, 'departments'), orderBy('name'))),
-      getDocs(query(collection(db, 'fuel_types'), orderBy('createdAt', 'asc'))),
+    const [deptsRes, fuelTypesRes] = await Promise.all([
+      api.get('/Department'),
+      api.get('/FuelType'),
     ])
-    departments.value = deptsSnap.docs.map((d) => ({ id: d.id, name: d.data().name as string }))
-    fuelTypes.value = fuelTypesSnap.docs.map((d) => ({
-      id: d.id, name: d.data().name as string, severity: (d.data().severity as string) || 'secondary',
-    }))
+    departments.value = deptsRes.data
+    fuelTypes.value = fuelTypesRes.data
   } catch (error: unknown) {
     toast.fromError(error, 'ไม่สามารถโหลดข้อมูลหน่วยงาน/ประเภทน้ำมันได้')
   }
@@ -171,10 +143,16 @@ onMounted(async () => {
 
 // ─── Helpers ───────────────────────────────────────────────────────────────
 const getDeptName = (id: string) => departments.value.find((x) => x.id === id)?.name || id
-const getFuelTypeName = (id: string) => fuelTypes.value.find((x) => x.id === id)?.name || id
-const getFuelTagSeverity = (id: string) => fuelTypes.value.find((x) => x.id === id)?.severity || 'secondary'
-const formatThaiDate = (ts: Timestamp | null | undefined) =>
-  ts ? ts.toDate().toLocaleDateString('th-TH', { year: 'numeric', month: 'short', day: 'numeric' }) : '-'
+const getFuelTypeName = (name: string) => {
+  const found = fuelTypes.value.find((x) => x.id === name || x.name === name)
+  return found?.name || name
+}
+const getFuelTagSeverity = (name: string) => {
+  const found = fuelTypes.value.find((x) => x.id === name || x.name === name)
+  return found?.severity || 'secondary'
+}
+const formatThaiDate = (dateStr: string | null | undefined) =>
+  dateStr ? new Date(dateStr).toLocaleDateString('th-TH', { year: 'numeric', month: 'short', day: 'numeric' }) : '-'
 const formatCurrency = (val: number | null | undefined) =>
   val != null ? new Intl.NumberFormat('th-TH', { style: 'currency', currency: 'THB' }).format(val) : '-'
 
@@ -192,13 +170,13 @@ const documentTypes = ['ใบสั่งซื้อ', 'ใบเสร็จ�
 
 interface EditForm {
   departmentId: string; refuelDate: Date | null; documentType: string; documentNumber: string
-  vehiclePlate: string; vehicleProvince: string; purchaserName: string; fuelType: string
+  vehiclePlate: string; vehicleProvince: string; purchaserName: string; fuelTypeName: string
   liters: number | null; totalAmount: number | null; gasStationCompany: string; note: string
 }
 
 const editForm = ref<EditForm>({
   departmentId: '', refuelDate: null, documentType: '', documentNumber: '',
-  vehiclePlate: '', vehicleProvince: '', purchaserName: '', fuelType: '',
+  vehiclePlate: '', vehicleProvince: '', purchaserName: '', fuelTypeName: '',
   liters: null, totalAmount: null, gasStationCompany: '', note: '',
 })
 
@@ -216,12 +194,18 @@ const openEdit = () => {
   if (!selectedRecord.value) return
   const r = selectedRecord.value
   editForm.value = {
-    departmentId: r.departmentId, refuelDate: r.refuelDate ? r.refuelDate.toDate() : null,
-    documentType: r.documentType, documentNumber: r.documentNumber,
-    vehiclePlate: r.vehiclePlate, vehicleProvince: r.vehicleProvince,
-    purchaserName: r.purchaserName, fuelType: r.fuelType,
-    liters: r.liters, totalAmount: r.totalAmount,
-    gasStationCompany: r.gasStationCompany, note: r.note,
+    departmentId: r.departmentId,
+    refuelDate: r.refuelDate ? new Date(r.refuelDate) : null,
+    documentType: r.documentType,
+    documentNumber: r.documentNumber,
+    vehiclePlate: r.vehiclePlate,
+    vehicleProvince: r.vehicleProvince,
+    purchaserName: r.purchaserName,
+    fuelTypeName: r.fuelTypeName,
+    liters: r.liters,
+    totalAmount: r.totalAmount,
+    gasStationCompany: r.gasStationCompany,
+    note: r.note,
   }
   detailVisible.value = false
   editVisible.value = true
@@ -231,14 +215,20 @@ const saveEdit = async () => {
   if (!selectedRecord.value) return
   isSaving.value = true
   try {
-    const originalRecord = historyRecords.value.find(r => r.id === selectedRecord.value!.id)
-    if (!originalRecord) throw new Error('Original record not found')
+    const payload = {
+      ...editForm.value,
+      refuelDate: editForm.value.refuelDate ? new Date(editForm.value.refuelDate).toISOString() : null,
+    }
+    await api.put(`/FuelRecord/${selectedRecord.value.id}`, payload)
 
-    const newValues = { ...editForm.value, refuelDate: editForm.value.refuelDate ? Timestamp.fromDate(editForm.value.refuelDate) : null }
-    await updateDoc(doc(db, 'fuel_records', selectedRecord.value.id), newValues)
-    
     // Update local record to avoid re-fetch
-    Object.assign(originalRecord, newValues, { id: selectedRecord.value.id })
+    const originalRecord = historyRecords.value.find(r => r.id === selectedRecord.value!.id)
+    if (originalRecord) {
+      Object.assign(originalRecord, {
+        ...payload,
+        id: selectedRecord.value.id,
+      })
+    }
 
     toast.success('บันทึกข้อมูลสำเร็จ')
     editVisible.value = false
@@ -251,7 +241,7 @@ const deleteRecord = async () => {
   if (!confirm('ยืนยันการลบข้อมูลนี้?')) return
   isSaving.value = true
   try {
-    await deleteDoc(doc(db, 'fuel_records', selectedRecord.value.id))
+    await api.delete(`/FuelRecord/${selectedRecord.value.id}`)
     historyRecords.value = historyRecords.value.filter(r => r.id !== selectedRecord.value!.id)
     toast.success('ลบข้อมูลสำเร็จ')
     editVisible.value = false
@@ -296,56 +286,52 @@ const handleFileUpload = (event: Event) => {
       const lines = text.split('\n').filter(r => r.trim().length > 0)
       if (lines.length < 2) throw new Error('ไม่พบข้อมูล หรือไฟล์ว่างเปล่า (ต้องมีหัว Column)')
 
-      const batch = writeBatch(db)
-      const collRef = collection(db, 'fuel_records')
       let importedCount = 0
+      const promises: Promise<unknown>[] = []
 
       for (let i = 1; i < lines.length; i++) {
         const rowString = (lines[i] || '').trim()
         if(!rowString) continue
-        
+
         const cells = rowString.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/).map(v => (v || '').replace(/^"|"$/g, '').trim())
         if (cells.length < 10) continue
 
         const [deptNameStr, dateStr, docType, docNum, plate, prov, purch, fuelNameStr, litersStr, amtStr, gasco, noteStr] = cells
 
         const matchedDept = departments.value.find(d => d.name === deptNameStr)?.id || 'DEP-UNKNOWN'
-        const matchedFuelType = fuelTypes.value.find(f => f.name === fuelNameStr)?.id || fuelNameStr
 
-        let refuelTS = null
+        let refuelDate = null
         if (dateStr) {
           const dObj = new Date(dateStr)
           if (!isNaN(dObj.getTime())) {
-            refuelTS = Timestamp.fromDate(dObj)
+            refuelDate = dObj.toISOString()
           }
         }
 
         const newRec = {
           departmentId: matchedDept,
-          refuelDate: refuelTS,
+          refuelDate,
           documentType: docType || '-',
           documentNumber: docNum || '-',
           vehiclePlate: plate || '-',
           vehicleProvince: prov || '-',
           purchaserName: purch || '',
-          fuelType: matchedFuelType,
+          fuelTypeName: fuelNameStr || '',
           liters: parseFloat(litersStr || '0') || 0,
           totalAmount: parseFloat(amtStr || '0') || 0,
           gasStationCompany: gasco || '',
           note: noteStr || '',
-          recordedByName: authStore.userProfile?.displayName || 'System Batch Import',
-          recordedByUid: 'batch-import-' + Date.now(),
-          createdAt: Timestamp.now()
+          recordedBy: authStore.user?.uid || '',
         }
 
-        batch.set(doc(collRef), newRec)
+        promises.push(api.post('/FuelRecord', newRec))
         importedCount++
       }
 
       if (importedCount > 0) {
-        await batch.commit()
+        await Promise.all(promises)
         toast.success(`นำเข้าสำเร็จ ${importedCount} รายการ`, 'กรุณารีเฟรชหน้าเพื่อดูข้อมูลที่นำเข้า')
-        handleFilterChange() // Refetch data
+        handleFilterChange()
       } else {
         toast.warn('ไม่พบแถวข้อมูลที่สามารถนำเข้าได้', 'ฟอร์แมตอาจจะไม่ถูกต้อง')
       }
@@ -441,7 +427,7 @@ const handleFileUpload = (event: Event) => {
           <Column v-if="currentUserRole !== 'user'" header="หน่วยงาน">
             <template #body="sp">
               <div class="font-bold text-gray-700">{{ getDeptName(sp.data.departmentId) }}</div>
-              <div class="text-xs text-gray-500"><i class="pi pi-user mr-1"></i>{{ sp.data.recordedByName }}</div>
+              <div class="text-xs text-gray-500"><i class="pi pi-user mr-1"></i>{{ sp.data.recordedBy }}</div>
             </template>
           </Column>
           <Column header="วันที่ / ทะเบียน">
@@ -457,7 +443,7 @@ const handleFileUpload = (event: Event) => {
           </Column>
           <Column header="ประเภทน้ำมัน / ปริมาณ">
             <template #body="sp">
-              <Tag :value="getFuelTypeName(sp.data.fuelType)" :severity="getFuelTagSeverity(sp.data.fuelType)" rounded class="mb-1 text-xs" />
+              <Tag :value="getFuelTypeName(sp.data.fuelTypeName)" :severity="getFuelTagSeverity(sp.data.fuelTypeName)" rounded class="mb-1 text-xs" />
               <div class="text-sm text-gray-600 font-medium">{{ sp.data.liters }} ลิตร</div>
             </template>
           </Column>
@@ -521,7 +507,7 @@ const handleFileUpload = (event: Event) => {
           <div class="flex flex-col gap-2 text-sm">
             <div class="flex justify-between">
               <span class="text-gray-600">ประเภทน้ำมัน</span>
-              <Tag :value="getFuelTypeName(selectedRecord.fuelType)" :severity="getFuelTagSeverity(selectedRecord.fuelType)" rounded class="text-xs" />
+              <Tag :value="getFuelTypeName(selectedRecord.fuelTypeName)" :severity="getFuelTagSeverity(selectedRecord.fuelTypeName)" rounded class="text-xs" />
             </div>
             <div class="flex justify-between">
               <span class="text-gray-600">ปริมาณ</span>
@@ -584,7 +570,7 @@ const handleFileUpload = (event: Event) => {
           </div>
           <div class="flex flex-col gap-2">
             <label class="text-sm font-semibold text-gray-700">ประเภทน้ำมัน</label>
-            <Select v-model="editForm.fuelType" :options="fuelTypes" optionLabel="name" optionValue="id" class="w-full" />
+            <Select v-model="editForm.fuelTypeName" :options="fuelTypes" optionLabel="name" optionValue="name" class="w-full" />
           </div>
           <div class="flex flex-col gap-2">
             <label class="text-sm font-semibold text-gray-700">ปริมาณ (ลิตร)</label>

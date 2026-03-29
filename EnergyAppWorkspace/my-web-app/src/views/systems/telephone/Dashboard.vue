@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted, watch, computed } from 'vue'
-// Firebase Removed
-// Firebase Removed
+import api from '@/services/api'
 import { useAuthStore } from '@/stores/auth'
 import { useAppToast } from '@/composables/useAppToast'
 import { usePermissions } from '@/composables/usePermissions'
@@ -15,21 +14,21 @@ defineOptions({ name: 'TelephoneDashboard' })
 
 // 1. Interfaces
 interface FetchedTelephoneRecord {
-    departmentId: string
-    customerId: string
-    adslCost: number
-    sipTrunkCost: number
-    otherCost: number
+    id: string
+    billingCycle: string | null
+    phoneNumber: string
+    providerName: string
+    usageAmount: number
     vatAmount: number
     totalAmount: number
-    billingCycle: Timestamp | null
+    recordedBy: string
+    createdAt: string
 }
 
 interface MonthlyData {
-    adsl: number
-    sipTrunk: number
-    other: number
-    total: number // เพิ่มฟิลด์สำหรับเก็บยอดรวม
+    usage: number
+    vat: number
+    total: number
 }
 
 // 2. State & Auth
@@ -43,59 +42,50 @@ const rawRecords = ref<FetchedTelephoneRecord[]>([])
 
 // KPIs
 const totalExpense = ref<number>(0)
-const totalAdslCost = ref<number>(0)
-const totalSipTrunkCost = ref<number>(0)
-const totalCustomers = ref<number>(0)
+const totalUsageAmount = ref<number>(0)
+const totalVatAmount = ref<number>(0)
+const totalProviders = ref<number>(0)
 
-const sumOther = ref<number>(0)
-const sumVat = ref<number>(0)
+const getLastMonthRange = (): Date[] => {
+    const now = new Date()
+    const first = new Date(now.getFullYear(), now.getMonth() - 1, 1)
+    const last = new Date(now.getFullYear(), now.getMonth(), 0)
+    return [first, last]
+}
+const selectedDateRange = ref<Date[] | null>(getLastMonthRange())
 
-// เริ่มต้นด้วยช่วงเดือนที่แล้ว
-    const getLastMonthRange = (): Date[] => {
-        const now = new Date()
-        const first = new Date(now.getFullYear(), now.getMonth() - 1, 1)
-        const last = new Date(now.getFullYear(), now.getMonth(), 0)
-        return [first, last]
-    }
-    const selectedDateRange = ref<Date[] | null>(getLastMonthRange())
-
-    const thaiMonthShort = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.']
-    const dateRangeLabel = computed(() => {
-        const r = selectedDateRange.value
-        if (!r || r.length < 2 || !r[0] || !r[1]) return 'ทุกช่วงเวลา'
-        const fmt = (d: Date) => `${thaiMonthShort[d.getMonth()]} ${d.getFullYear() + 543}`
-        const s = fmt(r[0]), e = fmt(r[1])
-        return s === e ? s : `${s} – ${e}`
-    })
+const thaiMonthShort = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.']
+const dateRangeLabel = computed(() => {
+    const r = selectedDateRange.value
+    if (!r || r.length < 2 || !r[0] || !r[1]) return 'ทุกช่วงเวลา'
+    const fmt = (d: Date) => `${thaiMonthShort[d.getMonth()]} ${d.getFullYear() + 543}`
+    const s = fmt(r[0]), e = fmt(r[1])
+    return s === e ? s : `${s} – ${e}`
+})
 
 // Charts
 const trendChartData = ref()
 const trendChartOptions = ref()
 const breakdownChartData = ref()
 const breakdownChartOptions = ref()
-const customerChartData = ref()
-const customerChartOptions = ref()
+const providerChartData = ref()
+const providerChartOptions = ref()
 
 const isLoading = ref<boolean>(true)
 
-// 3. ดึงข้อมูลแบบ One-time (ลด Reads)
+// 3. Fetch data
 const fetchData = async (): Promise<void> => {
     isLoading.value = true
     try {
+        const params: Record<string, unknown> = { take: 100 }
         const startDate = selectedDateRange.value?.[0] || null
         const endDate = selectedDateRange.value?.[1] ? new Date(selectedDateRange.value[1]) : null
         if (endDate) endDate.setHours(23, 59, 59, 999)
+        if (startDate) params.fromDate = startDate.toISOString()
+        if (endDate) params.toDate = endDate.toISOString()
 
-        const phoneRef = collection(db, 'telephone_records')
-        const constraints: Parameters<typeof query>[1][] = []
-        if (!isAdmin) constraints.push(where('departmentId', '==', currentUserDepartment.value))
-        if (startDate && endDate) {
-            constraints.push(where('billingCycle', '>=', Timestamp.fromDate(startDate)))
-            constraints.push(where('billingCycle', '<=', Timestamp.fromDate(endDate)))
-        }
-        constraints.push(orderBy('billingCycle', 'desc'))
-        const snapshot = await getDocs(query(phoneRef, ...constraints))
-        rawRecords.value = snapshot.docs.map((doc) => doc.data() as FetchedTelephoneRecord)
+        const response = await api.get('/TelephoneRecord', { params })
+        rawRecords.value = response.data as FetchedTelephoneRecord[]
         processData()
     } catch (error: unknown) {
         toast.fromError(error, 'ไม่สามารถโหลดข้อมูล Dashboard ค่าโทรศัพท์ได้')
@@ -108,58 +98,48 @@ onMounted(() => fetchData())
 watch(selectedDateRange, () => fetchData())
 const clearDateFilter = (): void => { selectedDateRange.value = getLastMonthRange() }
 
-// 4. ประมวลผลข้อมูล
+// 4. Process data
 const processData = (): void => {
     let tempExpense = 0
-    let tempAdsl = 0
-    let tempSipTrunk = 0
-    let tempOther = 0
+    let tempUsage = 0
     let tempVat = 0
 
     const monthlyData: Record<string, MonthlyData> = {}
-    const customerExpenses: Record<string, number> = {}
-    const uniqueCustomers = new Set<string>()
+    const providerExpenses: Record<string, number> = {}
+    const uniqueProviders = new Set<string>()
 
     rawRecords.value.forEach((data) => {
         if (!data.billingCycle) return
-        const recordDateObj = data.billingCycle.toDate()
-
+        const recordDateObj = new Date(data.billingCycle)
         const sortKey = `${recordDateObj.getFullYear()}-${String(recordDateObj.getMonth() + 1).padStart(2, '0')}`
-        if (!monthlyData[sortKey]) monthlyData[sortKey] = { adsl: 0, sipTrunk: 0, other: 0, total: 0 }
+
+        if (!monthlyData[sortKey]) monthlyData[sortKey] = { usage: 0, vat: 0, total: 0 }
 
         const amount = data.totalAmount || 0
-        const adsl = data.adslCost || 0
-        const sipTrunk = data.sipTrunkCost || 0
-        const other = data.otherCost || 0
+        const usage = data.usageAmount || 0
         const vat = data.vatAmount || 0
 
         tempExpense += amount
-        tempAdsl += adsl
-        tempSipTrunk += sipTrunk
-        tempOther += other
+        tempUsage += usage
         tempVat += vat
 
-        monthlyData[sortKey].adsl += adsl
-        monthlyData[sortKey].sipTrunk += sipTrunk
-        monthlyData[sortKey].other += other
-        monthlyData[sortKey].total += amount // สะสมยอดรวมรายเดือน
+        monthlyData[sortKey].usage += usage
+        monthlyData[sortKey].vat += vat
+        monthlyData[sortKey].total += amount
 
-        const cId = data.customerId || 'ไม่ระบุ'
-        if (!customerExpenses[cId]) customerExpenses[cId] = 0
-        customerExpenses[cId] += amount
+        const provider = data.providerName || 'ไม่ระบุ'
+        if (!providerExpenses[provider]) providerExpenses[provider] = 0
+        providerExpenses[provider] += amount
 
-        if (data.customerId) uniqueCustomers.add(data.customerId)
+        if (data.providerName) uniqueProviders.add(data.providerName)
     })
 
     totalExpense.value = tempExpense
-    totalAdslCost.value = tempAdsl
-    totalSipTrunkCost.value = tempSipTrunk
-    totalCustomers.value = uniqueCustomers.size
+    totalUsageAmount.value = tempUsage
+    totalVatAmount.value = tempVat
+    totalProviders.value = uniqueProviders.size
 
-    sumOther.value = tempOther
-    sumVat.value = tempVat
-
-    setupCharts(monthlyData, customerExpenses)
+    setupCharts(monthlyData, providerExpenses)
 }
 
 const formatChartLabel = (sortKey: string): string => {
@@ -168,19 +148,18 @@ const formatChartLabel = (sortKey: string): string => {
     return `${monthNames[parseInt(monthStr, 10) - 1]} ${yearStr}`
 }
 
-// 5. เตรียมกราฟ
-const setupCharts = (monthlyData: Record<string, MonthlyData>, customerExpenses: Record<string, number>): void => {
+// 5. Setup charts
+const setupCharts = (monthlyData: Record<string, MonthlyData>, providerExpenses: Record<string, number>): void => {
     const sortedKeys = Object.keys(monthlyData).sort()
     const labels = sortedKeys.map((key) => formatChartLabel(key))
 
-    // กราฟที่ 1: กราฟผสม (Mixed Chart) แสดงยอดรวมแบบเส้น + สัดส่วนแบบแท่ง
     trendChartData.value = {
         labels,
         datasets: [
             {
-                type: 'line', // กราฟเส้นแสดงยอดรวมสุทธิ
+                type: 'line',
                 label: 'ยอดรวมสุทธิ (รวม VAT)',
-                borderColor: '#10b981', // สีเขียว
+                borderColor: '#10b981',
                 backgroundColor: '#10b981',
                 borderWidth: 3,
                 tension: 0.4,
@@ -188,67 +167,56 @@ const setupCharts = (monthlyData: Record<string, MonthlyData>, customerExpenses:
             },
             {
                 type: 'bar',
-                label: 'ค่าบริการ ADSL (บาท)',
-                backgroundColor: '#3b82f6', // สีน้ำเงิน
-                data: sortedKeys.map((key) => monthlyData[key]?.adsl ?? 0),
+                label: 'ค่าใช้บริการ (บาท)',
+                backgroundColor: '#3b82f6',
+                data: sortedKeys.map((key) => monthlyData[key]?.usage ?? 0),
             },
             {
                 type: 'bar',
-                label: 'ค่าบริการ SIP Trunk (บาท)',
-                backgroundColor: '#8b5cf6', // สีม่วง
-                data: sortedKeys.map((key) => monthlyData[key]?.sipTrunk ?? 0),
+                label: 'VAT 7% (บาท)',
+                backgroundColor: '#9ca3af',
+                data: sortedKeys.map((key) => monthlyData[key]?.vat ?? 0),
             },
-            {
-                type: 'bar',
-                label: 'บริการอื่นๆ (บาท)',
-                backgroundColor: '#f59e0b', // สีส้ม
-                data: sortedKeys.map((key) => monthlyData[key]?.other ?? 0),
-            }
         ],
     }
     trendChartOptions.value = {
         maintainAspectRatio: false,
         aspectRatio: 0.6,
-        interaction: {
-            mode: 'index',
-            intersect: false,
-        },
+        interaction: { mode: 'index', intersect: false },
         scales: {
             x: { stacked: true, grid: { display: false } },
             y: { stacked: true, display: true, title: { display: true, text: 'จำนวนเงิน (บาท)' } },
         },
     }
 
-    // กราฟที่ 2: โดนัท สัดส่วนค่าใช้จ่ายทั้งหมด
     breakdownChartData.value = {
-        labels: ['ADSL', 'SIP Trunk', 'บริการอื่นๆ', 'ภาษี (VAT)'],
+        labels: ['ค่าบริการ', 'ภาษี (VAT)'],
         datasets: [
             {
-                data: [totalAdslCost.value, totalSipTrunkCost.value, sumOther.value, sumVat.value],
-                backgroundColor: ['#3b82f6', '#8b5cf6', '#f59e0b', '#9ca3af'],
+                data: [totalUsageAmount.value, totalVatAmount.value],
+                backgroundColor: ['#3b82f6', '#9ca3af'],
                 borderWidth: 0,
             },
         ],
     }
     breakdownChartOptions.value = { plugins: { legend: { position: 'bottom' } }, cutout: '50%' }
 
-    // กราฟที่ 3: จัดอันดับลูกค้าที่มียอดชำระสูงสุด
-    const sortedCustomers = Object.entries(customerExpenses)
+    const sortedProviders = Object.entries(providerExpenses)
         .sort((a, b) => b[1] - a[1])
         .slice(0, 10)
 
-    customerChartData.value = {
-        labels: sortedCustomers.map(item => item[0]),
+    providerChartData.value = {
+        labels: sortedProviders.map(item => item[0]),
         datasets: [
             {
                 label: 'ยอดชำระสะสม (บาท)',
-                data: sortedCustomers.map(item => item[1]),
-                backgroundColor: '#10b981', // สีเขียว
+                data: sortedProviders.map(item => item[1]),
+                backgroundColor: '#10b981',
                 borderRadius: 4,
             },
         ],
     }
-    customerChartOptions.value = {
+    providerChartOptions.value = {
         indexAxis: 'y',
         maintainAspectRatio: false,
         aspectRatio: 0.8,
@@ -266,7 +234,7 @@ const formatCurrency = (val: number): string => new Intl.NumberFormat('th-TH', {
                 <h2 class="text-3xl font-bold text-gray-800">
                     <i class="pi pi-chart-bar text-green-500 mr-2"></i>ภาพรวมค่าบริการสื่อสาร
                 </h2>
-                <p class="text-gray-500 mt-1">วิเคราะห์ค่าใช้จ่าย ADSL, SIP Trunk และจัดอันดับรหัสลูกค้า</p>
+                <p class="text-gray-500 mt-1">วิเคราะห์ค่าใช้จ่ายโทรศัพท์และอินเทอร์เน็ต</p>
             </div>
             <div class="flex items-center gap-3">
                 <div class="bg-white p-3 rounded-lg shadow-sm border border-gray-100 flex items-center gap-3">
@@ -308,8 +276,8 @@ const formatCurrency = (val: number): string => new Intl.NumberFormat('th-TH', {
                 <template #content>
                     <div class="flex justify-between items-start">
                         <div>
-                            <p class="text-xs text-gray-500 font-semibold mb-1 uppercase">ค่าบริการ ADSL รวม</p>
-                            <h3 class="text-2xl font-bold text-gray-800">{{ formatCurrency(totalAdslCost) }}</h3>
+                            <p class="text-xs text-gray-500 font-semibold mb-1 uppercase">ค่าใช้บริการรวม</p>
+                            <h3 class="text-2xl font-bold text-gray-800">{{ formatCurrency(totalUsageAmount) }}</h3>
                         </div>
                         <div class="w-10 h-10 bg-blue-50 rounded-full flex items-center justify-center text-blue-500"><i
                                 class="pi pi-globe"></i></div>
@@ -317,16 +285,15 @@ const formatCurrency = (val: number): string => new Intl.NumberFormat('th-TH', {
                 </template>
             </Card>
 
-            <Card class="shadow-sm border-t-4 border-purple-500">
+            <Card class="shadow-sm border-t-4 border-gray-400">
                 <template #content>
                     <div class="flex justify-between items-start">
                         <div>
-                            <p class="text-xs text-gray-500 font-semibold mb-1 uppercase">ค่าบริการ SIP Trunk รวม</p>
-                            <h3 class="text-2xl font-bold text-gray-800">{{ formatCurrency(totalSipTrunkCost) }}</h3>
+                            <p class="text-xs text-gray-500 font-semibold mb-1 uppercase">VAT รวม</p>
+                            <h3 class="text-2xl font-bold text-gray-800">{{ formatCurrency(totalVatAmount) }}</h3>
                         </div>
-                        <div
-                            class="w-10 h-10 bg-purple-50 rounded-full flex items-center justify-center text-purple-500">
-                            <i class="pi pi-server"></i></div>
+                        <div class="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center text-gray-500">
+                            <i class="pi pi-percentage"></i></div>
                     </div>
                 </template>
             </Card>
@@ -335,9 +302,9 @@ const formatCurrency = (val: number): string => new Intl.NumberFormat('th-TH', {
                 <template #content>
                     <div class="flex justify-between items-start">
                         <div>
-                            <p class="text-xs text-gray-500 font-semibold mb-1 uppercase">จำนวนรหัสลูกค้า</p>
-                            <h3 class="text-2xl font-bold text-gray-800">{{ totalCustomers.toLocaleString() }} <span
-                                    class="text-sm font-normal text-gray-500">บัญชี</span></h3>
+                            <p class="text-xs text-gray-500 font-semibold mb-1 uppercase">จำนวนผู้ให้บริการ</p>
+                            <h3 class="text-2xl font-bold text-gray-800">{{ totalProviders.toLocaleString() }} <span
+                                    class="text-sm font-normal text-gray-500">ราย</span></h3>
                         </div>
                         <div
                             class="w-10 h-10 bg-orange-50 rounded-full flex items-center justify-center text-orange-500">
@@ -388,18 +355,18 @@ const formatCurrency = (val: number): string => new Intl.NumberFormat('th-TH', {
 
         <Card class="shadow-sm border-none">
             <template #title>
-                <div class="text-lg font-bold text-gray-700">จัดอันดับรหัสลูกค้าที่มียอดชำระสูงสุด (10 อันดับแรก)</div>
+                <div class="text-lg font-bold text-gray-700">จัดอันดับผู้ให้บริการที่มียอดชำระสูงสุด (10 อันดับแรก)</div>
             </template>
             <template #content>
                 <div v-if="isLoading" class="h-64 flex items-center justify-center"><i
                         class="pi pi-spin pi-spinner text-4xl text-green-500"></i></div>
-                <div v-else-if="customerChartData?.labels?.length === 0"
+                <div v-else-if="providerChartData?.labels?.length === 0"
                     class="h-64 flex flex-col items-center justify-center text-gray-400">
                     <i class="pi pi-align-left text-3xl mb-2"></i>
                     <p>ไม่มีข้อมูล</p>
                 </div>
                 <div v-else class="h-64 relative">
-                    <Chart type="bar" :data="customerChartData" :options="customerChartOptions" class="h-full w-full" />
+                    <Chart type="bar" :data="providerChartData" :options="providerChartOptions" class="h-full w-full" />
                 </div>
             </template>
         </Card>

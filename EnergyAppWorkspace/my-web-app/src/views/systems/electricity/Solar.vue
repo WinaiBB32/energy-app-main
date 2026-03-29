@@ -1,24 +1,6 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue'
-import {
-  collection,
-  query,
-  orderBy,
-  where,
-  limit,
-  startAfter,
-  getDocs,
-  onSnapshot,
-  doc,
-  updateDoc,
-  deleteDoc,
-  writeBatch,
-  serverTimestamp,
-  Timestamp,
-  type QueryDocumentSnapshot,
-  type QueryConstraint,
-} from 'firebase/firestore'
-// Firebase Removed
+import { ref, computed, onMounted } from 'vue'
+import api from '@/services/api'
 
 import { useAuthStore } from '@/stores/auth'
 import { useAppToast } from '@/composables/useAppToast'
@@ -54,12 +36,12 @@ interface SolarRecord {
 interface FetchedSolarRecord {
   id: string
   type: string
-  recordDate: Timestamp | null
+  recordDate: string | null
   buildingId: string
   solarUnitProduced: number
   note: string
   recordedBy: string
-  createdAt: Timestamp
+  createdAt: string
 }
 
 interface Building {
@@ -87,28 +69,25 @@ const historyRecords = ref<FetchedSolarRecord[]>([])
 const isLoadingHistory = ref<boolean>(true)
 const isLoadingMore = ref<boolean>(false)
 const hasMore = ref<boolean>(false)
-const lastDoc = ref<QueryDocumentSnapshot | null>(null)
+const skip = ref(0)
 const PAGE_SIZE = 20
-let unsubscribeBuildings: () => void
 
 const fetchHistory = async (loadMore = false): Promise<void> => {
   if (loadMore) isLoadingMore.value = true
-  else { isLoadingHistory.value = true; historyRecords.value = []; lastDoc.value = null }
+  else { isLoadingHistory.value = true; historyRecords.value = []; skip.value = 0 }
   try {
-    const constraints: QueryConstraint[] = [
-      where('type', '==', 'SOLAR_PRODUCTION'),
-      orderBy('createdAt', 'desc'),
-      limit(PAGE_SIZE + 1),
-    ]
-    if (!isAdmin) constraints.unshift(where('departmentId', '==', currentUserDepartment.value))
-    if (loadMore && lastDoc.value) constraints.push(startAfter(lastDoc.value))
-    const snap = await getDocs(query(collection(db, 'energy_records'), ...constraints))
-    const docs = snap.docs.slice(0, PAGE_SIZE)
-    hasMore.value = snap.docs.length > PAGE_SIZE
-    if (docs.length > 0) lastDoc.value = docs[docs.length - 1] ?? null
-    const records = docs.map((d) => ({ id: d.id, ...d.data() } as FetchedSolarRecord))
+    const response = await api.get('/ElectricityRecord', {
+      params: {
+        type: 'SOLAR_PRODUCTION',
+        skip: loadMore ? skip.value : 0,
+        take: PAGE_SIZE,
+      },
+    })
+    const records: FetchedSolarRecord[] = response.data
+    hasMore.value = records.length === PAGE_SIZE
     if (loadMore) historyRecords.value.push(...records)
     else historyRecords.value = records
+    skip.value = historyRecords.value.length
   } catch (error: unknown) {
     toast.fromError(error, 'ไม่สามารถโหลดข้อมูล Solar ได้')
   } finally {
@@ -117,169 +96,144 @@ const fetchHistory = async (loadMore = false): Promise<void> => {
   }
 }
 
-onMounted(() => {
-  unsubscribeBuildings = onSnapshot(
-    query(collection(db, 'buildings'), orderBy('createdAt', 'asc')),
-    (snapshot) => {
-      buildings.value = snapshot.docs.map((d) => ({ id: d.id, name: d.data().name as string }))
-    }
-  )
+onMounted(async () => {
+  try {
+    const response = await api.get('/Building')
+    buildings.value = response.data.map((b: { id: string; name: string }) => ({ id: b.id, name: b.name }))
+  } catch (e) {
+    toast.fromError(e, 'ไม่สามารถโหลดข้อมูลอาคารได้')
+  }
   fetchHistory()
 })
 
-onUnmounted(() => {
-  if (unsubscribeBuildings) unsubscribeBuildings()
-})
+const parseCSVRow = (str: string): string[] => {
+  const result: string[] = []
+  let current = ''
+  let inQuotes = false
+  for (let i = 0; i < str.length; i++) {
+    const char = str[i]
+    if (char === '"') {
+      if (inQuotes && str[i + 1] === '"') {
+        current += '"'; i++
+      } else inQuotes = !inQuotes
+    } else if (char === ',' && !inQuotes) {
+      result.push(current.trim())
+      current = ''
+    } else current += char
+  }
+  result.push(current.trim())
+  return result
+}
 
-  const parseCSVRow = (str: string): string[] => {
-    const result: string[] = []
-    let current = ''
-    let inQuotes = false
-    for (let i = 0; i < str.length; i++) {
-      const char = str[i]
-      if (char === '"') {
-        if (inQuotes && str[i + 1] === '"') {
-          current += '"'; i++
-        } else inQuotes = !inQuotes
-      } else if (char === ',' && !inQuotes) {
-        result.push(current.trim())
-        current = ''
-      } else current += char
-    }
-    result.push(current.trim())
-    return result
+const selectedFile = ref<File | null>(null)
+
+const handleFileSelect = (event: Event): void => {
+  const target = event.target as HTMLInputElement
+  if (target.files && target.files.length > 0) {
+    selectedFile.value = target.files[0] || null
+  }
+}
+
+const submitForm = async (): Promise<void> => {
+  successMessage.value = ''
+  errorMessage.value = ''
+  if (!formData.value.buildingId) {
+    errorMessage.value = 'กรุณาเลือกอาคาร/จุดติดตั้ง'
+    return
+  }
+  if (!selectedFile.value) {
+    errorMessage.value = 'กรุณาเลือกไฟล์ CSV'
+    return
   }
 
-  const selectedFile = ref<File | null>(null)
-  
-  const handleFileSelect = (event: Event): void => {
-    const target = event.target as HTMLInputElement
-    if (target.files && target.files.length > 0) {
-      selectedFile.value = target.files[0] || null
-    }
-  }
+  isSubmitting.value = true
+  const reader = new FileReader()
 
-  const submitForm = async (): Promise<void> => {
-    successMessage.value = ''
-    errorMessage.value = ''
-    if (!formData.value.buildingId) {
-      errorMessage.value = 'กรุณาเลือกอาคาร/จุดติดตั้ง'
-      return
-    }
-    if (!selectedFile.value) {
-      errorMessage.value = 'กรุณาเลือกไฟล์ CSV'
-      return
-    }
+  reader.onload = async (e: ProgressEvent<FileReader>) => {
+    try {
+      const text = e.target?.result
+      if (typeof text !== 'string') throw new Error('ไม่สามารถอ่านไฟล์ได้')
 
-    isSubmitting.value = true
-    const reader = new FileReader()
+      const rows = text.split('\n').map(r => r.trim()).filter(r => r.length > 0)
+      if (rows.length < 2) throw new Error('ไฟล์ว่างเปล่า')
 
-    reader.onload = async (e: ProgressEvent<FileReader>) => {
-      try {
-        const text = e.target?.result
-        if (typeof text !== 'string') throw new Error('ไม่สามารถอ่านไฟล์ได้')
+      const records = []
 
-        const rows = text.split('\n').map(r => r.trim()).filter(r => r.length > 0)
-        if (rows.length < 2) throw new Error('ไฟล์ว่างเปล่า')
+      for (let i = 1; i < rows.length; i++) {
+        const row = rows[i]
+        if (!row) continue
+        const cols = parseCSVRow(row)
+        if (cols.length < 9) continue
 
-        const batch = writeBatch(db)
-        let count = 0
+        const rawDate = cols[0] || ''
+        const parts = rawDate.split('/') // MM/DD/YYYY
+        if (parts.length !== 3) continue
 
-        for (let i = 1; i < rows.length; i++) {
-          const row = rows[i]
-          if (!row) continue
-          const cols = parseCSVRow(row)
-          if (cols.length < 9) continue
+        const mm = parseInt(parts[0] || '1', 10)
+        const dd = parseInt(parts[1] || '1', 10)
+        let yyyy = parseInt((parts[2] || '').split(' ')[0] || '2000', 10)
 
-          const rawDate = cols[0] || ''
-          const parts = rawDate.split('/') // MM/DD/YYYY
-          if (parts.length !== 3) continue
-          
-          const mm = parseInt(parts[0] || '1', 10)
-          const dd = parseInt(parts[1] || '1', 10)
-          let yyyy = parseInt((parts[2] || '').split(' ')[0] || '2000', 10) // in case time is appended
-          
-          if(yyyy < 2000) yyyy += 2000;
-          
-          const recordDate = new Date(yyyy, mm - 1, dd)
+        if (yyyy < 2000) yyyy += 2000
 
-          // Columns definition
-          // 0: Measurement Time
-          // 1: Production (Wh)
-          // 2: To Battery (Wh)
-          // 3: To Grid (Wh)
-          // 4: To Home (Wh)
-          // 5: Consumption (Wh)
-          // 6: From Battery (Wh)
-          // 7: From Grid (Wh)
-          // 8: From Solar (Wh)
+        const recordDate = new Date(yyyy, mm - 1, dd)
 
-          const productionWh = Number((cols[1] || '').replace(/,/g, '')) || 0
-          const toBatteryWh = Number((cols[2] || '').replace(/,/g, '')) || 0
-          const toGridWh = Number((cols[3] || '').replace(/,/g, '')) || 0
-          const toHomeWh = Number((cols[4] || '').replace(/,/g, '')) || 0
-          const consumptionWh = Number((cols[5] || '').replace(/,/g, '')) || 0
-          const fromBatteryWh = Number((cols[6] || '').replace(/,/g, '')) || 0
-          const fromGridWh = Number((cols[7] || '').replace(/,/g, '')) || 0
-          const fromSolarWh = Number((cols[8] || '').replace(/,/g, '')) || 0
+        const productionWh = Number((cols[1] || '').replace(/,/g, '')) || 0
+        const toBatteryWh = Number((cols[2] || '').replace(/,/g, '')) || 0
+        const toGridWh = Number((cols[3] || '').replace(/,/g, '')) || 0
+        const toHomeWh = Number((cols[4] || '').replace(/,/g, '')) || 0
+        const consumptionWh = Number((cols[5] || '').replace(/,/g, '')) || 0
+        const fromBatteryWh = Number((cols[6] || '').replace(/,/g, '')) || 0
+        const fromGridWh = Number((cols[7] || '').replace(/,/g, '')) || 0
+        const fromSolarWh = Number((cols[8] || '').replace(/,/g, '')) || 0
 
-          const docData = {
-            type: 'SOLAR_PRODUCTION',
-            departmentId: currentUserDepartment.value,
-            recordDate: Timestamp.fromDate(recordDate),
-            buildingId: formData.value.buildingId,
-            
-            // Core Dashboard Value (kWh)
-            solarUnitProduced: productionWh / 1000,
-            
-            // Full Dataset Detail
-            productionWh,
-            toBatteryWh,
-            toGridWh,
-            toHomeWh,
-            consumptionWh,
-            fromBatteryWh,
-            fromGridWh,
-            fromSolarWh,
-            
-            note: formData.value.note || selectedFile.value?.name || 'นำเข้าข้อมูล CSV',
-            recordedBy: authStore.user?.uid || 'unknown',
-            createdAt: serverTimestamp(),
-          }
-
-          const docRef = doc(collection(db, 'energy_records'))
-          batch.set(docRef, docData)
-          count++
-        }
-        
-        if (count === 0) {
-          throw new Error('ไม่พบข้อมูลรูปแบบที่ถูกต้องในไฟล์')
-        }
-
-        await batch.commit()
-        successMessage.value = `นำเข้าข้อมูล Solar สำเร็จจำนวน ${count} รายการ`
-        
-        // Reset file
-        selectedFile.value = null
-        const fileInput = document.getElementById('solarCsv') as HTMLInputElement
-        if (fileInput) fileInput.value = ''
-        formData.value.note = ''
-
-      } catch (err: unknown) {
-        errorMessage.value = err instanceof Error ? err.message : 'เกิดข้อผิดพลาดในการอ่านไฟล์'
-      } finally {
-        isSubmitting.value = false
+        records.push({
+          type: 'SOLAR_PRODUCTION',
+          departmentId: currentUserDepartment.value,
+          recordDate: recordDate.toISOString(),
+          buildingId: formData.value.buildingId,
+          solarUnitProduced: productionWh / 1000,
+          productionWh,
+          toBatteryWh,
+          toGridWh,
+          toHomeWh,
+          consumptionWh,
+          fromBatteryWh,
+          fromGridWh,
+          fromSolarWh,
+          note: formData.value.note || selectedFile.value?.name || 'นำเข้าข้อมูล CSV',
+          recordedBy: authStore.user?.uid || authStore.user?.email || 'unknown',
+        })
       }
+
+      if (records.length === 0) {
+        throw new Error('ไม่พบข้อมูลรูปแบบที่ถูกต้องในไฟล์')
+      }
+
+      // POST records one-by-one (or in batch if API supports)
+      for (const record of records) {
+        await api.post('/ElectricityRecord', record)
+      }
+
+      successMessage.value = `นำเข้าข้อมูล Solar สำเร็จจำนวน ${records.length} รายการ`
+
+      selectedFile.value = null
+      const fileInput = document.getElementById('solarCsv') as HTMLInputElement
+      if (fileInput) fileInput.value = ''
+      formData.value.note = ''
+      fetchHistory()
+    } catch (err: unknown) {
+      errorMessage.value = err instanceof Error ? err.message : 'เกิดข้อผิดพลาดในการอ่านไฟล์'
+    } finally {
+      isSubmitting.value = false
     }
-    reader.readAsText(selectedFile.value)
   }
+  reader.readAsText(selectedFile.value)
+}
 
 const getBuildingName = (id: string): string => buildings.value.find((x) => x.id === id)?.name || id
-const formatThaiDate = (ts: Timestamp | null | undefined): string => {
-  if (!ts) return '-'
-  return ts
-    .toDate()
-    .toLocaleDateString('th-TH', { year: 'numeric', month: 'short', day: 'numeric' })
+const formatThaiDate = (dateStr: string | null | undefined): string => {
+  if (!dateStr) return '-'
+  return new Date(dateStr).toLocaleDateString('th-TH', { year: 'numeric', month: 'short', day: 'numeric' })
 }
 
 // Detail / Edit dialog
@@ -309,7 +263,7 @@ const openEdit = () => {
   const r = selectedRecord.value
   editForm.value = {
     buildingId: r.buildingId,
-    recordDate: r.recordDate ? r.recordDate.toDate() : null,
+    recordDate: r.recordDate ? new Date(r.recordDate) : null,
     solarUnitProduced: r.solarUnitProduced,
     note: r.note,
   }
@@ -321,12 +275,26 @@ const saveEdit = async () => {
   if (!selectedRecord.value) return
   isSaving.value = true
   try {
-    await updateDoc(doc(db, 'energy_records', selectedRecord.value.id), {
+    await api.put(`/ElectricityRecord/${selectedRecord.value.id}`, {
       buildingId: editForm.value.buildingId,
-      recordDate: editForm.value.recordDate,
+      recordDate: editForm.value.recordDate ? editForm.value.recordDate.toISOString() : null,
       solarUnitProduced: editForm.value.solarUnitProduced || 0,
       note: editForm.value.note,
     })
+    const index = historyRecords.value.findIndex(r => r.id === selectedRecord.value!.id)
+    if (index !== -1) {
+      const item = historyRecords.value[index]
+      if (item) {
+        historyRecords.value[index] = {
+          ...item,
+          buildingId: editForm.value.buildingId,
+          recordDate: editForm.value.recordDate ? editForm.value.recordDate.toISOString() : null,
+          solarUnitProduced: editForm.value.solarUnitProduced || 0,
+          note: editForm.value.note,
+        }
+      }
+    }
+    toast.success('บันทึกข้อมูลสำเร็จ')
     editVisible.value = false
   } catch (e: unknown) {
     toast.fromError(e, 'เกิดข้อผิดพลาด กรุณาลองใหม่')
@@ -339,7 +307,10 @@ const deleteRecord = async () => {
   if (!selectedRecord.value) return
   if (!confirm('ยืนยันการลบข้อมูลนี้?')) return
   try {
-    await deleteDoc(doc(db, 'energy_records', selectedRecord.value.id))
+    await api.delete(`/ElectricityRecord/${selectedRecord.value.id}`)
+    historyRecords.value = historyRecords.value.filter(r => r.id !== selectedRecord.value!.id)
+    skip.value = historyRecords.value.length
+    toast.success('ลบข้อมูลสำเร็จ')
     editVisible.value = false
     detailVisible.value = false
     selectedRecord.value = null

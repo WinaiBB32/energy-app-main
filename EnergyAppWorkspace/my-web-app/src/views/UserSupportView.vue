@@ -1,12 +1,8 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue'
-import {
-  collection, addDoc, serverTimestamp,
-  query, where, onSnapshot, getDocs, orderBy, limit, Timestamp,
-} from 'firebase/firestore'
 import { useRouter } from 'vue-router'
-// Firebase Removed
 import { useAuthStore } from '@/stores/auth'
+import api from '@/services/api'
 
 import Button from 'primevue/button'
 import InputText from 'primevue/inputtext'
@@ -39,8 +35,8 @@ interface ServiceRequest {
   requesterEmail: string
   assignedTo?: string
   note?: string
-  createdAt: Timestamp | null
-  updatedAt?: Timestamp | null
+  createdAt: string | null
+  updatedAt?: string | null
 }
 
 // ─── Setup ────────────────────────────────────────────────────────────────────
@@ -105,73 +101,57 @@ const form = ref({
   extension: '',
 })
 
-let unsub: (() => void) | null = null
-
-// ─── Firestore ─────────────────────────────────────────────────────────────────
+// ─── Load data ─────────────────────────────────────────────────────────────────
 onMounted(async () => {
   const email = authStore.user?.email
   if (!email) return
 
-  // 1. คำร้องของตัวเอง
-  const q = query(collection(db, 'ipphone_service_requests'), where('requesterEmail', '==', email))
-  unsub = onSnapshot(q, (snap) => {
-    const list = snap.docs.map((d) => ({ id: d.id, ...d.data() } as ServiceRequest))
-    list.sort((a, b) => (b.createdAt?.toMillis() ?? 0) - (a.createdAt?.toMillis() ?? 0))
-    requests.value = list
-    loading.value = false
-  })
-
-  // 2. หาเบอร์โทรศัพท์ที่ผูกกับ user นี้ (สำหรับแท็บแชทกับผู้รับผิดชอบ)
-  // รองรับทั้งรูปแบบเก่า (linkedUserEmail: string) และใหม่ (linkedUserEmails: string[])
+  // 1. โหลดคำร้องของตัวเอง
   try {
-    const [snapNew, snapOld, deptSnap] = await Promise.all([
-      getDocs(query(collection(db, 'ipphone_directory'), where('linkedUserEmails', 'array-contains', email))),
-      getDocs(query(collection(db, 'ipphone_directory'), where('linkedUserEmail', '==', email))),
-      getDocs(collection(db, 'departments')),
-    ])
-    const deptMap = new Map<string, string>()
-    deptSnap.docs.forEach((d) => deptMap.set(d.id, d.data().name as string))
-
-    const seen = new Set<string>()
-    const merged = [...snapNew.docs, ...snapOld.docs].filter((d) => {
-      if (seen.has(d.id)) return false
-      seen.add(d.id)
-      return true
+    const res = await api.get<ServiceRequest[]>('/IPPhoneServiceRequest', {
+      params: { requesterEmail: email },
     })
-    linkedDirectories.value = merged.map((d) => ({
-      id: d.id,
-      ipPhoneNumber: d.data().ipPhoneNumber as string,
-      ownerName: d.data().ownerName as string,
-      departmentId: d.data().departmentId as string,
-      departmentName: deptMap.get(d.data().departmentId as string) ?? d.data().departmentId as string,
-      workgroup: d.data().workgroup as string | undefined,
-      linkedUsers: d.data().linkedUsers ?? [],
-    }))
-    // ถ้า user มีเบอร์ที่รับผิดชอบ → สลับไปแท็บแชทโดยอัตโนมัติ
+    const list = (res.data ?? []).slice().sort((a, b) => {
+      const ta = a.createdAt ? new Date(a.createdAt).getTime() : 0
+      const tb = b.createdAt ? new Date(b.createdAt).getTime() : 0
+      return tb - ta
+    })
+    requests.value = list
+  } catch {
+    // ignore — show empty list
+  } finally {
+    loading.value = false
+  }
+
+  // 2. โหลด IP Phone directories ที่ผูกกับ user นี้
+  try {
+    const res = await api.get<LinkedDirectory[]>('/IPPhoneDirectory', {
+      params: { linkedEmail: email },
+    })
+    linkedDirectories.value = res.data ?? []
     if (linkedDirectories.value.length > 0) {
       currentTab.value = 'assigned'
     }
-    // ตรวจสอบข้อความใหม่ในแต่ละเบอร์
+    // ตรวจสอบข้อความใหม่ (last-seen จาก localStorage)
     const currentUid = authStore.user?.uid ?? ''
     const unread = new Set<string>()
     await Promise.all(
       linkedDirectories.value.map(async (dir) => {
         const lastSeen = getLastSeen(dir.id)
-        const msgSnap = await getDocs(
-          query(
-            collection(db, 'ipphone_directory', dir.id, 'messages'),
-            orderBy('createdAt', 'desc'),
-            limit(1),
-          ),
-        )
-        const [latestDoc] = msgSnap.docs
-        if (latestDoc) {
-          const msg = latestDoc.data()
-          const msgTime = (msg.createdAt as Timestamp | null)?.toMillis() ?? 0
-          // lastSeen + 5000ms buffer เผื่อ clock skew ระหว่าง client และ server
-          if (msgTime > lastSeen + 5000 && msg.senderUid !== currentUid) {
-            unread.add(dir.id)
+        try {
+          const msgRes = await api.get<{ senderId: string; createdAt: string | null }[]>(
+            `/IPPhoneDirectory/${dir.id}/messages`,
+            { params: { limit: 1, orderBy: 'createdAt_desc' } },
+          )
+          const latest = msgRes.data?.[0]
+          if (latest) {
+            const msgTime = latest.createdAt ? new Date(latest.createdAt).getTime() : 0
+            if (msgTime > lastSeen + 5000 && latest.senderId !== currentUid) {
+              unread.add(dir.id)
+            }
           }
+        } catch {
+          // ignore per-directory errors
         }
       }),
     )
@@ -181,10 +161,6 @@ onMounted(async () => {
   } finally {
     loadingLinked.value = false
   }
-})
-
-onUnmounted(() => {
-  if (unsub) unsub()
 })
 
 // ─── Computed ─────────────────────────────────────────────────────────────────
@@ -197,9 +173,9 @@ const statCounts = computed(() => ({
 const linkedCount = computed(() => unreadDirIds.value.size)
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
-function formatDate(ts: Timestamp | null | undefined): string {
+function formatDate(ts: string | null | undefined): string {
   if (!ts) return '-'
-  return ts.toDate().toLocaleString('th-TH', {
+  return new Date(ts).toLocaleString('th-TH', {
     year: 'numeric', month: 'short', day: 'numeric',
     hour: '2-digit', minute: '2-digit',
   })
@@ -234,16 +210,17 @@ async function submitRequest() {
   if (!form.value.description.trim()) { formError.value = 'กรุณาระบุรายละเอียด'; return }
   saving.value = true
   try {
-    await addDoc(collection(db, 'ipphone_service_requests'), {
+    const res = await api.post<ServiceRequest>('/IPPhoneServiceRequest', {
       ...form.value,
       status: 'pending',
       requesterName:  authStore.user?.displayName ?? authStore.user?.email ?? '',
       requesterEmail: authStore.user?.email ?? '',
-      requesterUid:   authStore.user?.uid ?? '',
-      createdAt:  serverTimestamp(),
-      updatedAt:  serverTimestamp(),
+      requesterUid:   authStore.user?.uid ?? authStore.user?.id ?? '',
     })
     formVisible.value = false
+    if (res.data) {
+      requests.value = [res.data, ...requests.value]
+    }
     successMsg.value = 'ส่งคำร้องเรียบร้อยแล้ว ทีมงานจะติดต่อกลับโดยเร็ว'
     setTimeout(() => (successMsg.value = ''), 6000)
   } catch (e) {

@@ -1,8 +1,6 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue'
-// Firebase Removed
-import { toMonthKey, batchUpdateSummary } from '@/utils/monthlySummary'
-// Firebase Removed
+import { ref, computed, onMounted } from 'vue'
+import api from '@/services/api'
 import { useAuthStore } from '@/stores/auth'
 import { useAppToast } from '@/composables/useAppToast'
 import { usePermissions } from '@/composables/usePermissions'
@@ -28,27 +26,31 @@ import TabPanel from 'primevue/tabpanel'
 import Textarea from 'primevue/textarea'
 import Dialog from 'primevue/dialog'
 
-// 1. Interfaces ปรับฟิลด์ตามที่กำหนดเป๊ะๆ
+// 1. Interfaces
 interface TelephoneRecord {
-    departmentId: string
     docReceiveNumber: string
     docNumber: string
     billingCycle: Date | null
-    customerId: string
-    adslCost: number | null
-    sipTrunkCost: number | null
-    otherCost: number | null
-    note: string
+    phoneNumber: string
+    providerName: string
+    usageAmount: number | null
+    vatAmount: number | null
+    totalAmount: number | null
+    recordedBy: string
 }
 
-interface FetchedTelephoneRecord extends Omit<TelephoneRecord, 'billingCycle'> {
+interface FetchedTelephoneRecord {
     id: string
-    billingCycle: Timestamp | null
-    vatAmount: number // บันทึกลง DB
-    totalAmount: number // บันทึกลง DB
-    recordedByName: string
-    recordedByUid: string
-    createdAt: Timestamp
+    docReceiveNumber: string
+    docNumber: string
+    billingCycle: string | null
+    phoneNumber: string
+    providerName: string
+    usageAmount: number
+    vatAmount: number
+    totalAmount: number
+    recordedBy: string
+    createdAt: string
 }
 
 interface Department {
@@ -60,21 +62,20 @@ const authStore = useAuthStore()
 const { isSuperAdmin, isSystemAdmin } = usePermissions()
 const isAdmin = isSystemAdmin('telephone')
 
-// 2. ดึงสิทธิ์และหน่วยงานจากระบบจริง
 const currentUserDepartment = computed(() => authStore.userProfile?.departmentId || '')
 
 const departments = ref<Department[]>([])
 
 const formData = ref<TelephoneRecord>({
-    departmentId: isSuperAdmin.value ? '' : currentUserDepartment.value,
     docReceiveNumber: '',
     docNumber: '',
     billingCycle: null,
-    customerId: '',
-    adslCost: null,
-    sipTrunkCost: null,
-    otherCost: null,
-    note: ''
+    phoneNumber: '',
+    providerName: '',
+    usageAmount: null,
+    vatAmount: null,
+    totalAmount: null,
+    recordedBy: ''
 })
 
 const isSubmitting = ref<boolean>(false)
@@ -85,43 +86,36 @@ const historyRecords = ref<FetchedTelephoneRecord[]>([])
 const isLoadingHistory = ref<boolean>(true)
 const isLoadingMore = ref<boolean>(false)
 const hasMore = ref<boolean>(false)
-const lastDoc = ref<QueryDocumentSnapshot | null>(null)
-const PAGE_SIZE = 20
+const skip = ref<number>(0)
+const take = 20
 
-let unsubscribeDepts: () => void
-
-// 3. ระบบคำนวณ ออโต้ (รวมยอด + VAT 7%)
-const computedSubTotal = computed<number>(() => {
-    return (formData.value.adslCost || 0) +
-        (formData.value.sipTrunkCost || 0) +
-        (formData.value.otherCost || 0)
-})
-
-// ภาษีมูลค่าเพิ่ม 7% คิดให้ออโต้
+// 3. Auto-calculate VAT 7% and total
 const computedVatAmount = computed<number>(() => {
-    return computedSubTotal.value * 0.07
+    return (formData.value.usageAmount || 0) * 0.07
 })
 
-// รวมค่าใช้บริการรอบปัจจุบัน คิดให้ออโต้
 const computedTotalAmount = computed<number>(() => {
-    return computedSubTotal.value + computedVatAmount.value
+    return (formData.value.usageAmount || 0) + computedVatAmount.value
 })
 
-// 4. ดึงข้อมูลประวัติ และ รายชื่อหน่วยงาน
+// Edit form computed
+const editSubTotal = computed(() => editForm.value.usageAmount || 0)
+const editVat = computed(() => editSubTotal.value * 0.07)
+const editTotal = computed(() => editSubTotal.value + editVat.value)
+
+// 4. Fetch history
 const fetchHistory = async (loadMore = false): Promise<void> => {
     if (loadMore) isLoadingMore.value = true
-    else { isLoadingHistory.value = true; historyRecords.value = []; lastDoc.value = null }
+    else { isLoadingHistory.value = true; historyRecords.value = []; skip.value = 0 }
     try {
-        const constraints: QueryConstraint[] = [orderBy('createdAt', 'desc'), limit(PAGE_SIZE + 1)]
-        if (!isAdmin) constraints.unshift(where('departmentId', '==', currentUserDepartment.value))
-        if (loadMore && lastDoc.value) constraints.push(startAfter(lastDoc.value))
-        const snap = await getDocs(query(collection(db, 'telephone_records'), ...constraints))
-        const docs = snap.docs.slice(0, PAGE_SIZE)
-        hasMore.value = snap.docs.length > PAGE_SIZE
-        if (docs.length > 0) lastDoc.value = docs[docs.length - 1] ?? null
-        const records = docs.map(d => ({ id: d.id, ...d.data() } as FetchedTelephoneRecord))
+        const params: Record<string, unknown> = { skip: loadMore ? skip.value : 0, take }
+        const response = await api.get('/TelephoneRecord', { params })
+        const records: FetchedTelephoneRecord[] = response.data
         if (loadMore) historyRecords.value.push(...records)
         else historyRecords.value = records
+        hasMore.value = records.length >= take
+        if (loadMore) skip.value += records.length
+        else skip.value = records.length
     } catch (error: unknown) {
         toast.fromError(error, 'ไม่สามารถโหลดข้อมูลค่าโทรศัพท์ได้')
     } finally {
@@ -130,26 +124,22 @@ const fetchHistory = async (loadMore = false): Promise<void> => {
     }
 }
 
-onMounted(() => {
-    const deptQuery = query(collection(db, 'departments'), orderBy('name'))
-    unsubscribeDepts = onSnapshot(deptQuery, (snapshot) => {
-        const depts: Department[] = []
-        snapshot.forEach(doc => depts.push({ id: doc.id, name: doc.data().name }))
-        departments.value = depts
-    })
+onMounted(async () => {
+    try {
+        const deptRes = await api.get('/Department')
+        departments.value = deptRes.data
+    } catch (error: unknown) {
+        toast.fromError(error, 'ไม่สามารถโหลดรายชื่อหน่วยงานได้')
+    }
     fetchHistory()
 })
 
-onUnmounted(() => {
-    if (unsubscribeDepts) unsubscribeDepts()
-})
-
-// 5. บันทึกข้อมูล
+// 5. Submit
 const submitForm = async (): Promise<void> => {
     successMessage.value = ''
     errorMessage.value = ''
 
-    if (!formData.value.billingCycle || !formData.value.customerId) {
+    if (!formData.value.billingCycle) {
         errorMessage.value = 'กรุณากรอกข้อมูลที่จำเป็น (*) ให้ครบถ้วน'
         return
     }
@@ -157,43 +147,27 @@ const submitForm = async (): Promise<void> => {
     try {
         isSubmitting.value = true
 
-        const saveDepartmentId = isSuperAdmin.value ? formData.value.departmentId : currentUserDepartment.value
-
-        const docData = {
-            departmentId: saveDepartmentId,
+        const payload = {
             docReceiveNumber: formData.value.docReceiveNumber,
             docNumber: formData.value.docNumber,
-            billingCycle: formData.value.billingCycle,
-            customerId: formData.value.customerId,
-            adslCost: formData.value.adslCost || 0,
-            sipTrunkCost: formData.value.sipTrunkCost || 0,
-            otherCost: formData.value.otherCost || 0,
+            billingCycle: formData.value.billingCycle.toISOString(),
+            phoneNumber: formData.value.phoneNumber,
+            providerName: formData.value.providerName,
+            usageAmount: formData.value.usageAmount || 0,
             vatAmount: computedVatAmount.value,
             totalAmount: computedTotalAmount.value,
-            note: formData.value.note,
-            recordedByName: authStore.userProfile?.displayName || authStore.user?.email || 'ไม่ระบุชื่อ',
-            recordedByUid: authStore.user?.uid || 'unknown',
-            createdAt: serverTimestamp()
+            recordedBy: authStore.user?.uid || '',
         }
-        const newDocRef = doc(collection(db, 'telephone_records'))
-        const batch = writeBatch(db)
-        batch.set(newDocRef, docData)
-        const monthKey = toMonthKey(formData.value.billingCycle)
-        if (monthKey) {
-            batchUpdateSummary(batch, monthKey, 'telephone', {
-                totalAmount: computedTotalAmount.value,
-                count: 1,
-            })
-        }
-        await batch.commit()
+
+        await api.post('/TelephoneRecord', payload)
         successMessage.value = 'บันทึกข้อมูลค่าโทรศัพท์สำเร็จ'
 
-        // เคลียร์ฟอร์ม
         formData.value = {
-            departmentId: isSuperAdmin.value ? '' : currentUserDepartment.value,
             docReceiveNumber: '', docNumber: '', billingCycle: null,
-            customerId: '', adslCost: null, sipTrunkCost: null, otherCost: null, note: ''
+            phoneNumber: '', providerName: '', usageAmount: null,
+            vatAmount: null, totalAmount: null, recordedBy: ''
         }
+        await fetchHistory()
     } catch (error: unknown) {
         errorMessage.value = error instanceof Error ? `เกิดข้อผิดพลาด: ${error.message}` : 'เกิดข้อผิดพลาดที่ไม่ทราบสาเหตุ'
     } finally {
@@ -208,27 +182,18 @@ const editVisible = ref(false)
 const isSaving = ref(false)
 
 interface EditForm {
-    departmentId: string
     docReceiveNumber: string
     docNumber: string
     billingCycle: Date | null
-    customerId: string
-    adslCost: number | null
-    sipTrunkCost: number | null
-    otherCost: number | null
-    note: string
+    phoneNumber: string
+    providerName: string
+    usageAmount: number | null
 }
 
 const editForm = ref<EditForm>({
-    departmentId: '', docReceiveNumber: '', docNumber: '', billingCycle: null,
-    customerId: '', adslCost: null, sipTrunkCost: null, otherCost: null, note: ''
+    docReceiveNumber: '', docNumber: '', billingCycle: null,
+    phoneNumber: '', providerName: '', usageAmount: null
 })
-
-
-// ใช้เพื่อแสดง preview ใน edit dialog เท่านั้น — ไม่ได้ส่งค่าเหล่านี้ไป backend
-const editSubTotal = computed(() => (editForm.value.adslCost || 0) + (editForm.value.sipTrunkCost || 0) + (editForm.value.otherCost || 0))
-const editVat = computed(() => editSubTotal.value * 0.07)
-const editTotal = computed(() => editSubTotal.value + editVat.value)
 
 const openDetail = (event: { data: FetchedTelephoneRecord }) => {
     selectedRecord.value = event.data
@@ -239,15 +204,12 @@ const openEdit = () => {
     if (!selectedRecord.value) return
     const r = selectedRecord.value
     editForm.value = {
-        departmentId: r.departmentId,
         docReceiveNumber: r.docReceiveNumber,
         docNumber: r.docNumber,
-        billingCycle: r.billingCycle ? r.billingCycle.toDate() : null,
-        customerId: r.customerId,
-        adslCost: r.adslCost,
-        sipTrunkCost: r.sipTrunkCost,
-        otherCost: r.otherCost,
-        note: r.note
+        billingCycle: r.billingCycle ? new Date(r.billingCycle) : null,
+        phoneNumber: r.phoneNumber,
+        providerName: r.providerName,
+        usageAmount: r.usageAmount,
     }
     detailVisible.value = false
     editVisible.value = true
@@ -257,20 +219,20 @@ const saveEdit = async () => {
     if (!selectedRecord.value) return
     isSaving.value = true
     try {
-        await updateDoc(doc(db, 'telephone_records', selectedRecord.value.id), {
-            departmentId: editForm.value.departmentId,
+        const payload = {
             docReceiveNumber: editForm.value.docReceiveNumber,
             docNumber: editForm.value.docNumber,
-            billingCycle: editForm.value.billingCycle,
-            customerId: editForm.value.customerId,
-            adslCost: editForm.value.adslCost || 0,
-            sipTrunkCost: editForm.value.sipTrunkCost || 0,
-            otherCost: editForm.value.otherCost || 0,
+            billingCycle: editForm.value.billingCycle ? editForm.value.billingCycle.toISOString() : null,
+            phoneNumber: editForm.value.phoneNumber,
+            providerName: editForm.value.providerName,
+            usageAmount: editForm.value.usageAmount || 0,
             vatAmount: editVat.value,
             totalAmount: editTotal.value,
-            note: editForm.value.note,
-        })
+        }
+        await api.put(`/TelephoneRecord/${selectedRecord.value.id}`, payload)
         editVisible.value = false
+        await fetchHistory()
+        toast.success('แก้ไขข้อมูลสำเร็จ')
     } catch (e: unknown) {
         toast.fromError(e, 'เกิดข้อผิดพลาด กรุณาลองใหม่')
     } finally {
@@ -282,20 +244,12 @@ const deleteRecord = async () => {
     if (!selectedRecord.value) return
     if (!confirm('ยืนยันการลบข้อมูลนี้?')) return
     try {
-        const record = selectedRecord.value
-        const batch = writeBatch(db)
-        batch.delete(doc(db, 'telephone_records', record.id))
-        const monthKey = toMonthKey(record.billingCycle)
-        if (monthKey) {
-            batchUpdateSummary(batch, monthKey, 'telephone', {
-                totalAmount: -(record.totalAmount || 0),
-                count: -1,
-            })
-        }
-        await batch.commit()
+        await api.delete(`/TelephoneRecord/${selectedRecord.value.id}`)
         editVisible.value = false
         detailVisible.value = false
         selectedRecord.value = null
+        await fetchHistory()
+        toast.success('ลบข้อมูลสำเร็จ')
     } catch (e: unknown) {
         toast.fromError(e, 'เกิดข้อผิดพลาด กรุณาลองใหม่')
     }
@@ -303,8 +257,10 @@ const deleteRecord = async () => {
 
 // 7. Helpers
 const getDeptName = (id: string): string => departments.value.find(x => x.id === id)?.name || id
-const formatThaiMonth = (ts: Timestamp | null | undefined): string => ts ? ts.toDate().toLocaleDateString('th-TH', { year: 'numeric', month: 'long' }) : '-'
-const formatCurrency = (val: number | null | undefined): string => val != null ? new Intl.NumberFormat('th-TH', { style: 'currency', currency: 'THB' }).format(val) : '-'
+const formatThaiMonth = (dateStr: string | null | undefined): string =>
+    dateStr ? new Date(dateStr).toLocaleDateString('th-TH', { year: 'numeric', month: 'long' }) : '-'
+const formatCurrency = (val: number | null | undefined): string =>
+    val != null ? new Intl.NumberFormat('th-TH', { style: 'currency', currency: 'THB' }).format(val) : '-'
 </script>
 
 <template>
@@ -313,7 +269,7 @@ const formatCurrency = (val: number | null | undefined): string => val != null ?
             <div>
                 <h2 class="text-2xl font-bold text-gray-800"><i
                         class="pi pi-phone text-green-500 mr-2"></i>บันทึกค่าโทรศัพท์และอินเทอร์เน็ต</h2>
-                <p class="text-gray-500 mt-1">บันทึกข้อมูลใบแจ้งหนี้ ค่าบริการ ADSL และ SIP Trunk</p>
+                <p class="text-gray-500 mt-1">บันทึกข้อมูลใบแจ้งหนี้ ค่าบริการโทรศัพท์และอินเทอร์เน็ต</p>
             </div>
         </div>
 
@@ -340,28 +296,23 @@ const formatCurrency = (val: number | null | undefined): string => val != null ?
 
                                 <div>
                                     <h3 class="font-bold text-gray-700 border-b pb-2 mb-4 text-lg"><i
-                                            class="pi pi-file mr-2 text-green-500"></i>ข้อมูลเอกสารและหน่วยงาน</h3>
+                                            class="pi pi-file mr-2 text-green-500"></i>ข้อมูลเอกสารและการบริการ</h3>
                                     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                                        <div class="flex flex-col gap-2">
-                                            <label class="font-semibold text-sm text-gray-700">หน่วยงานรับผิดชอบ <span
-                                                    class="text-red-500">*</span></label>
-                                            <Select v-if="isSuperAdmin" v-model="formData.departmentId"
-                                                :options="departments" optionLabel="name" optionValue="id"
-                                                placeholder="-- เลือกหน่วยงาน --" class="w-full" />
-                                            <InputText v-else :value="getDeptName(currentUserDepartment)" disabled
-                                                class="w-full bg-gray-100 font-bold" />
-                                        </div>
-                                        <div class="flex flex-col gap-2">
-                                            <label class="font-semibold text-sm text-gray-700">รหัสลูกค้า <span
-                                                    class="text-red-500">*</span></label>
-                                            <InputText v-model="formData.customerId" placeholder="เช่น CUST-12345"
-                                                class="w-full font-bold" />
-                                        </div>
                                         <div class="flex flex-col gap-2">
                                             <label class="font-semibold text-sm text-gray-700">รอบบิล (เดือน/ปี) <span
                                                     class="text-red-500">*</span></label>
                                             <DatePicker v-model="formData.billingCycle" view="month" dateFormat="MM yy"
                                                 class="w-full" showIcon />
+                                        </div>
+                                        <div class="flex flex-col gap-2">
+                                            <label class="font-semibold text-sm text-gray-700">ชื่อผู้ให้บริการ</label>
+                                            <InputText v-model="formData.providerName" placeholder="เช่น TOT, True, AIS"
+                                                class="w-full" />
+                                        </div>
+                                        <div class="flex flex-col gap-2">
+                                            <label class="font-semibold text-sm text-gray-700">หมายเลขโทรศัพท์</label>
+                                            <InputText v-model="formData.phoneNumber" placeholder="เช่น 02-xxx-xxxx"
+                                                class="w-full" />
                                         </div>
                                         <div class="flex flex-col gap-2">
                                             <label class="font-semibold text-sm text-gray-700">เลขที่รับหนังสือ</label>
@@ -379,24 +330,12 @@ const formatCurrency = (val: number | null | undefined): string => val != null ?
                                             class="pi pi-calculator mr-2"></i>รายละเอียดค่าบริการ</h3>
                                     <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 items-end">
                                         <div class="flex flex-col gap-2">
-                                            <label class="font-semibold text-sm text-gray-700">ค่าบริการ ADSL 1
-                                                Port</label>
-                                            <InputNumber v-model="formData.adslCost" mode="currency" currency="THB"
-                                                locale="th-TH" class="w-full" />
-                                        </div>
-                                        <div class="flex flex-col gap-2">
-                                            <label class="font-semibold text-sm text-gray-700">ค่าบริการ SIP Trunk 1
-                                                Trunk</label>
-                                            <InputNumber v-model="formData.sipTrunkCost" mode="currency" currency="THB"
-                                                locale="th-TH" class="w-full" />
-                                        </div>
-                                        <div class="flex flex-col gap-2">
-                                            <label class="font-semibold text-sm text-gray-700">บริการอื่นๆ</label>
-                                            <InputNumber v-model="formData.otherCost" mode="currency" currency="THB"
+                                            <label class="font-semibold text-sm text-gray-700">ค่าใช้บริการ (ก่อน VAT)</label>
+                                            <InputNumber v-model="formData.usageAmount" mode="currency" currency="THB"
                                                 locale="th-TH" class="w-full" />
                                         </div>
 
-                                        <div class="flex flex-col gap-2 lg:col-start-2">
+                                        <div class="flex flex-col gap-2">
                                             <label class="font-semibold text-sm text-gray-500">ภาษีมูลค่าเพิ่ม 7%
                                                 (คำนวณอัตโนมัติ)</label>
                                             <InputNumber :modelValue="computedVatAmount" mode="currency" currency="THB"
@@ -415,12 +354,6 @@ const formatCurrency = (val: number | null | undefined): string => val != null ?
                                     </div>
                                 </div>
 
-                                <div class="flex flex-col gap-2">
-                                    <label class="font-semibold text-sm text-gray-700">หมายเหตุ</label>
-                                    <Textarea v-model="formData.note" rows="2" placeholder="รายละเอียดเพิ่มเติม..."
-                                        class="w-full" />
-                                </div>
-
                                 <div class="flex justify-end mt-2 pt-4 border-t border-gray-100">
                                     <Button type="submit" label="บันทึกบิลค่าโทรศัพท์" icon="pi pi-save"
                                         severity="success" :loading="isSubmitting" class="px-8 py-3 text-lg" />
@@ -437,30 +370,25 @@ const formatCurrency = (val: number | null | undefined): string => val != null ?
                                 stripedRows responsiveLayout="scroll" emptyMessage="ยังไม่มีข้อมูล"
                                 selectionMode="single" @row-click="openDetail" class="cursor-pointer">
 
-                                <Column v-if="isAdmin" header="หน่วยงาน">
+                                <Column v-if="isAdmin" header="ผู้บันทึก">
                                     <template #body="sp">
-                                        <div class="font-bold text-gray-700">{{ getDeptName(sp.data.departmentId) }}
-                                        </div>
                                         <div class="text-xs text-gray-500"><i class="pi pi-user mr-1"></i>{{
-                                            sp.data.recordedByName }}</div>
+                                            sp.data.recordedBy }}</div>
                                     </template>
                                 </Column>
 
-                                <Column header="รอบบิล / รหัสลูกค้า">
+                                <Column header="รอบบิล / ผู้ให้บริการ">
                                     <template #body="sp">
-                                        <div class="font-semibold text-gray-800 tracking-wider">{{ sp.data.customerId }}
+                                        <div class="font-semibold text-gray-800 tracking-wider">{{ sp.data.providerName || '-' }}
                                         </div>
                                         <div class="text-xs text-gray-500 mt-1"><i class="pi pi-calendar mr-1"></i>{{
                                             formatThaiMonth(sp.data.billingCycle) }}</div>
                                     </template>
                                 </Column>
 
-                                <Column header="รายละเอียดค่าบริการ">
+                                <Column header="หมายเลขโทรศัพท์">
                                     <template #body="sp">
-                                        <div class="text-xs text-gray-600 mb-1">ADSL: {{
-                                            formatCurrency(sp.data.adslCost) }}</div>
-                                        <div class="text-xs text-gray-600">SIP Trunk: {{
-                                            formatCurrency(sp.data.sipTrunkCost) }}</div>
+                                        <div class="text-sm text-gray-700">{{ sp.data.phoneNumber || '-' }}</div>
                                     </template>
                                 </Column>
 
@@ -495,13 +423,12 @@ const formatCurrency = (val: number | null | undefined): string => val != null ?
                         <div v-if="selectedRecord" class="flex flex-col gap-5">
                             <div class="grid grid-cols-2 gap-3 text-sm">
                                 <div class="bg-gray-50 rounded-lg p-3">
-                                    <p class="text-gray-500 text-xs mb-1">หน่วยงาน</p>
-                                    <p class="font-semibold text-gray-800">{{ getDeptName(selectedRecord.departmentId)
-                                        }}</p>
+                                    <p class="text-gray-500 text-xs mb-1">ผู้ให้บริการ</p>
+                                    <p class="font-semibold text-gray-800">{{ selectedRecord.providerName || '-' }}</p>
                                 </div>
                                 <div class="bg-gray-50 rounded-lg p-3">
-                                    <p class="text-gray-500 text-xs mb-1">รหัสลูกค้า</p>
-                                    <p class="font-semibold text-gray-800">{{ selectedRecord.customerId }}</p>
+                                    <p class="text-gray-500 text-xs mb-1">หมายเลขโทรศัพท์</p>
+                                    <p class="font-semibold text-gray-800">{{ selectedRecord.phoneNumber || '-' }}</p>
                                 </div>
                                 <div class="bg-gray-50 rounded-lg p-3">
                                     <p class="text-gray-500 text-xs mb-1">รอบบิล</p>
@@ -510,7 +437,7 @@ const formatCurrency = (val: number | null | undefined): string => val != null ?
                                 </div>
                                 <div class="bg-gray-50 rounded-lg p-3">
                                     <p class="text-gray-500 text-xs mb-1">บันทึกโดย</p>
-                                    <p class="font-semibold text-gray-800">{{ selectedRecord.recordedByName }}</p>
+                                    <p class="font-semibold text-gray-800">{{ selectedRecord.recordedBy }}</p>
                                 </div>
                                 <div v-if="selectedRecord.docReceiveNumber" class="bg-gray-50 rounded-lg p-3">
                                     <p class="text-gray-500 text-xs mb-1">เลขที่รับหนังสือ</p>
@@ -527,18 +454,8 @@ const formatCurrency = (val: number | null | undefined): string => val != null ?
                                         class="pi pi-calculator mr-2"></i>รายละเอียดค่าบริการ</p>
                                 <div class="flex flex-col gap-2 text-sm">
                                     <div class="flex justify-between">
-                                        <span class="text-gray-600">ค่าบริการ ADSL</span>
-                                        <span class="font-semibold">{{ formatCurrency(selectedRecord.adslCost) }}</span>
-                                    </div>
-                                    <div class="flex justify-between">
-                                        <span class="text-gray-600">ค่าบริการ SIP Trunk</span>
-                                        <span class="font-semibold">{{ formatCurrency(selectedRecord.sipTrunkCost)
-                                            }}</span>
-                                    </div>
-                                    <div class="flex justify-between">
-                                        <span class="text-gray-600">บริการอื่นๆ</span>
-                                        <span class="font-semibold">{{ formatCurrency(selectedRecord.otherCost)
-                                            }}</span>
+                                        <span class="text-gray-600">ค่าใช้บริการ</span>
+                                        <span class="font-semibold">{{ formatCurrency(selectedRecord.usageAmount) }}</span>
                                     </div>
                                     <div class="flex justify-between border-t border-green-200 pt-2 mt-1">
                                         <span class="text-gray-500">VAT 7%</span>
@@ -552,12 +469,6 @@ const formatCurrency = (val: number | null | undefined): string => val != null ?
                                             }}</span>
                                     </div>
                                 </div>
-                            </div>
-
-                            <div v-if="selectedRecord.note"
-                                class="bg-amber-50 rounded-lg p-3 text-sm border border-amber-100">
-                                <p class="text-gray-500 text-xs mb-1">หมายเหตุ</p>
-                                <p class="text-gray-700">{{ selectedRecord.note }}</p>
                             </div>
                         </div>
 
@@ -574,23 +485,18 @@ const formatCurrency = (val: number | null | undefined): string => val != null ?
                         <div class="flex flex-col gap-4">
                             <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                 <div class="flex flex-col gap-2">
-                                    <label class="text-sm font-semibold text-gray-700">หน่วยงาน</label>
-                                    <Select v-if="isSuperAdmin" v-model="editForm.departmentId" :options="departments"
-                                        optionLabel="name" optionValue="id" placeholder="-- เลือกหน่วยงาน --"
-                                        class="w-full" />
-                                    <InputText v-else :value="getDeptName(editForm.departmentId)" disabled
-                                        class="w-full bg-gray-100" />
-                                </div>
-                                <div class="flex flex-col gap-2">
-                                    <label class="text-sm font-semibold text-gray-700">รหัสลูกค้า <span
-                                            class="text-red-500">*</span></label>
-                                    <InputText v-model="editForm.customerId" class="w-full" />
-                                </div>
-                                <div class="flex flex-col gap-2">
                                     <label class="text-sm font-semibold text-gray-700">รอบบิล <span
                                             class="text-red-500">*</span></label>
                                     <DatePicker v-model="editForm.billingCycle" view="month" dateFormat="MM yy"
                                         class="w-full" showIcon />
+                                </div>
+                                <div class="flex flex-col gap-2">
+                                    <label class="text-sm font-semibold text-gray-700">ชื่อผู้ให้บริการ</label>
+                                    <InputText v-model="editForm.providerName" class="w-full" />
+                                </div>
+                                <div class="flex flex-col gap-2">
+                                    <label class="text-sm font-semibold text-gray-700">หมายเลขโทรศัพท์</label>
+                                    <InputText v-model="editForm.phoneNumber" class="w-full" />
                                 </div>
                                 <div class="flex flex-col gap-2">
                                     <label class="text-sm font-semibold text-gray-700">เลขที่รับหนังสือ</label>
@@ -607,18 +513,8 @@ const formatCurrency = (val: number | null | undefined): string => val != null ?
                                         class="pi pi-calculator mr-2"></i>รายละเอียดค่าบริการ</p>
                                 <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
                                     <div class="flex flex-col gap-2">
-                                        <label class="text-xs font-semibold text-gray-700">ค่าบริการ ADSL</label>
-                                        <InputNumber v-model="editForm.adslCost" mode="currency" currency="THB"
-                                            locale="th-TH" class="w-full" />
-                                    </div>
-                                    <div class="flex flex-col gap-2">
-                                        <label class="text-xs font-semibold text-gray-700">ค่าบริการ SIP Trunk</label>
-                                        <InputNumber v-model="editForm.sipTrunkCost" mode="currency" currency="THB"
-                                            locale="th-TH" class="w-full" />
-                                    </div>
-                                    <div class="flex flex-col gap-2">
-                                        <label class="text-xs font-semibold text-gray-700">บริการอื่นๆ</label>
-                                        <InputNumber v-model="editForm.otherCost" mode="currency" currency="THB"
+                                        <label class="text-xs font-semibold text-gray-700">ค่าใช้บริการ (ก่อน VAT)</label>
+                                        <InputNumber v-model="editForm.usageAmount" mode="currency" currency="THB"
                                             locale="th-TH" class="w-full" />
                                     </div>
                                 </div>
@@ -628,11 +524,6 @@ const formatCurrency = (val: number | null | undefined): string => val != null ?
                                     <span class="font-bold text-green-700">รวมสุทธิ: {{ formatCurrency(editTotal)
                                         }}</span>
                                 </div>
-                            </div>
-
-                            <div class="flex flex-col gap-2">
-                                <label class="text-sm font-semibold text-gray-700">หมายเหตุ</label>
-                                <Textarea v-model="editForm.note" rows="2" class="w-full" />
                             </div>
                         </div>
 

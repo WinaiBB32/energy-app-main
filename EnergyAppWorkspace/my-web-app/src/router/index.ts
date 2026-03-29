@@ -15,13 +15,13 @@ const router = createRouter({
     {
       path: '/profile',
       name: 'profile',
-      component: () => import('../views/ComingSoon.vue'),
+      component: () => import('../views/ProfileView.vue'),
       meta: { requiresAuth: true },
     },
     {
       path: '/support',
       name: 'user-support',
-      component: () => import('../views/ComingSoon.vue'),
+      component: () => import('../views/UserSupportView.vue'),
       meta: { requiresAuth: true },
     },
     {
@@ -39,19 +39,19 @@ const router = createRouter({
         {
           path: '/electricity/dashboard',
           name: 'electricity-dashboard',
-          component: () => import('../views/ComingSoon.vue'),
+          component: () => import('../views/systems/electricity/Dashboard.vue'),
           meta: { system: 'system1' },
         },
         {
           path: '/electricity',
           name: 'electricity-bill',
-          component: () => import('../views/ComingSoon.vue'),
+          component: () => import('../views/systems/electricity/Electricity.vue'),
           meta: { system: 'system1', requiresAdmin: true },
         },
         {
           path: '/electricity/solar',
           name: 'electricity-solar',
-          component: () => import('../views/ComingSoon.vue'),
+          component: () => import('../views/systems/electricity/Solar.vue'),
           meta: { system: 'system1', requiresAdmin: true },
         },
 
@@ -59,13 +59,13 @@ const router = createRouter({
         {
           path: '/water/dashboard',
           name: 'water-dashboard',
-          component: () => import('../views/ComingSoon.vue'),
+          component: () => import('../views/systems/water/Dashboard.vue'),
           meta: { system: 'system2' },
         },
         {
           path: '/water',
           name: 'water-bill',
-          component: () => import('../views/ComingSoon.vue'),
+          component: () => import('../views/systems/water/Water.vue'),
           meta: { system: 'system2', requiresAdmin: true },
         },
 
@@ -73,43 +73,43 @@ const router = createRouter({
         {
           path: '/fuel/dashboard',
           name: 'fuel-dashboard',
-          component: () => import('../views/ComingSoon.vue'),
+          component: () => import('../views/systems/fuel/Dashboard.vue'),
           meta: { system: 'system3' },
         },
         {
           path: '/fuel',
           name: 'fuel-record',
-          component: () => import('../views/ComingSoon.vue'),
+          component: () => import('../views/systems/fuel/Fuel.vue'),
           meta: { system: 'system3', requiresAdmin: true },
         },
         {
           path: '/fuel/history',
           name: 'fuel-history',
-          component: () => import('../views/ComingSoon.vue'),
+          component: () => import('../views/systems/fuel/FuelHistory.vue'),
           meta: { system: 'system3', requiresAdmin: true },
         },
         {
           path: '/fuel/print',
           name: 'fuel-print',
-          component: () => import('../views/ComingSoon.vue'),
+          component: () => import('../views/systems/fuel/FuelPrint.vue'),
           meta: { system: 'system3', requiresAdmin: true },
         },
         {
           path: '/fuel/receipt',
           name: 'fuel-receipt',
-          component: () => import('../views/ComingSoon.vue'),
+          component: () => import('../views/systems/fuel/FuelReceipt.vue'),
           meta: { system: 'system3', requiresAdmin: true },
         },
         {
           path: '/fuel/receipt-history',
           name: 'fuel-receipt-history',
-          component: () => import('../views/ComingSoon.vue'),
+          component: () => import('../views/systems/fuel/FuelReceiptHistory.vue'),
           meta: { system: 'system3', requiresAdmin: true },
         },
         {
           path: '/fuel/receipt-print',
           name: 'fuel-receipt-print',
-          component: () => import('../views/ComingSoon.vue'),
+          component: () => import('../views/systems/fuel/FuelReceiptPrint.vue'),
           meta: { system: 'system3', requiresAdmin: true },
         },
 
@@ -117,13 +117,13 @@ const router = createRouter({
         {
           path: '/telephone/dashboard',
           name: 'telephone-dashboard',
-          component: () => import('../views/ComingSoon.vue'),
+          component: () => import('../views/systems/telephone/Dashboard.vue'),
           meta: { system: 'system4' },
         },
         {
           path: '/telephone',
           name: 'telephone-bill',
-          component: () => import('../views/ComingSoon.vue'),
+          component: () => import('../views/systems/telephone/Telephone.vue'),
           meta: { system: 'system4', requiresAdmin: true },
         },
 
@@ -131,13 +131,13 @@ const router = createRouter({
         {
           path: '/saraban/dashboard',
           name: 'saraban-dashboard',
-          component: () => import('../views/ComingSoon.vue'),
+          component: () => import('../views/systems/saraban/Dashboard.vue'),
           meta: { system: 'system5' },
         },
         {
           path: '/saraban',
           name: 'saraban-record',
-          component: () => import('../views/ComingSoon.vue'),
+          component: () => import('../views/systems/saraban/Saraban.vue'),
           meta: { system: 'system5', requiresAdmin: true },
         },
 
@@ -145,43 +145,43 @@ const router = createRouter({
         {
           path: '/ipphone/dashboard',
           name: 'ipphone-dashboard',
-          component: () => import('../views/ComingSoon.vue'),
+          component: () => import('../views/systems/ipphone/Dashboard.vue'),
           meta: { system: 'system6' },
         },
         {
           path: '/ipphone',
           name: 'ipphone-directory',
-          component: () => import('../views/ComingSoon.vue'),
+          component: () => import('../views/systems/ipphone/IPPhone.vue'),
           meta: { system: 'system6' },
         },
         {
           path: '/ipphone/upload',
           name: 'ipphone-upload',
-          component: () => import('../views/ComingSoon.vue'),
+          component: () => import('../views/systems/ipphone/Upload.vue'),
           meta: { system: 'system6', requiresSuperAdmin: true },
         },
         {
           path: '/ipphone/directory/:id',
           name: 'ipphone-detail',
-          component: () => import('../views/ComingSoon.vue'),
+          component: () => import('../views/systems/ipphone/IPPhoneDetail.vue'),
           meta: { requiresAuth: true },
         },
         {
           path: '/ipphone/service',
           name: 'ipphone-service',
-          component: () => import('../views/ComingSoon.vue'),
+          component: () => import('../views/systems/ipphone/ServiceRequest.vue'),
           meta: { system: 'system6', requiresSuperAdmin: true },
         },
         {
           path: '/ipphone/service/:id',
           name: 'ipphone-service-chat',
-          component: () => import('../views/ComingSoon.vue'),
+          component: () => import('../views/systems/ipphone/ServiceChat.vue'),
           meta: { requiresAuth: true },
         },
         {
           path: '/ipphone/mapping',
           name: 'ipphone-mapping',
-          component: () => import('../views/ComingSoon.vue'),
+          component: () => import('../views/systems/ipphone/UserMapping.vue'),
           meta: { system: 'system6', requiresSuperAdmin: true },
         },
 
@@ -189,13 +189,13 @@ const router = createRouter({
         {
           path: '/postal/dashboard',
           name: 'postal-dashboard',
-          component: () => import('../views/ComingSoon.vue'),
+          component: () => import('../views/systems/postal/Dashboard.vue'),
           meta: { system: 'system7' },
         },
         {
           path: '/postal',
           name: 'postal-record',
-          component: () => import('../views/ComingSoon.vue'),
+          component: () => import('../views/systems/postal/Postal.vue'),
           meta: { system: 'system7', requiresAdmin: true },
         },
 
@@ -203,13 +203,13 @@ const router = createRouter({
         {
           path: '/meeting/dashboard',
           name: 'meeting-dashboard',
-          component: () => import('../views/ComingSoon.vue'),
+          component: () => import('../views/systems/meeting/Dashboard.vue'),
           meta: { system: 'system8' },
         },
         {
           path: '/meeting',
           name: 'meeting-record',
-          component: () => import('../views/ComingSoon.vue'),
+          component: () => import('../views/systems/meeting/MeetingRecord.vue'),
           meta: { system: 'system8', requiresAdmin: true },
         },
         {

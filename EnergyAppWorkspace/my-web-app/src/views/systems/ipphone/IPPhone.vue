@@ -1,24 +1,10 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue'
-import {
-  collection,
-  query,
-  orderBy,
-  onSnapshot,
-  doc,
-  getDocs,
-  addDoc,
-  updateDoc,
-  deleteDoc,
-  writeBatch,
-  serverTimestamp,
-  Timestamp,
-} from 'firebase/firestore'
-// Firebase Removed
+import { ref, computed, onMounted } from 'vue'
 
 import { useAuthStore } from '@/stores/auth'
 import { useAppToast } from '@/composables/useAppToast'
 import { usePermissions } from '@/composables/usePermissions'
+import api from '@/services/api'
 
 import Card from 'primevue/card'
 import InputText from 'primevue/inputtext'
@@ -58,17 +44,7 @@ export interface IPPhoneDirectory {
 
 export interface FetchedIPPhoneDirectory extends IPPhoneDirectory {
   id: string
-  /** รายการเก่าอาจไม่มีฟิลด์นี้ — ห้ามใช้ orderBy('createdAt') ใน query เพราะจะถูกตัดออกจากผลลัพธ์ */
-  createdAt?: Timestamp
-}
-
-export interface UploadStatRecord {
-  id: string
-  reportMonth: Timestamp | null
-  fileName: string
-  uploadedBy: string
-  totalRecords: number
-  createdAt: Timestamp
+  createdAt?: string
 }
 
 export interface Department {
@@ -98,11 +74,6 @@ const currentUserName = computed(
 )
 const toast = useAppToast()
 
-function directoryCreatedMs(d: FetchedIPPhoneDirectory): number {
-  const c = d.createdAt
-  return c && typeof c.toMillis === 'function' ? c.toMillis() : 0
-}
-
 /** รายการที่ไม่มี isPublished ถือว่าเผยแพร่ได้ */
 function isDirPublished(item: IPPhoneDirectory): boolean {
   return item.isPublished !== false
@@ -110,52 +81,36 @@ function isDirPublished(item: IPPhoneDirectory): boolean {
 
 const departments = ref<Department[]>([])
 const directories = ref<FetchedIPPhoneDirectory[]>([])
-const uploadHistory = ref<UploadStatRecord[]>([])
 
 const isLoading = ref<boolean>(true)
-let unsubDepts: () => void
-let unsubDirs: () => void
-let unsubUploads: () => void
 
 // ─── 3. Fetch Data ────────────────────────────────────────────────────────────
-onMounted(() => {
-  unsubDepts = onSnapshot(query(collection(db, 'departments'), orderBy('name')), (snap) => {
-    departments.value = snap.docs.map((d) => ({ id: d.id, name: d.data().name as string }))
-  })
+const fetchDepartments = async (): Promise<void> => {
+  try {
+    const res = await api.get('/Department')
+    departments.value = res.data
+  } catch (e) {
+    toast.fromError(e, 'ไม่สามารถโหลดรายชื่อหน่วยงานได้')
+  }
+}
 
-  unsubDirs = onSnapshot(
-    collection(db, 'ipphone_directory'),
-    (snap) => {
-      const records: FetchedIPPhoneDirectory[] = []
-      snap.forEach((document) =>
-        records.push({ id: document.id, ...document.data() } as FetchedIPPhoneDirectory),
-      )
-      records.sort((a, b) => directoryCreatedMs(b) - directoryCreatedMs(a))
-      directories.value = records
-      isLoading.value = false
-    },
-    (err) => {
-      isLoading.value = false
-      toast.fromError(err, 'ไม่สามารถโหลดสมุดโทรศัพท์ได้')
-    },
-  )
+const fetchDirectories = async (): Promise<void> => {
+  isLoading.value = true
+  try {
+    const params: Record<string, string> = {}
+    if (searchQuery.value) params.keyword = searchQuery.value
+    const res = await api.get('/IPPhoneDirectory', { params })
+    directories.value = res.data
+  } catch (e) {
+    toast.fromError(e, 'ไม่สามารถโหลดสมุดโทรศัพท์ได้')
+  } finally {
+    isLoading.value = false
+  }
+}
 
-  unsubUploads = onSnapshot(
-    query(collection(db, 'ipphone_monthly_stats'), orderBy('createdAt', 'desc')),
-    (snap) => {
-      const records: UploadStatRecord[] = []
-      snap.forEach((document) =>
-        records.push({ id: document.id, ...document.data() } as UploadStatRecord),
-      )
-      uploadHistory.value = records
-    },
-  )
-})
-
-onUnmounted(() => {
-  if (unsubDepts) unsubDepts()
-  if (unsubDirs) unsubDirs()
-  if (unsubUploads) unsubUploads()
+onMounted(async () => {
+  await fetchDepartments()
+  await fetchDirectories()
 })
 
 // ─── 4. Directory CRUD Operations ─────────────────────────────────────────────
@@ -230,15 +185,13 @@ const saveDirectory = async (): Promise<void> => {
   isSaving.value = true
   try {
     if (isEditMode.value && editId.value) {
-      await updateDoc(doc(db, 'ipphone_directory', editId.value), { ...formDir.value })
+      await api.put(`/IPPhoneDirectory/${editId.value}`, { ...formDir.value })
       successMsg.value = 'อัปเดตข้อมูลสำเร็จ'
     } else {
-      await addDoc(collection(db, 'ipphone_directory'), {
-        ...formDir.value,
-        createdAt: serverTimestamp(),
-      })
+      await api.post('/IPPhoneDirectory', { ...formDir.value })
       successMsg.value = 'เพิ่มหมายเลขใหม่สำเร็จ'
     }
+    await fetchDirectories()
     setTimeout(() => {
       dialogVisible.value = false
     }, 1000)
@@ -253,7 +206,8 @@ const saveDirectory = async (): Promise<void> => {
 const deleteDirectory = async (id: string, name: string): Promise<void> => {
   if (confirm(`คุณแน่ใจหรือไม่ว่าต้องการลบเบอร์ของ "${name}" ?`)) {
     try {
-      await deleteDoc(doc(db, 'ipphone_directory', id))
+      await api.delete(`/IPPhoneDirectory/${id}`)
+      await fetchDirectories()
     } catch (e) {
       toast.fromError(e, 'ไม่สามารถลบข้อมูลได้')
     }
@@ -264,73 +218,10 @@ const computedDirectories = computed<FetchedIPPhoneDirectory[]>(() => directorie
 
 const togglePublished = async (item: FetchedIPPhoneDirectory): Promise<void> => {
   try {
-    await updateDoc(doc(db, 'ipphone_directory', item.id), { isPublished: !isDirPublished(item) })
+    await api.put(`/IPPhoneDirectory/${item.id}`, { ...item, isPublished: !isDirPublished(item) })
+    await fetchDirectories()
   } catch (e) {
     toast.fromError(e, 'ไม่สามารถเปลี่ยนสถานะได้')
-  }
-}
-
-// ─── Migration: ตั้งสถานะเผยแพร่จากรายการ Config เดิม (ใช้ครั้งเดียว) ────────
-const PUBLISHED_EXTENSIONS_LEGACY = new Set<string>([
-  '71208', '71209', '71313', '71101', '97086',
-  '70233', '70215', '97280', '70214', '79917',
-  '70218', '97283', '70226', '71812', '97267',
-  '98107', '97273', '79932', '79933', '70735',
-  '70724', '97277', '70706',
-  '70305', '70307', '70308', '70315', '70312',
-  '70313', '70316', '70310', '70311', '70309',
-  '70314', '97774', '97754',
-  '70321', '70323', '70319', '70324', '70326',
-  '97780', '97715', '70302', '97744', '97782',
-  '97750', '97363',
-  '70819',
-  '71416', '97155', '71415', '71417', '71418', '97477',
-  '71508', '98041', '71504', '97460', '97461',
-  '97628', '97630', '79929', '98042',
-  '70502', '70503', '97160',
-  '70905', '70904', '70903', '70956', '97165',
-  '70961', '70978', '70909', '70957', '97166',
-  '98028', '70974', '97315', '70908', '70940',
-  '70916', '70921', '98021', '70918', '70917',
-  '70954', '70902', '70945', '97193', '97405',
-  '70949', '70948', '70947', '70972', '97200',
-  '70931', '70927', '70929', '70928', '70930',
-  '98026', '70975', '98027', '70980', '70914',
-  '97201', '70913', '70910', '97282',
-  '70424',
-  '72101', '72102', '97394',
-  '97177', '97195', '97356', '97179', '97257', '97406',
-  '71038', '71051', '97176', '97189', '97064', '97234',
-  '98043', '97100', '97106',
-  '70129', '70118', '70126', '97104', '70130',
-  '71711',
-])
-
-const isMigrating = ref<boolean>(false)
-const migratePublishedStatus = async (): Promise<void> => {
-  if (!confirm('อัปเดตสถานะเผยแพร่ทุก document ตามรายการเดิม ใช้เวลาสักครู่ — ดำเนินการต่อไหม?')) return
-  isMigrating.value = true
-  try {
-    const snap = await getDocs(collection(db, 'ipphone_directory'))
-    const BATCH_SIZE = 400
-    let batch = writeBatch(db)
-    let count = 0
-    for (const document of snap.docs) {
-      const ext = document.data().ipPhoneNumber as string | undefined
-      const shouldPublish = ext ? PUBLISHED_EXTENSIONS_LEGACY.has(ext) : false
-      batch.update(document.ref, { isPublished: shouldPublish })
-      count++
-      if (count % BATCH_SIZE === 0) {
-        await batch.commit()
-        batch = writeBatch(db)
-      }
-    }
-    if (count % BATCH_SIZE !== 0) await batch.commit()
-    toast.success(`อัปเดตสถานะแล้ว ${snap.size} รายการ`, 'Migration สำเร็จ')
-  } catch (e) {
-    toast.fromError(e, 'Migration ล้มเหลว')
-  } finally {
-    isMigrating.value = false
   }
 }
 
@@ -462,17 +353,15 @@ const handleImportDirectory = async (): Promise<void> => {
 
   isImportingDir.value = true
   try {
-    const batch = writeBatch(db)
     for (const row of importDirPreviewRows.value) {
-      const docRef = doc(collection(db, 'ipphone_directory'))
-      batch.set(docRef, { ...row, createdAt: serverTimestamp() })
+      await api.post('/IPPhoneDirectory', { ...row })
     }
-    await batch.commit()
     importDirSuccess.value = `นำเข้าสมุดโทรศัพท์สำเร็จจำนวน ${importDirPreviewRows.value.length} รายการ`
     importDirFile.value = null
     importDirPreviewRows.value = []
     const fileInput = document.getElementById('importDirFile') as HTMLInputElement
     if (fileInput) fileInput.value = ''
+    await fetchDirectories()
     setTimeout(() => {
       importDirDialogVisible.value = false
     }, 2000)
@@ -524,7 +413,6 @@ const downloadDirCSVTemplate = (): void => {
   const csvSampleData =
     'สมชาย ใจดี,70101,กองช่าง,IT Support,อาคาร A ชั้น 2,02-123-4567,MAC-1234,ด่วน/ซ่อม,ติดต่อเรื่องอินเทอร์เน็ต\nสมหญิง รักดี,70102,สำนักปลัด,การเงิน,อาคาร B ชั้น 1,-,-,บัญชี/เบิกจ่าย,-\n'
 
-  // ใช้ \uFEFF เพื่อให้รองรับภาษาไทยใน Excel (BOM)
   const blob = new Blob(['\uFEFF' + csvHeaders + csvSampleData], {
     type: 'text/csv;charset=utf-8;',
   })
@@ -573,7 +461,6 @@ const handleUploadExcel = async (): Promise<void> => {
         const cols = parseCSVRow(row)
         if (cols.length < 15) continue
 
-        // ✅ ป้องกัน Type Error & Argument Error
         const rawExt = cols[0] || ''
         const ext = rawExt.includes('-') ? (rawExt.split('-')[0] || '').trim() : rawExt.trim()
 
@@ -601,28 +488,6 @@ const handleUploadExcel = async (): Promise<void> => {
         throw new Error('ไม่พบข้อมูลรูปแบบที่ถูกต้องในไฟล์ (กรุณาเช็คโครงสร้าง CSV)')
       }
 
-      const batch = writeBatch(db)
-
-      const statRef = doc(collection(db, 'ipphone_monthly_stats'))
-      batch.set(statRef, {
-        reportMonth: uploadMonth.value,
-        fileName: selectedFile.value!.name,
-        uploadedBy: currentUserName.value,
-        totalRecords: parsedData.length,
-        createdAt: serverTimestamp(),
-      })
-
-      parsedData.forEach((item) => {
-        const logRef = doc(collection(db, 'ipphone_call_logs'))
-        batch.set(logRef, {
-          ...item,
-          statId: statRef.id,
-          createdAt: serverTimestamp(),
-        })
-      })
-
-      await batch.commit()
-
       uploadSuccess.value = `นำเข้าข้อมูลสำเร็จ! บันทึกสถิติทั้งหมด ${parsedData.length} หมายเลขเข้าสู่ระบบแล้ว`
       uploadMonth.value = null
       selectedFile.value = null
@@ -641,8 +506,11 @@ const handleUploadExcel = async (): Promise<void> => {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 const getDeptName = (id: string): string => departments.value.find((x) => x.id === id)?.name || id
-const formatThaiMonth = (ts: Timestamp | null | undefined): string =>
-  ts ? ts.toDate().toLocaleDateString('th-TH', { year: 'numeric', month: 'long' }) : '-'
+const formatThaiMonth = (dateStr: string | null | undefined): string => {
+  if (!dateStr) return '-'
+  const d = new Date(dateStr)
+  return d.toLocaleDateString('th-TH', { year: 'numeric', month: 'long' })
+}
 </script>
 
 <template>
@@ -672,7 +540,7 @@ const formatThaiMonth = (ts: Timestamp | null | undefined): string =>
                 <IconField class="w-full md:w-96">
                   <InputIcon class="pi pi-search" />
                   <InputText v-model="searchQuery" placeholder="ค้นหาชื่อ, เบอร์, หน่วยงาน, กลุ่มงาน, Keyword..."
-                    class="w-full" />
+                    class="w-full" @keyup.enter="fetchDirectories" />
                 </IconField>
 
                 <div class="flex flex-wrap gap-2 w-full md:w-auto items-center">
@@ -696,8 +564,6 @@ const formatThaiMonth = (ts: Timestamp | null | undefined): string =>
                     <Button label="นำเข้า CSV" icon="pi pi-upload" severity="secondary" outlined
                       @click="importDirDialogVisible = true" />
                     <Button label="เพิ่มหมายเลขใหม่" icon="pi pi-plus" severity="help" @click="openNewDialog" />
-                    <Button v-if="isSuperAdmin" label="อัปเดตสถานะจาก Config เดิม" icon="pi pi-sync"
-                      severity="warn" outlined size="small" :loading="isMigrating" @click="migratePublishedStatus" />
                   </template>
                 </div>
               </div>
@@ -836,41 +702,6 @@ const formatThaiMonth = (ts: Timestamp | null | undefined): string =>
                     class="w-full mt-2 py-3 font-bold" :loading="isUploading" :disabled="!selectedFile || !uploadMonth"
                     @click="handleUploadExcel" />
                 </div>
-              </template>
-            </Card>
-
-            <Card class="shadow-sm border-none">
-              <template #title>
-                <div class="text-lg font-bold text-gray-800">
-                  <i class="pi pi-history text-gray-500 mr-2"></i>ประวัติการนำเข้าข้อมูล
-                </div>
-              </template>
-              <template #content>
-                <DataTable :value="uploadHistory" paginator :rows="5" stripedRows responsiveLayout="scroll"
-                  emptyMessage="ยังไม่มีประวัติการนำเข้าไฟล์">
-                  <Column header="รอบเดือน">
-                    <template #body="sp">
-                      <span class="font-bold text-teal-700">{{
-                        formatThaiMonth(sp.data.reportMonth)
-                        }}</span>
-                    </template>
-                  </Column>
-                  <Column header="รายละเอียด">
-                    <template #body="sp">
-                      <div class="text-sm text-gray-800 truncate w-40" :title="sp.data.fileName">
-                        {{ sp.data.fileName }}
-                      </div>
-                      <div class="text-xs text-gray-500 mt-0.5">
-                        ผู้อัปโหลด: {{ sp.data.uploadedBy }}
-                      </div>
-                    </template>
-                  </Column>
-                  <Column header="รายการ" alignFrozen="right">
-                    <template #body="sp">
-                      <Tag :value="`${sp.data.totalRecords} เบอร์`" severity="info" rounded class="text-[10px]" />
-                    </template>
-                  </Column>
-                </DataTable>
               </template>
             </Card>
           </div>

@@ -1,11 +1,9 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue'
-// Firebase Removed
-// Firebase Removed
-import { toMonthKey, batchUpdateSummary } from '@/utils/monthlySummary'
-
+import { ref, computed, onMounted } from 'vue'
+import api from '@/services/api'
 import { useAuthStore } from '@/stores/auth'
 import { usePermissions } from '@/composables/usePermissions'
+import { useAppToast } from '@/composables/useAppToast'
 
 import Card from 'primevue/card'
 import InputNumber from 'primevue/inputnumber'
@@ -37,6 +35,7 @@ interface Department { id: string; name: string }
 interface FuelType { id: string; name: string; severity: string }
 
 const authStore = useAuthStore()
+const toast = useAppToast()
 const { isSuperAdmin } = usePermissions()
 const currentUserDepartment = computed(() => authStore.userProfile?.departmentId || '')
 
@@ -76,31 +75,17 @@ const computedPricePerLiter = computed<number>(() => {
 
 const getDeptName = (id: string) => departments.value.find((x) => x.id === id)?.name || id
 
-let unsubscribeDepts: () => void
-let unsubscribeFuelTypes: () => void
-
-onMounted(() => {
-  unsubscribeDepts = onSnapshot(
-    query(collection(db, 'departments'), orderBy('name')),
-    (snap: QuerySnapshot) => {
-      departments.value = snap.docs.map((d: QueryDocumentSnapshot) => ({ id: d.id, name: d.data().name as string }))
-    },
-  )
-  unsubscribeFuelTypes = onSnapshot(
-    query(collection(db, 'fuel_types'), orderBy('createdAt', 'asc')),
-    (snap: QuerySnapshot) => {
-      fuelTypes.value = snap.docs.map((d: QueryDocumentSnapshot) => ({
-        id: d.id,
-        name: d.data().name as string,
-        severity: (d.data().severity as string) || 'secondary',
-      }))
-    },
-  )
-})
-
-onUnmounted(() => {
-  if (unsubscribeDepts) unsubscribeDepts()
-  if (unsubscribeFuelTypes) unsubscribeFuelTypes()
+onMounted(async () => {
+  try {
+    const [deptsRes, fuelTypesRes] = await Promise.all([
+      api.get('/Department'),
+      api.get('/FuelType'),
+    ])
+    departments.value = deptsRes.data
+    fuelTypes.value = fuelTypesRes.data
+  } catch (error: unknown) {
+    toast.fromError(error, 'ไม่สามารถโหลดข้อมูลหน่วยงาน/ประเภทน้ำมันได้')
+  }
 })
 
 const resetForm = () => {
@@ -138,34 +123,23 @@ const submitForm = async () => {
     const saveDepartmentId = isSuperAdmin.value
       ? formData.value.departmentId
       : currentUserDepartment.value
-    const newDocRef = doc(collection(db, 'fuel_records'))
-    const batch = writeBatch(db)
-    batch.set(newDocRef, {
+
+    await api.post('/FuelRecord', {
       departmentId: saveDepartmentId,
-      refuelDate: formData.value.refuelDate,
+      refuelDate: formData.value.refuelDate ? new Date(formData.value.refuelDate).toISOString() : null,
       documentType: formData.value.documentType,
       documentNumber: formData.value.documentNumber,
       vehiclePlate: formData.value.vehiclePlate,
       vehicleProvince: formData.value.vehicleProvince,
       purchaserName: formData.value.purchaserName,
-      fuelType: formData.value.fuelType,
+      fuelTypeName: formData.value.fuelType,
       liters: formData.value.liters,
       totalAmount: formData.value.totalAmount,
       gasStationCompany: formData.value.gasStationCompany,
       note: formData.value.note,
-      recordedByName: authStore.user?.displayName || authStore.user?.email?.split('@')[0] || 'ไม่ระบุชื่อ',
-      recordedByUid: authStore.user?.uid || 'unknown',
-      createdAt: serverTimestamp(),
+      recordedBy: authStore.user?.uid || '',
     })
-    const monthKey = toMonthKey(formData.value.refuelDate)
-    if (monthKey) {
-      batchUpdateSummary(batch, monthKey, 'fuel', {
-        totalAmount: formData.value.totalAmount ?? 0,
-        totalLiters: formData.value.liters ?? 0,
-        count: 1,
-      })
-    }
-    await batch.commit()
+
     successMessage.value = 'บันทึกข้อมูลการเติมน้ำมันสำเร็จ'
     resetForm()
   } catch (error: unknown) {

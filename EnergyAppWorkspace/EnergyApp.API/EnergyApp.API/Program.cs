@@ -32,7 +32,7 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
-app.UseHttpsRedirection();
+// app.UseHttpsRedirection();
 
 // --- 2. เปิดใช้งาน CORS ตรงนี้ (ต้องอยู่ก่อน UseAuthorization เสมอ!) ---
 app.UseCors("AllowVueApp");

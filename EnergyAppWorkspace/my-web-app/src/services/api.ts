@@ -3,7 +3,7 @@ import axios from 'axios'
 // 1. สร้าง Axios Instance
 const api = axios.create({
   // เปลี่ยน 7187 เป็นพอร์ตที่รันอยู่ในหน้า Swagger ของคุณ
-  baseURL: import.meta.env.VITE_API_URL || 'http://localhost:5007/api/v1',
+  baseURL: import.meta.env.VITE_API_URL || 'http://localhost:5008/api/v1',
   timeout: 10000, // ป้องกันแอปค้าง ถ้ายิง API แล้ว Backend ไม่ตอบสนองใน 10 วินาที
   headers: {
     'Content-Type': 'application/json',

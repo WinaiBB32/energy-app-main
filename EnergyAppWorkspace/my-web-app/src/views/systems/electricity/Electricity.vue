@@ -1,24 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
-import {
-  collection,
-  query,
-  where,
-  orderBy,
-  limit,
-  startAfter,
-  getDocs,
-  updateDoc,
-  deleteDoc,
-  doc,
-  serverTimestamp,
-  Timestamp,
-  writeBatch,
-  type QueryDocumentSnapshot,
-  type QueryConstraint,
-} from 'firebase/firestore'
-// Firebase Removed
-import { toMonthKey, batchUpdateSummary } from '@/utils/monthlySummary'
+import api from '@/services/api'
 
 import { useAuthStore } from '@/stores/auth'
 import { useAppToast } from '@/composables/useAppToast'
@@ -51,7 +33,7 @@ interface ElectricityRecord {
   billingCycle: Date | null
   peaUnitUsed: number | null
   peaAmount: number | null
-  ftRate: number | null // เพิ่ม: เก็บค่า Ft
+  ftRate: number | null
 }
 
 interface FetchedElectricityRecord {
@@ -60,12 +42,12 @@ interface FetchedElectricityRecord {
   docReceiveNumber: string
   docNumber: string
   buildingId: string
-  billingCycle: Timestamp | null
+  billingCycle: string | null
   peaUnitUsed: number
   peaAmount: number
   ftRate: number
   recordedBy: string
-  createdAt: Timestamp
+  createdAt: string
 }
 
 interface Building {
@@ -95,7 +77,7 @@ const errorMessage = ref<string>('')
 
 const historyRecords = ref<FetchedElectricityRecord[]>([])
 const isLoadingHistory = ref<boolean>(true)
-const lastDoc = ref<QueryDocumentSnapshot | null>(null)
+const skip = ref(0)
 const hasMore = ref(true)
 const PAGE_SIZE = 20
 
@@ -108,7 +90,6 @@ const clearFilters = () => {
   filterDateFrom.value = null
   filterDateTo.value = null
   filterBuildingId.value = ''
-  // Watcher will trigger refetch
 }
 
 const fetchHistory = async (loadMore = false): Promise<void> => {
@@ -116,42 +97,30 @@ const fetchHistory = async (loadMore = false): Promise<void> => {
   isLoadingHistory.value = true
 
   try {
-    const energyRef = collection(db, 'energy_records')
-    const constraints: QueryConstraint[] = [
-      where('type', '==', 'PEA_BILL'),
-      orderBy('createdAt', 'desc'),
-    ]
-
-    // Apply filters
-    if (!isAdmin) {
-      constraints.push(where('departmentId', '==', currentUserDepartment.value))
+    const params: Record<string, unknown> = {
+      type: 'PEA_BILL',
+      skip: loadMore ? skip.value : 0,
+      take: PAGE_SIZE,
     }
+
     if (filterBuildingId.value) {
-      constraints.push(where('buildingId', '==', filterBuildingId.value))
+      params.buildingId = filterBuildingId.value
     }
     if (filterDateFrom.value) {
       const from = new Date(filterDateFrom.value)
-      from.setDate(1) // Start of month
+      from.setDate(1)
       from.setHours(0, 0, 0, 0)
-      constraints.push(where('billingCycle', '>=', Timestamp.fromDate(from)))
+      params.fromDate = from.toISOString()
     }
     if (filterDateTo.value) {
       const to = new Date(filterDateTo.value)
-      to.setMonth(to.getMonth() + 1, 0) // End of month
+      to.setMonth(to.getMonth() + 1, 0)
       to.setHours(23, 59, 59, 999)
-      constraints.push(where('billingCycle', '<=', Timestamp.fromDate(to)))
+      params.toDate = to.toISOString()
     }
 
-    // Apply pagination
-    if (loadMore && lastDoc.value) {
-      constraints.push(startAfter(lastDoc.value))
-    }
-    constraints.push(limit(PAGE_SIZE))
-
-    const q = query(energyRef, ...constraints)
-    const snap = await getDocs(q)
-
-    const newRecords = snap.docs.map((d) => ({ id: d.id, ...d.data() } as FetchedElectricityRecord))
+    const response = await api.get('/ElectricityRecord', { params })
+    const newRecords: FetchedElectricityRecord[] = response.data
 
     if (loadMore) {
       historyRecords.value.push(...newRecords)
@@ -159,9 +128,8 @@ const fetchHistory = async (loadMore = false): Promise<void> => {
       historyRecords.value = newRecords
     }
 
-    lastDoc.value = snap.docs[snap.docs.length - 1] || null
+    skip.value = historyRecords.value.length
     hasMore.value = newRecords.length === PAGE_SIZE
-
   } catch (error: unknown) {
     toast.fromError(error, 'ไม่สามารถโหลดข้อมูลไฟฟ้าได้')
     hasMore.value = false
@@ -171,7 +139,7 @@ const fetchHistory = async (loadMore = false): Promise<void> => {
 }
 
 const handleFilterChange = () => {
-  lastDoc.value = null
+  skip.value = 0
   hasMore.value = true
   historyRecords.value = []
   fetchHistory(false)
@@ -180,10 +148,10 @@ const handleFilterChange = () => {
 watch([filterDateFrom, filterDateTo, filterBuildingId], handleFilterChange)
 
 onMounted(async () => {
-  handleFilterChange() // Initial fetch
+  handleFilterChange()
   try {
-    const buildingsSnap = await getDocs(query(collection(db, 'buildings'), orderBy('createdAt', 'asc')))
-    buildings.value = buildingsSnap.docs.map((d) => ({ id: d.id, name: d.data().name as string }))
+    const response = await api.get('/Building')
+    buildings.value = response.data.map((b: { id: string; name: string }) => ({ id: b.id, name: b.name }))
   } catch (e) {
     toast.fromError(e, 'ไม่สามารถโหลดข้อมูลอาคารได้')
   }
@@ -204,34 +172,20 @@ const submitForm = async (): Promise<void> => {
 
   try {
     isSubmitting.value = true
-    const batch = writeBatch(db)
-    const energyRef = doc(collection(db, 'energy_records'))
     const docData = {
       type: 'PEA_BILL',
       departmentId: currentUserDepartment.value,
       docReceiveNumber: formData.value.docReceiveNumber,
       docNumber: formData.value.docNumber,
       buildingId: formData.value.buildingId,
-      billingCycle: formData.value.billingCycle ? Timestamp.fromDate(formData.value.billingCycle) : null,
+      billingCycle: formData.value.billingCycle ? formData.value.billingCycle.toISOString() : null,
       peaUnitUsed: formData.value.peaUnitUsed || 0,
       peaAmount: formData.value.peaAmount || 0,
       ftRate: formData.value.ftRate || 0,
-      recordedBy: authStore.user?.uid || 'unknown',
-      createdAt: serverTimestamp(),
+      recordedBy: authStore.user?.uid || authStore.user?.email || 'unknown',
     }
 
-    batch.set(energyRef, docData)
-
-    // Aggregation
-    const monthKey = toMonthKey(formData.value.billingCycle)
-    if (monthKey) {
-      batchUpdateSummary(batch, monthKey, 'electricity', {
-        totalAmount: formData.value.peaAmount || 0,
-        count: 1,
-      })
-    }
-
-    await batch.commit()
+    await api.post('/ElectricityRecord', docData)
     successMessage.value = 'บันทึกข้อมูลบิลค่าไฟฟ้าสำเร็จ'
     formData.value = {
       docReceiveNumber: '',
@@ -242,7 +196,7 @@ const submitForm = async (): Promise<void> => {
       peaAmount: null,
       ftRate: null,
     }
-    handleFilterChange() // Refresh history
+    handleFilterChange()
   } catch (error: unknown) {
     if (error instanceof Error) errorMessage.value = `เกิดข้อผิดพลาด: ${error.message}`
     else errorMessage.value = 'เกิดข้อผิดพลาดที่ไม่ทราบสาเหตุ'
@@ -252,9 +206,9 @@ const submitForm = async (): Promise<void> => {
 }
 
 const getBuildingName = (id: string): string => buildings.value.find((x) => x.id === id)?.name || id
-const formatThaiMonth = (ts: Timestamp | null | undefined): string => {
-  if (!ts) return '-'
-  return ts.toDate().toLocaleDateString('th-TH', { year: 'numeric', month: 'long' })
+const formatThaiMonth = (dateStr: string | null | undefined): string => {
+  if (!dateStr) return '-'
+  return new Date(dateStr).toLocaleDateString('th-TH', { year: 'numeric', month: 'long' })
 }
 const formatCurrency = (val: number | null | undefined): string => {
   if (val === null || val === undefined) return '-'
@@ -294,7 +248,7 @@ const openEdit = () => {
     docReceiveNumber: r.docReceiveNumber,
     docNumber: r.docNumber,
     buildingId: r.buildingId,
-    billingCycle: r.billingCycle ? r.billingCycle.toDate() : null,
+    billingCycle: r.billingCycle ? new Date(r.billingCycle) : null,
     peaUnitUsed: r.peaUnitUsed,
     peaAmount: r.peaAmount,
     ftRate: r.ftRate,
@@ -311,12 +265,12 @@ const saveEdit = async () => {
       docReceiveNumber: editForm.value.docReceiveNumber,
       docNumber: editForm.value.docNumber,
       buildingId: editForm.value.buildingId,
-      billingCycle: editForm.value.billingCycle ? Timestamp.fromDate(editForm.value.billingCycle) : null,
+      billingCycle: editForm.value.billingCycle ? editForm.value.billingCycle.toISOString() : null,
       peaUnitUsed: editForm.value.peaUnitUsed || 0,
       peaAmount: editForm.value.peaAmount || 0,
       ftRate: editForm.value.ftRate || 0,
     }
-    await updateDoc(doc(db, 'energy_records', selectedRecord.value.id), updatedData)
+    await api.put(`/ElectricityRecord/${selectedRecord.value.id}`, updatedData)
 
     const index = historyRecords.value.findIndex(r => r.id === selectedRecord.value!.id)
     if (index !== -1) {
@@ -340,8 +294,9 @@ const deleteRecord = async () => {
   if (!confirm('ยืนยันการลบข้อมูลนี้?')) return
   isSaving.value = true
   try {
-    await deleteDoc(doc(db, 'energy_records', selectedRecord.value.id))
+    await api.delete(`/ElectricityRecord/${selectedRecord.value.id}`)
     historyRecords.value = historyRecords.value.filter(r => r.id !== selectedRecord.value!.id)
+    skip.value = historyRecords.value.length
     toast.success('ลบข้อมูลสำเร็จ')
     editVisible.value = false
     detailVisible.value = false

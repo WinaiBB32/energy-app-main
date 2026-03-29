@@ -1,15 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import {
-  collection,
-  query,
-  orderBy,
-  where,
-  getDocs,
-  limit,
-  Timestamp,
-} from 'firebase/firestore'
-// Firebase Removed
+import api from '@/services/api'
 import { useAuthStore } from '@/stores/auth'
 
 import Card from 'primevue/card'
@@ -23,17 +14,16 @@ import Column from 'primevue/column'
 interface FetchedFuelRecord {
   id: string
   departmentId: string
-  refuelDate: Timestamp | null
+  refuelDate: string | null
   documentNumber: string
   vehiclePlate: string
   vehicleProvince: string
-  fuelType: string
+  fuelTypeName: string
   liters: number | null
   totalAmount: number | null
   gasStationCompany: string
-  recordedByName: string
-  recordedByUid: string
-  createdAt: Timestamp
+  recordedBy: string
+  createdAt: string
 }
 
 interface Department { id: string; name: string }
@@ -48,17 +38,17 @@ const isLoading = ref(true)
 
 onMounted(async () => {
   try {
-    const fuelRef = collection(db, 'fuel_records')
-    const q = currentUserRole.value === 'superadmin'
-      ? query(fuelRef, orderBy('createdAt', 'desc'), limit(500))
-      : query(fuelRef, where('departmentId', '==', currentUserDepartment.value), orderBy('createdAt', 'desc'), limit(500))
+    const params: Record<string, string | number> = { skip: 0, take: 500 }
+    if (currentUserRole.value !== 'superadmin') {
+      params.departmentId = currentUserDepartment.value
+    }
 
-    const [recordsSnap, deptsSnap] = await Promise.all([
-      getDocs(q),
-      getDocs(query(collection(db, 'departments'), orderBy('name'))),
+    const [recordsRes, deptsRes] = await Promise.all([
+      api.get('/FuelRecord', { params }),
+      api.get('/Department'),
     ])
-    historyRecords.value = recordsSnap.docs.map((d) => ({ id: d.id, ...d.data() } as FetchedFuelRecord))
-    departments.value = deptsSnap.docs.map((d) => ({ id: d.id, name: d.data().name as string }))
+    historyRecords.value = recordsRes.data
+    departments.value = deptsRes.data
   } finally {
     isLoading.value = false
   }
@@ -75,11 +65,11 @@ const printRecords = computed(() =>
   historyRecords.value.filter((r) => {
     if (printDateFrom.value && r.refuelDate) {
       const from = new Date(printDateFrom.value); from.setHours(0, 0, 0, 0)
-      if (r.refuelDate.toDate() < from) return false
+      if (new Date(r.refuelDate) < from) return false
     }
     if (printDateTo.value && r.refuelDate) {
       const to = new Date(printDateTo.value); to.setHours(23, 59, 59, 999)
-      if (r.refuelDate.toDate() > to) return false
+      if (new Date(r.refuelDate) > to) return false
     }
     if (currentUserRole.value === 'superadmin' && printDeptId.value) {
       if (r.departmentId !== printDeptId.value) return false
@@ -91,8 +81,8 @@ const printRecords = computed(() =>
 const printTotalAmount = computed(() => printRecords.value.reduce((s, r) => s + (r.totalAmount ?? 0), 0))
 const printTotalLiters = computed(() => printRecords.value.reduce((s, r) => s + (r.liters ?? 0), 0))
 
-const formatThaiDate = (ts: Timestamp | null | undefined): string =>
-  ts ? ts.toDate().toLocaleDateString('th-TH', { year: 'numeric', month: 'short', day: 'numeric' }) : '-'
+const formatThaiDate = (dateStr: string | null | undefined): string =>
+  dateStr ? new Date(dateStr).toLocaleDateString('th-TH', { year: 'numeric', month: 'short', day: 'numeric' }) : '-'
 
 const formatCurrency = (val: number | null | undefined): string =>
   val != null ? new Intl.NumberFormat('th-TH', { style: 'currency', currency: 'THB' }).format(val) : '-'
@@ -131,8 +121,8 @@ const printReport = () => {
   const total = printTotalAmount.value
   const totalLiters = printTotalLiters.value
 
-  const fmtDate = (ts: Timestamp | null) =>
-    ts ? ts.toDate().toLocaleDateString('th-TH', { year: 'numeric', month: 'short', day: 'numeric' }) : ''
+  const fmtDate = (dateStr: string | null) =>
+    dateStr ? new Date(dateStr).toLocaleDateString('th-TH', { year: 'numeric', month: 'short', day: 'numeric' }) : ''
   const fmtAmount = (v: number | null) =>
     v != null ? v.toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : ''
 
