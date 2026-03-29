@@ -122,11 +122,11 @@ const fetchData = async (): Promise<void> => {
     try {
         const [roomsResponse, recordsResponse] = await Promise.all([
             api.get('/MeetingRoom'),
-            api.get('/MeetingRecord?take=10000') // Fetch all records
+            api.get('/MeetingRecord', { params: { take: 10000 } })
         ])
-        
-        meetingRooms.value = roomsResponse.data.items || []
-        
+
+        meetingRooms.value = roomsResponse.data || []
+
         const allRecords = recordsResponse.data.items || []
         const start = selectedDateRange.value?.[0]
         const end = selectedDateRange.value?.[1]

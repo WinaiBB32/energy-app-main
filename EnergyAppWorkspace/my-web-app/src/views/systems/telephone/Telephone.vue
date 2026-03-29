@@ -110,7 +110,7 @@ const fetchHistory = async (loadMore = false): Promise<void> => {
     try {
         const params: Record<string, unknown> = { skip: loadMore ? skip.value : 0, take }
         const response = await api.get('/TelephoneRecord', { params })
-        const records: FetchedTelephoneRecord[] = response.data
+        const records: FetchedTelephoneRecord[] = response.data.items || []
         if (loadMore) historyRecords.value.push(...records)
         else historyRecords.value = records
         hasMore.value = records.length >= take

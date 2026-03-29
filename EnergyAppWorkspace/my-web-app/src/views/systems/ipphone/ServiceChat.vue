@@ -1,8 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-// Firebase Removed
-// Firebase Removed
+import api from '@/services/api'
 import { useAuthStore } from '@/stores/auth'
 import { logAudit } from '@/utils/auditLogger'
 import { usePermissions } from '@/composables/usePermissions'
@@ -26,8 +25,8 @@ interface ServiceRequest {
   requesterUid?: string
   assignedTo?: string
   note?: string
-  createdAt: Timestamp | null
-  updatedAt?: Timestamp | null
+  createdAt: string | null
+  updatedAt?: string | null
 }
 
 interface ChatMessage {
@@ -37,7 +36,7 @@ interface ChatMessage {
   senderEmail: string
   senderId: string
   senderRole: string
-  createdAt: Timestamp | null
+  createdAt: string | null
 }
 
 // ─── Setup ────────────────────────────────────────────────────────────────────
@@ -65,88 +64,65 @@ const statusOptions = [
   { label: 'ยกเลิก', value: 'cancelled' },
 ]
 
-let unsubReq: (() => void) | null = null
-let unsubMsg: (() => void) | null = null
+let pollInterval: ReturnType<typeof setInterval> | null = null
 
 // ─── Auth ─────────────────────────────────────────────────────────────────────
 const currentUser = computed(() => authStore.user)
 const { isSuperAdmin, isSystemAdmin } = usePermissions()
 const isAdmin = isSystemAdmin('ipphone')
 
-// Can send messages: requester, admin/superadmin, or the linked user of the extension
 const canChat = computed(() => {
   if (!currentUser.value || !request.value) return false
   if (isAdmin) return true
   if (request.value.requesterEmail === currentUser.value.email) return true
-  // Check if this user is linked to the extension in the request
-  // We check via linkedUserEmail stored in the request's extension mapping
-  // (handled via isLinkedUser computed below)
-  return isLinkedUser.value
+  return false
 })
 
-const isLinkedUser = ref(false)
-
-// ─── Firestore ────────────────────────────────────────────────────────────────
-onMounted(async () => {
-  // Listen to request doc
-  unsubReq = onSnapshot(doc(db, 'ipphone_service_requests', requestId), (snap: DocumentSnapshot) => {
-    if (!snap.exists()) {
-      goBack()
-      return
-    }
-    request.value = { id: snap.id, ...snap.data() } as ServiceRequest
-    newStatus.value = request.value.status
-    loadingRequest.value = false
-
-    // Check if current user is linked to this extension
-    checkLinkedUser(request.value.extension)
-
-    if (unsubMsg === null) {
-      unsubMsg = onSnapshot(query(
-        collection(db, 'ipphone_service_requests', requestId, 'messages'),
-        orderBy('createdAt', 'asc')
-      ), (snap: QuerySnapshot) => {
-        messages.value = snap.docs.map((d: QueryDocumentSnapshot) => ({ id: d.id, ...d.data() } as ChatMessage))
-        scrollToBottom()
-      })
-    }
-  })
-})
-
-onUnmounted(() => {
-  if (unsubReq) unsubReq()
-  if (unsubMsg) unsubMsg()
-})
-
-async function checkLinkedUser(extension: string) {
-  if (!extension || !currentUser.value) return
+// ─── Data Fetching ────────────────────────────────────────────────────────────
+async function loadRequest() {
   try {
-    const { getDocs, where, collection: col, query: q } = await import('firebase/firestore')
-    const snap = await getDocs(
-      q(col(db, 'ipphone_directory'), where('ipPhoneNumber', '==', extension)),
-    )
-    const email = currentUser.value.email ?? ''
-    snap.forEach((d) => {
-      const emails: string[] = d.data().linkedUserEmails ?? []
-      if (emails.includes(email)) isLinkedUser.value = true
-    })
+    const res = await api.get(`/ServiceRequest/${requestId}`)
+    request.value = res.data
+    newStatus.value = res.data.status
+    loadingRequest.value = false
   } catch {
-    // ignore — default false
+    goBack()
   }
 }
 
+async function loadMessages() {
+  try {
+    const res = await api.get(`/ServiceRequest/${requestId}/messages`)
+    messages.value = res.data
+    scrollToBottom()
+  } catch {
+    // ignore
+  }
+}
+
+onMounted(async () => {
+  await loadRequest()
+  await loadMessages()
+  // Poll for new messages every 10 seconds
+  pollInterval = setInterval(loadMessages, 10000)
+})
+
+onUnmounted(() => {
+  if (pollInterval) clearInterval(pollInterval)
+})
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
-function formatDate(ts: Timestamp | null | undefined): string {
-  if (!ts) return ''
-  return ts.toDate().toLocaleString('th-TH', {
+function formatDate(dateStr: string | null | undefined): string {
+  if (!dateStr) return ''
+  return new Date(dateStr).toLocaleString('th-TH', {
     year: 'numeric', month: 'short', day: 'numeric',
     hour: '2-digit', minute: '2-digit',
   })
 }
 
-function formatTime(ts: Timestamp | null | undefined): string {
-  if (!ts) return ''
-  return ts.toDate().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })
+function formatTime(dateStr: string | null | undefined): string {
+  if (!dateStr) return ''
+  return new Date(dateStr).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })
 }
 
 function categoryLabel(val: string): string {
@@ -174,14 +150,12 @@ function statusTag(val: string): { severity: 'secondary' | 'info' | 'success' | 
 }
 
 function isMine(msg: ChatMessage): boolean {
-  return msg.senderId === currentUser.value?.uid
+  return msg.senderId === (currentUser.value?.uid ?? currentUser.value?.id)
 }
 
 function scrollToBottom() {
   nextTick(() => {
-    if (chatBottom.value) {
-      chatBottom.value.scrollIntoView({ behavior: 'smooth' })
-    }
+    if (chatBottom.value) chatBottom.value.scrollIntoView({ behavior: 'smooth' })
   })
 }
 
@@ -191,22 +165,15 @@ async function sendMessage() {
   if (!text || !currentUser.value) return
   sending.value = true
   try {
-    await addDoc(
-      collection(db, 'ipphone_service_requests', requestId, 'messages'),
-      {
-        text,
-        senderName: currentUser.value.displayName ?? currentUser.value.email ?? '',
-        senderEmail: currentUser.value.email ?? '',
-        senderId: currentUser.value.uid,
-        senderRole: authStore.userProfile?.role ?? 'user',
-        createdAt: serverTimestamp(),
-      },
-    )
-    // Update request updatedAt
-    await updateDoc(doc(db, 'ipphone_service_requests', requestId), {
-      updatedAt: serverTimestamp(),
+    await api.post(`/ServiceRequest/${requestId}/messages`, {
+      text,
+      senderName: currentUser.value.displayName ?? currentUser.value.email ?? '',
+      senderEmail: currentUser.value.email ?? '',
+      senderId: currentUser.value.uid ?? currentUser.value.id ?? '',
+      senderRole: authStore.userProfile?.role ?? 'user',
     })
     messageText.value = ''
+    await loadMessages()
   } catch (e) {
     alert(`ส่งข้อความไม่สำเร็จ: ${String(e)}`)
   } finally {
@@ -222,12 +189,8 @@ function handleEnter(e: KeyboardEvent) {
 }
 
 function goBack() {
-  // superadmin กลับไปหน้าจัดการ, user ทั่วไปกลับไปหน้าคำร้องของตัวเอง
-  if (isSuperAdmin.value) {
-    router.push('/ipphone/service')
-  } else {
-    router.push('/support')
-  }
+  if (isSuperAdmin.value) router.push('/ipphone/service')
+  else router.push('/support')
 }
 
 async function updateStatus() {
@@ -235,26 +198,21 @@ async function updateStatus() {
   updatingStatus.value = true
   try {
     const prevStatus = request.value.status
-    await updateDoc(doc(db, 'ipphone_service_requests', requestId), {
-      status: newStatus.value,
-      updatedAt: serverTimestamp(),
-    })
+    await api.put(`/ServiceRequest/${requestId}`, { ...request.value, status: newStatus.value })
     logAudit(
       { uid: currentUser.value?.uid ?? '', displayName: authStore.userProfile?.displayName ?? currentUser.value?.email ?? '', email: currentUser.value?.email ?? '', role: authStore.userProfile?.role ?? 'user' },
       'UPDATE', 'ServiceChat', `อัปเดตสถานะ [${requestId}] ${prevStatus} → ${newStatus.value}`,
     )
     // Send system message
-    await addDoc(
-      collection(db, 'ipphone_service_requests', requestId, 'messages'),
-      {
-        text: `[ระบบ] อัปเดตสถานะเป็น: ${statusOptions.find((s) => s.value === newStatus.value)?.label}`,
-        senderName: currentUser.value?.displayName ?? 'Admin',
-        senderEmail: currentUser.value?.email ?? '',
-        senderId: currentUser.value?.uid ?? '',
-        senderRole: 'system',
-        createdAt: serverTimestamp(),
-      },
-    )
+    await api.post(`/ServiceRequest/${requestId}/messages`, {
+      text: `[ระบบ] อัปเดตสถานะเป็น: ${statusOptions.find((s) => s.value === newStatus.value)?.label}`,
+      senderName: currentUser.value?.displayName ?? 'Admin',
+      senderEmail: currentUser.value?.email ?? '',
+      senderId: currentUser.value?.uid ?? currentUser.value?.id ?? '',
+      senderRole: 'system',
+    })
+    request.value.status = newStatus.value
+    await loadMessages()
   } catch (e) {
     alert(`อัปเดตสถานะไม่สำเร็จ: ${String(e)}`)
   } finally {
@@ -284,8 +242,7 @@ async function updateStatus() {
               </div>
               <p class="text-sm text-gray-400 mt-0.5">
                 {{ categoryLabel(request.category) }}
-                <span v-if="request.extension"> · เบอร์ <span class="font-mono font-semibold">{{ request.extension
-                }}</span></span>
+                <span v-if="request.extension"> · เบอร์ <span class="font-mono font-semibold">{{ request.extension }}</span></span>
                 · แจ้งโดย <strong>{{ request.requesterName }}</strong>
                 · {{ formatDate(request.createdAt) }}
               </p>
@@ -294,8 +251,7 @@ async function updateStatus() {
 
           <!-- Admin: quick status update -->
           <div v-if="isAdmin" class="flex items-center gap-2 shrink-0">
-            <Select v-model="newStatus" :options="statusOptions" option-label="label" option-value="value"
-              class="w-44" />
+            <Select v-model="newStatus" :options="statusOptions" option-label="label" option-value="value" class="w-44" />
             <Button label="อัปเดต" icon="pi pi-check" size="small" :loading="updatingStatus"
               :disabled="newStatus === request.status" @click="updateStatus" />
           </div>
@@ -328,13 +284,10 @@ async function updateStatus() {
 
           <!-- Regular message -->
           <template v-else>
-            <!-- Avatar -->
             <div class="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold shrink-0 mt-1"
               :class="isMine(msg) ? 'bg-indigo-600 text-white' : 'bg-slate-200 text-slate-600'">
               {{ msg.senderName.charAt(0).toUpperCase() }}
             </div>
-
-            <!-- Bubble -->
             <div :class="['max-w-sm lg:max-w-md', isMine(msg) ? 'items-end' : 'items-start', 'flex flex-col']">
               <div class="flex items-baseline gap-2 mb-1" :class="isMine(msg) ? 'flex-row-reverse' : ''">
                 <span class="text-xs font-semibold text-gray-700">{{ msg.senderName }}</span>
@@ -356,12 +309,10 @@ async function updateStatus() {
 
       <!-- ── Input area ── -->
       <div class="bg-white border-t border-gray-100 px-6 py-4 shrink-0">
-        <!-- Cannot chat notice -->
         <div v-if="!canChat" class="text-center text-sm text-gray-400 py-2">
           <i class="pi pi-lock mr-1"></i>
-          เฉพาะผู้แจ้ง, ผู้ดูแลระบบ และผู้ที่รับผิดชอบเบอร์นี้เท่านั้นที่สามารถส่งข้อความได้
+          เฉพาะผู้แจ้ง และผู้ดูแลระบบเท่านั้นที่สามารถส่งข้อความได้
         </div>
-
         <div v-else class="flex gap-3 items-end">
           <Textarea v-model="messageText" :rows="2"
             placeholder="พิมพ์ข้อความ... (Enter ส่ง, Shift+Enter ขึ้นบรรทัดใหม่)" class="flex-1 resize-none"

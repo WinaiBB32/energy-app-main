@@ -1,5 +1,11 @@
 using EnergyApp.API.Data;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.IdentityModel.Tokens;
+using System.Text;
+
+// ✅ แก้ปัญหา Npgsql ไม่ยอมรับ DateTime.Kind=Local
+AppContext.SetSwitch("Npgsql.EnableLegacyTimestampBehavior", true);
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -7,18 +13,32 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
 
-// --- 1. เพิ่มการตั้งค่า CORS ตรงนี้ ---
+// --- JWT Authentication ---
+var jwtSecret = builder.Configuration["JwtSettings:Secret"]!;
+builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer(options =>
+    {
+        options.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuerSigningKey = true,
+            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSecret)),
+            ValidateIssuer = false,
+            ValidateAudience = false,
+            ClockSkew = TimeSpan.Zero
+        };
+    });
+
+// --- CORS ---
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowVueApp", policy =>
     {
-        policy.WithOrigins("http://localhost:5173") // URL ของ Vue 3
-              .AllowAnyHeader()   // อนุญาตให้ส่ง Header อะไรมาก็ได้ (เช่น Authorization Bearer)
-              .AllowAnyMethod()   // อนุญาตทุก Method (GET, POST, PUT, DELETE)
-              .AllowCredentials(); // อนุญาตให้ส่ง Cookie/Token ข้ามโดเมนได้
+        policy.WithOrigins("http://localhost:5173")
+              .AllowAnyHeader()
+              .AllowAnyMethod()
+              .AllowCredentials();
     });
 });
-// ---------------------------------
 
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
@@ -34,10 +54,8 @@ if (app.Environment.IsDevelopment())
 
 // app.UseHttpsRedirection();
 
-// --- 2. เปิดใช้งาน CORS ตรงนี้ (ต้องอยู่ก่อน UseAuthorization เสมอ!) ---
 app.UseCors("AllowVueApp");
-// -----------------------------------------------------------
-
+app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
 app.Run();

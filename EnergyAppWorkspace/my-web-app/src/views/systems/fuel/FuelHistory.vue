@@ -97,7 +97,7 @@ const fetchRecords = async (loadMore = false) => {
     }
 
     const response = await api.get('/FuelRecord', { params })
-    const newRecords: FetchedFuelRecord[] = response.data
+    const newRecords: FetchedFuelRecord[] = response.data.items || []
 
     if (loadMore) {
       historyRecords.value.push(...newRecords)

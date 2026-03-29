@@ -18,7 +18,7 @@ namespace EnergyApp.API.Controllers
             public string Description { get; set; } = string.Empty;
             public string Category { get; set; } = string.Empty;
             public string Priority { get; set; } = "normal";
-            public string Status { get; set; } = "open";
+            public string Status { get; set; } = "pending";
             public string Extension { get; set; } = string.Empty;
             public string RequesterName { get; set; } = string.Empty;
             public string RequesterEmail { get; set; } = string.Empty;

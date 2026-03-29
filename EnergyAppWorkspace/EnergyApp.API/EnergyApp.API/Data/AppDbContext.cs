@@ -24,5 +24,7 @@ namespace EnergyApp.API.Data
         public DbSet<ChatMessage> ChatMessages { get; set; }
         public DbSet<PostalRecord> PostalRecords { get; set; }
         public DbSet<MeetingRecord> MeetingRecords { get; set; }
+        public DbSet<IPPhoneMonthStat> IPPhoneMonthStats { get; set; }
+        public DbSet<IPPhoneCallLog> IPPhoneCallLogs { get; set; }
     }
 }

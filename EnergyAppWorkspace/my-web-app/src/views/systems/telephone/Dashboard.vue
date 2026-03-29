@@ -85,7 +85,7 @@ const fetchData = async (): Promise<void> => {
         if (endDate) params.toDate = endDate.toISOString()
 
         const response = await api.get('/TelephoneRecord', { params })
-        rawRecords.value = response.data as FetchedTelephoneRecord[]
+        rawRecords.value = (response.data.items || []) as FetchedTelephoneRecord[]
         processData()
     } catch (error: unknown) {
         toast.fromError(error, 'ไม่สามารถโหลดข้อมูล Dashboard ค่าโทรศัพท์ได้')

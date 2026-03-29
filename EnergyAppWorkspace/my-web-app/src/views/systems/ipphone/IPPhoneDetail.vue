@@ -67,7 +67,7 @@ onMounted(async () => {
         api.get(`/IPPhoneDirectory/${directoryId}`)
     ]);
 
-    departments.value = deptsResponse.data.items || [];
+    departments.value = deptsResponse.data || [];
     
     if (dirResponse.data) {
         directoryData.value = dirResponse.data;

@@ -90,7 +90,7 @@ const fetchData = async (): Promise<void> => {
       api.get('/FuelReceipt', { params })
     ])
 
-    fuelTypes.value = fuelTypesResponse.data.items || []
+    fuelTypes.value = fuelTypesResponse.data || []
     rawFuelRecords.value = fuelRecordsResponse.data.items || []
     rawReceipts.value = fuelReceiptsResponse.data.items || []
 
@@ -134,8 +134,8 @@ const processData = (): void => {
     tempReceiptExpense += expense
     tempReceiptEntries += 1
 
-     if (receipt.receiptDate) {
-      const date = new Date(receipt.receiptDate)
+     if (receipt.createdAt) {
+      const date = new Date(receipt.createdAt)
       const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
       monthlyReceiptData[monthKey] = (monthlyReceiptData[monthKey] || 0) + expense
     }

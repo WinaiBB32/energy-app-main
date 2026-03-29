@@ -1,20 +1,8 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 
 defineOptions({ name: 'FileUpload' })
-import {
-  collection,
-  doc,
-  serverTimestamp,
-  query,
-  onSnapshot,
-  Timestamp,
-  writeBatch,
-  where,
-  getDocs,
-  deleteDoc,
-} from 'firebase/firestore'
-// Firebase Removed
+import api from '@/services/api'
 import { useAuthStore } from '@/stores/auth'
 import { logAudit } from '@/utils/auditLogger'
 
@@ -30,11 +18,11 @@ import Dialog from 'primevue/dialog'
 // ─── Interfaces ───────────────────────────────────────────────────────────────
 interface UploadStatRecord {
   id: string
-  reportMonth: Timestamp | null
+  reportMonth: string | null
   fileName: string
   uploadedBy: string
   totalRecords: number
-  createdAt: Timestamp
+  createdAt: string
 }
 
 interface ParsedRow {
@@ -64,29 +52,18 @@ const currentUserName = computed(
 )
 
 const uploadHistory = ref<UploadStatRecord[]>([])
-let unsubUploads: () => void
 
-function statCreatedMs(r: UploadStatRecord): number {
-  const c = r.createdAt
-  return c && typeof c.toMillis === 'function' ? c.toMillis() : 0
+async function loadHistory() {
+  try {
+    const res = await api.get('/IPPhoneMonthStat', { params: { take: '100' } })
+    uploadHistory.value = res.data.items ?? res.data
+  } catch {
+    // ignore
+  }
 }
 
 onMounted(() => {
-  unsubUploads = onSnapshot(
-    collection(db, 'ipphone_monthly_stats'),
-    (snap) => {
-      const records: UploadStatRecord[] = []
-      snap.forEach((document) =>
-        records.push({ id: document.id, ...document.data() } as UploadStatRecord),
-      )
-      records.sort((a, b) => statCreatedMs(b) - statCreatedMs(a))
-      uploadHistory.value = records
-    },
-  )
-})
-
-onUnmounted(() => {
-  if (unsubUploads) unsubUploads()
+  loadHistory()
 })
 
 // ─── CSV Template Download ──────────────────────────────────────────────────
@@ -302,63 +279,27 @@ const handleUploadExcel = async (): Promise<void> => {
     return
   }
 
-  // ตรวจสอบข้อมูลซ้ำ
   const selectedDate = uploadMonth.value
-  const startOfMonth = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), 1)
-  const startOfNextMonth = new Date(selectedDate.getFullYear(), selectedDate.getMonth() + 1, 1)
-  const dupSnap = await getDocs(
-    query(
-      collection(db, 'ipphone_monthly_stats'),
-      where('reportMonth', '>=', startOfMonth),
-      where('reportMonth', '<', startOfNextMonth),
-    ),
-  )
-  if (!dupSnap.empty) {
-    uploadError.value = `ข้อมูลสถิติ${selectedDate.toLocaleDateString('th-TH', { year: 'numeric', month: 'long' })} ถูกนำเข้าไปแล้ว กรุณาตรวจสอบประวัติการนำเข้า`
-    return
-  }
-
   isUploading.value = true
 
   try {
+    // Check duplicate
+    const dupRes = await api.get('/IPPhoneMonthStat/check-duplicate', {
+      params: { year: selectedDate.getFullYear(), month: selectedDate.getMonth() + 1 },
+    })
+    if (dupRes.data.exists) {
+      uploadError.value = `ข้อมูลสถิติ${selectedDate.toLocaleDateString('th-TH', { year: 'numeric', month: 'long' })} ถูกนำเข้าไปแล้ว กรุณาตรวจสอบประวัติการนำเข้า`
+      return
+    }
+
     const parsedData = previewData.value
-
-    // Batch write แบ่ง chunk ละ 499
-    const BATCH_SIZE = 499
-    const statRef = doc(collection(db, 'ipphone_monthly_stats'))
-
-    const firstBatch = writeBatch(db)
-    firstBatch.set(statRef, {
-      reportMonth: uploadMonth.value,
+    await api.post('/IPPhoneMonthStat', {
+      reportMonth: selectedDate.toISOString(),
       fileName: selectedFile.value?.name ?? 'ไม่ระบุ',
       uploadedBy: currentUserName.value,
       totalRecords: parsedData.length,
-      createdAt: serverTimestamp(),
+      logs: parsedData,
     })
-    parsedData.slice(0, BATCH_SIZE).forEach((item) => {
-      const logRef = doc(collection(db, 'ipphone_call_logs'))
-      firstBatch.set(logRef, { 
-        ...item, 
-        reportMonth: uploadMonth.value,
-        statId: statRef.id, 
-        createdAt: serverTimestamp() 
-      })
-    })
-    await firstBatch.commit()
-
-    for (let i = BATCH_SIZE; i < parsedData.length; i += BATCH_SIZE) {
-      const batch = writeBatch(db)
-      parsedData.slice(i, i + BATCH_SIZE).forEach((item) => {
-        const logRef = doc(collection(db, 'ipphone_call_logs'))
-        batch.set(logRef, { 
-          ...item, 
-          reportMonth: uploadMonth.value,
-          statId: statRef.id, 
-          createdAt: serverTimestamp() 
-        })
-      })
-      await batch.commit()
-    }
 
     logAudit(
       {
@@ -379,6 +320,7 @@ const handleUploadExcel = async (): Promise<void> => {
 
     const fileInput = document.getElementById('excelFile') as HTMLInputElement
     if (fileInput) fileInput.value = ''
+    await loadHistory()
   } catch (err: unknown) {
     uploadError.value = err instanceof Error ? err.message : 'เกิดข้อผิดพลาดในการบันทึกข้อมูล'
   } finally {
@@ -398,19 +340,9 @@ const handleDeleteUpload = async (): Promise<void> => {
   if (!confirmDeleteId.value) return
   isDeleting.value = true
   try {
-    // ลบ call_logs ที่มี statId ตรงกัน
-    const logsSnap = await getDocs(
-      query(collection(db, 'ipphone_call_logs'), where('statId', '==', confirmDeleteId.value)),
-    )
-    const BATCH_SIZE = 499
-    for (let i = 0; i < logsSnap.docs.length; i += BATCH_SIZE) {
-      const batch = writeBatch(db)
-      logsSnap.docs.slice(i, i + BATCH_SIZE).forEach((d) => batch.delete(d.ref))
-      await batch.commit()
-    }
-    // ลบ stat record
-    await deleteDoc(doc(db, 'ipphone_monthly_stats', confirmDeleteId.value))
+    await api.delete(`/IPPhoneMonthStat/${confirmDeleteId.value}`)
     uploadSuccess.value = 'ลบข้อมูลการนำเข้าและ log ที่เกี่ยวข้องเรียบร้อยแล้ว'
+    await loadHistory()
   } catch (err) {
     uploadError.value = err instanceof Error ? err.message : 'เกิดข้อผิดพลาดในการลบ'
   } finally {
@@ -420,8 +352,8 @@ const handleDeleteUpload = async (): Promise<void> => {
 }
 
 // ─── Helpers ───────────────────────────────────────────────────────────────────
-const formatThaiMonth = (ts: Timestamp | null | undefined): string =>
-  ts ? ts.toDate().toLocaleDateString('th-TH', { year: 'numeric', month: 'long' }) : '-'
+const formatThaiMonth = (dateStr: string | null | undefined): string =>
+  dateStr ? new Date(dateStr).toLocaleDateString('th-TH', { year: 'numeric', month: 'long' }) : '-'
 
 const answerRate = (row: ParsedRow): string => {
   const total = row.totalCalls

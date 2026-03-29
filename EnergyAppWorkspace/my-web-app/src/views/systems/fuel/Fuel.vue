@@ -132,7 +132,7 @@ const submitForm = async () => {
       vehiclePlate: formData.value.vehiclePlate,
       vehicleProvince: formData.value.vehicleProvince,
       purchaserName: formData.value.purchaserName,
-      fuelTypeName: formData.value.fuelType,
+      fuelTypeName: fuelTypes.value.find(f => f.id === formData.value.fuelType)?.name ?? formData.value.fuelType,
       liters: formData.value.liters,
       totalAmount: formData.value.totalAmount,
       gasStationCompany: formData.value.gasStationCompany,

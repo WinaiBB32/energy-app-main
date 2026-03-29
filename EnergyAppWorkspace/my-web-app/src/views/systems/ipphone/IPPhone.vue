@@ -100,7 +100,7 @@ const fetchDirectories = async (): Promise<void> => {
     const params: Record<string, string> = {}
     if (searchQuery.value) params.keyword = searchQuery.value
     const res = await api.get('/IPPhoneDirectory', { params })
-    directories.value = res.data
+    directories.value = res.data.items || []
   } catch (e) {
     toast.fromError(e, 'ไม่สามารถโหลดสมุดโทรศัพท์ได้')
   } finally {

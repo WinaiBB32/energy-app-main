@@ -534,7 +534,7 @@ const formatCurrency = (val: number): string =>
                 </div>
                 <div v-else class="h-64 relative flex items-center justify-center pb-4">
                   <Chart type="doughnut" :data="mixChartData" :options="mixChartOptions"
-                    class="w-full h-56 max-w-[15rem]" />
+                    class="w-full h-56 max-w-60" />
                 </div>
               </template>
             </Card>
@@ -770,7 +770,7 @@ const formatCurrency = (val: number): string =>
                 </div>
                 <div v-else class="h-64 relative flex items-center justify-center pb-4">
                   <Chart type="doughnut" :data="solarUsageChartData" :options="mixChartOptions"
-                    class="w-full h-56 max-w-[15rem]" />
+                    class="w-full h-56 max-w-60" />
                 </div>
               </template>
             </Card>
@@ -788,7 +788,7 @@ const formatCurrency = (val: number): string =>
                 </div>
                 <div v-else class="h-64 relative flex items-center justify-center pb-4">
                   <Chart type="doughnut" :data="solarBreakdownChartData" :options="mixChartOptions"
-                    class="w-full h-56 max-w-[15rem]" />
+                    class="w-full h-56 max-w-60" />
                 </div>
               </template>
             </Card>

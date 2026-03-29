@@ -1,15 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import {
-  collection,
-  query,
-  orderBy,
-  where,
-  getDocs,
-  limit,
-  Timestamp,
-} from 'firebase/firestore'
-// Firebase Removed
+import api from '@/services/api'
 import { useAuthStore } from '@/stores/auth'
 
 import Card from 'primevue/card'
@@ -43,11 +34,11 @@ const filteredRecords = computed(() =>
   allRecords.value.filter((r) => {
     if (filterDateFrom.value) {
       const from = new Date(filterDateFrom.value); from.setHours(0, 0, 0, 0)
-      if (r.createdAt?.toDate() < from) return false
+      if (new Date(r.createdAt) < from) return false
     }
     if (filterDateTo.value) {
       const to = new Date(filterDateTo.value); to.setHours(23, 59, 59, 999)
-      if (r.createdAt?.toDate() > to) return false
+      if (new Date(r.createdAt) > to) return false
     }
     if (filterDeptId.value && r.departmentId !== filterDeptId.value) return false
     return true
@@ -56,32 +47,32 @@ const filteredRecords = computed(() =>
 
 const totalAmount = computed(() => filteredRecords.value.reduce((s, r) => s + (r.totalAmount ?? 0), 0))
 
-// ─── Firestore ─────────────────────────────────────────────────────────────
+// ─── Fetch ─────────────────────────────────────────────────────────────────
 onMounted(async () => {
   try {
-    const colRef = collection(db, 'fuel_receipts')
-    const q = currentUserRole.value === 'superadmin'
-      ? query(colRef, orderBy('createdAt', 'desc'), limit(500))
-      : query(colRef, where('departmentId', '==', currentUserDepartment.value), orderBy('createdAt', 'desc'), limit(500))
+    const params: Record<string, string> = { take: '500' }
+    if (currentUserRole.value !== 'superadmin') params.departmentId = currentUserDepartment.value
 
-    const [recordsSnap, deptsSnap] = await Promise.all([
-      getDocs(q),
-      getDocs(query(collection(db, 'departments'), orderBy('name'))),
+    const [receiptsRes, deptsRes] = await Promise.all([
+      api.get('/FuelReceipt', { params }),
+      api.get('/Department'),
     ])
-    allRecords.value = recordsSnap.docs.map((d) => ({ id: d.id, ...d.data() } as FetchedReceipt))
-    departments.value = deptsSnap.docs.map((d) => ({ id: d.id, name: d.data().name as string }))
+    allRecords.value = (receiptsRes.data.items || []).map((r: FetchedReceipt & { entriesJson?: string }) => ({
+      ...r,
+      entries: r.entries ?? (r.entriesJson ? JSON.parse(r.entriesJson) : []),
+    }))
+    departments.value = deptsRes.data
   } finally {
     isLoading.value = false
   }
 })
 
-
 // ─── Helpers ───────────────────────────────────────────────────────────────
 const getDeptName = (id: string) => departments.value.find((x) => x.id === id)?.name || id
 const formatCurrency = (val: number | null | undefined) =>
   val != null ? new Intl.NumberFormat('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(val) : '-'
-const formatDate = (ts: Timestamp | undefined) =>
-  ts ? ts.toDate().toLocaleDateString('th-TH', { year: 'numeric', month: 'short', day: 'numeric' }) : '-'
+const formatDate = (dateStr: string | null | undefined) =>
+  dateStr ? new Date(dateStr).toLocaleDateString('th-TH', { year: 'numeric', month: 'short', day: 'numeric' }) : '-'
 
 const numberToThaiBaht = (amount: number): string => {
   if (amount === 0) return 'ศูนย์บาทถ้วน'
@@ -113,15 +104,10 @@ const numberToThaiBaht = (amount: number): string => {
 // ─── Print single ───────────────────────────────────────────────────────────
 const printBatch = () => {
   if (filteredRecords.value.length === 0) { alert('ไม่มีข้อมูลที่กรองอยู่'); return }
-  
   let allEntries: ReceiptEntry[] = []
-  filteredRecords.value.forEach(r => {
-    allEntries = allEntries.concat(r.entries)
-  })
-  
+  filteredRecords.value.forEach(r => { allEntries = allEntries.concat(r.entries) })
   const total = allEntries.reduce((s, e) => s + (e.amount || 0), 0)
   const firstRecord = filteredRecords.value[0]!
-  
   const fmtAmt = (v: number) => v.toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
   const rows = allEntries.map((e) => `<tr>
     <td class="c">${e.day || ''}</td><td class="c">${e.month || ''}</td><td class="c">${e.year || ''}</td>
@@ -129,7 +115,6 @@ const printBatch = () => {
     <td class="r">${e.amount != null ? fmtAmt(e.amount) : ''}</td>
     <td class="c">${e.driverName || ''}</td>
   </tr>`).join('')
-  
   const deptDisplay = declarerDept.value || getDeptName(firstRecord.departmentId)
   const css = `
     @import url('https://fonts.googleapis.com/css2?family=Sarabun:wght@400;700&display=swap');
@@ -247,7 +232,7 @@ const printBatch = () => {
               <p class="font-bold text-xl text-red-600">{{ formatCurrency(totalAmount) }} บาท</p>
             </div>
           </div>
-          <Button label="พิมพ์ใบรับรองรวมตามตัวกรอง" icon="pi pi-print" severity="danger" 
+          <Button label="พิมพ์ใบรับรองรวมตามตัวกรอง" icon="pi pi-print" severity="danger"
             :disabled="filteredRecords.length === 0" @click="printBatch" />
         </div>
 

@@ -1,18 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import {
-  collection,
-  query,
-  orderBy,
-  where,
-  getDocs,
-  limit,
-  Timestamp,
-  doc,
-  deleteDoc,
-  updateDoc,
-} from 'firebase/firestore'
-// Firebase Removed
+import api from '@/services/api'
 import { useAuthStore } from '@/stores/auth'
 
 import Card from 'primevue/card'
@@ -45,11 +33,11 @@ const filteredRecords = computed(() =>
   historyRecords.value.filter((r) => {
     if (filterDateFrom.value) {
       const from = new Date(filterDateFrom.value); from.setHours(0, 0, 0, 0)
-      if (r.createdAt?.toDate() < from) return false
+      if (new Date(r.createdAt) < from) return false
     }
     if (filterDateTo.value) {
       const to = new Date(filterDateTo.value); to.setHours(23, 59, 59, 999)
-      if (r.createdAt?.toDate() > to) return false
+      if (new Date(r.createdAt) > to) return false
     }
     if (filterDeptId.value && r.departmentId !== filterDeptId.value) return false
     return true
@@ -60,20 +48,21 @@ const totalAmount = computed(() => filteredRecords.value.reduce((s, r) => s + (r
 
 const clearFilters = () => { filterDateFrom.value = null; filterDateTo.value = null; filterDeptId.value = '' }
 
-// ─── Firestore ─────────────────────────────────────────────────────────────
+// ─── Fetch ─────────────────────────────────────────────────────────────────
 onMounted(async () => {
   try {
-    const colRef = collection(db, 'fuel_receipts')
-    const q = currentUserRole.value === 'superadmin'
-      ? query(colRef, orderBy('createdAt', 'desc'), limit(200))
-      : query(colRef, where('departmentId', '==', currentUserDepartment.value), orderBy('createdAt', 'desc'), limit(200))
+    const params: Record<string, string> = { take: '200' }
+    if (currentUserRole.value !== 'superadmin') params.departmentId = currentUserDepartment.value
 
-    const [recordsSnap, deptsSnap] = await Promise.all([
-      getDocs(q),
-      getDocs(query(collection(db, 'departments'), orderBy('name'))),
+    const [receiptsRes, deptsRes] = await Promise.all([
+      api.get('/FuelReceipt', { params }),
+      api.get('/Department'),
     ])
-    historyRecords.value = recordsSnap.docs.map((d) => ({ id: d.id, ...d.data() } as FetchedReceipt))
-    departments.value = deptsSnap.docs.map((d) => ({ id: d.id, name: d.data().name as string }))
+    historyRecords.value = (receiptsRes.data.items || []).map((r: FetchedReceipt & { entriesJson?: string }) => ({
+      ...r,
+      entries: r.entries ?? (r.entriesJson ? JSON.parse(r.entriesJson) : []),
+    }))
+    departments.value = deptsRes.data
   } catch (error: unknown) {
     console.error(error)
   } finally {
@@ -89,8 +78,8 @@ const thaiMonths = [
 const getDeptName = (id: string) => departments.value.find((x) => x.id === id)?.name || id
 const formatCurrency = (val: number | null | undefined) =>
   val != null ? new Intl.NumberFormat('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(val) : '-'
-const formatDate = (ts: Timestamp | undefined) =>
-  ts ? ts.toDate().toLocaleDateString('th-TH', { year: 'numeric', month: 'short', day: 'numeric' }) : '-'
+const formatDate = (dateStr: string | null | undefined) =>
+  dateStr ? new Date(dateStr).toLocaleDateString('th-TH', { year: 'numeric', month: 'short', day: 'numeric' }) : '-'
 
 // ─── Detail / Delete ────────────────────────────────────────────────────────
 const selectedRecord = ref<FetchedReceipt | null>(null)
@@ -99,20 +88,14 @@ const isEditing = ref(false)
 const isSaving = ref(false)
 
 const openDetail = (event: { data: FetchedReceipt }) => {
-  // สร้าง copy เพื่อไม่ให้กระทบตารางหลักตอน edit สด
   selectedRecord.value = JSON.parse(JSON.stringify(event.data)) as FetchedReceipt
-  // แต่ createdAt ที่เป็น Timestamp ไม่สามารถส่งผ่าน JSON.stringify ได้ตรงๆ ต้องปรับใหม่
-  selectedRecord.value.createdAt = event.data.createdAt
-  
-  // แปลง day, month, year กลับเป็น Date object เพื่อใช้กับ DatePicker ตอนแก้ไข
   selectedRecord.value.entries.forEach(e => {
     let mIndex = thaiMonths.indexOf(e.month)
-    if(mIndex === -1) mIndex = 0
+    if (mIndex === -1) mIndex = 0
     let y = e.year || new Date().getFullYear() + 543
     if (y > 2500) y -= 543
     e._editDate = new Date(y, mIndex, e.day || 1)
   })
-  
   isEditing.value = false
   detailVisible.value = true
 }
@@ -121,8 +104,6 @@ const saveEdit = async () => {
   if (!selectedRecord.value) return
   try {
     isSaving.value = true
-    
-    // แปลง Date object หมุนกลับเป็น day, month, year ก่อนเซฟ
     selectedRecord.value.entries.forEach(e => {
       if (e._editDate) {
         e.day = e._editDate.getDate()
@@ -131,20 +112,18 @@ const saveEdit = async () => {
       }
       delete e._editDate
     })
-    
-    // re-calculate total amount
     const entryTotal = selectedRecord.value.entries.reduce((s, e) => s + (e.amount || 0), 0)
     selectedRecord.value.totalAmount = entryTotal
-    
-    await updateDoc(doc(db, 'fuel_receipts', selectedRecord.value.id), {
-      entries: selectedRecord.value.entries,
+    await api.put(`/FuelReceipt/${selectedRecord.value.id}`, {
+      entriesJson: JSON.stringify(selectedRecord.value.entries),
       totalAmount: entryTotal,
       declarerName: selectedRecord.value.declarerName || '',
       declarerPosition: selectedRecord.value.declarerPosition || '',
       declarerDept: selectedRecord.value.declarerDept || '',
-      note: selectedRecord.value.note || ''
+      note: selectedRecord.value.note || '',
     })
-    
+    const index = historyRecords.value.findIndex(r => r.id === selectedRecord.value!.id)
+    if (index !== -1) historyRecords.value[index] = { ...historyRecords.value[index]!, ...selectedRecord.value }
     isEditing.value = false
   } catch (err: unknown) {
     alert('เกิดข้อผิดพลาดในการบันทึก: ' + (err instanceof Error ? err.message : String(err)))
@@ -156,12 +135,11 @@ const saveEdit = async () => {
 const deleteRecord = async () => {
   if (!selectedRecord.value) return
   if (!confirm('ยืนยันการลบข้อมูลนี้?')) return
-  await deleteDoc(doc(db, 'fuel_receipts', selectedRecord.value.id))
+  await api.delete(`/FuelReceipt/${selectedRecord.value.id}`)
+  historyRecords.value = historyRecords.value.filter(r => r.id !== selectedRecord.value!.id)
   detailVisible.value = false
   selectedRecord.value = null
 }
-
-// All printing functionality has been moved strictly to the Print page.
 </script>
 
 <template>
@@ -306,7 +284,6 @@ const deleteRecord = async () => {
             <h4 class="font-bold text-blue-800 border-b border-blue-100 pb-2">
               <i class="pi pi-receipt mr-2"></i>แก้ไขรายการจ่าย <span v-if="selectedRecord.entries.length > 1">#{{ i+1 }}</span>
             </h4>
-            
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 items-end">
               <div class="flex flex-col gap-2">
                 <label class="font-semibold text-sm text-gray-700">วันที่ <span class="text-red-500">*</span></label>
@@ -320,7 +297,6 @@ const deleteRecord = async () => {
                 <label class="font-semibold text-sm text-gray-700">พขร. / ผู้จ่ายเงิน</label>
                 <InputText v-model="e.driverName" placeholder="ชื่อคนขับ" class="w-full" />
               </div>
-              
               <div class="flex flex-col gap-2">
                 <label class="font-semibold text-sm text-gray-700">เลขที่</label>
                 <InputText v-model="e.receiptNo" placeholder="เลขที่อ้างอิง" class="w-full" />
@@ -335,7 +311,6 @@ const deleteRecord = async () => {
               </div>
             </div>
           </div>
-          
           <div class="flex items-center justify-between p-3 rounded-xl bg-red-50 border border-red-100">
             <span class="font-bold text-gray-700">ยอดรวมสุทธิ</span>
             <span class="font-bold text-red-700 text-lg">{{ formatCurrency(selectedRecord.entries.reduce((a,c) => a + (c.amount || 0), 0)) }} บาท</span>

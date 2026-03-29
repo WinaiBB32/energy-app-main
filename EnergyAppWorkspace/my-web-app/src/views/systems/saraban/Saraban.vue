@@ -209,8 +209,9 @@ const saveEdit = async (): Promise<void> => {
     }
     await api.put(`/SarabanRecord/${selectedRecord.value.id}`, payload)
     const index = historyRecords.value.findIndex(r => r.id === selectedRecord.value!.id)
-    if (index !== -1) {
-      historyRecords.value[index] = { ...historyRecords.value[index], ...payload, receivedDate: payload.receivedDate || null, dueDate: payload.dueDate || null }
+    const existing = historyRecords.value[index]
+    if (index !== -1 && existing) {
+      historyRecords.value[index] = { ...existing, ...payload, receivedDate: payload.receivedDate || null, dueDate: payload.dueDate || null }
     }
     editVisible.value = false
     toast.success('แก้ไขข้อมูลสำเร็จ')

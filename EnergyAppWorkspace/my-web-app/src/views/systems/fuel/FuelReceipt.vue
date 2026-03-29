@@ -1,9 +1,7 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue'
-// Firebase Removed
-// Firebase Removed
+import { ref, computed, onMounted } from 'vue'
+import api from '@/services/api'
 import { useAuthStore } from '@/stores/auth'
-import { toMonthKey, batchUpdateSummary } from '@/utils/monthlySummary'
 import { usePermissions } from '@/composables/usePermissions'
 
 import Card from 'primevue/card'
@@ -24,15 +22,15 @@ const thaiMonths = [
 ]
 
 const departments = ref<Department[]>([])
-let unsubscribeDepts: () => void
 
-onMounted(() => {
-  unsubscribeDepts = onSnapshot(
-    query(collection(db, 'departments'), orderBy('name')),
-    (snap: QuerySnapshot) => { departments.value = snap.docs.map((d: QueryDocumentSnapshot) => ({ id: d.id, name: d.data().name as string })) },
-  )
+onMounted(async () => {
+  try {
+    const res = await api.get('/Department')
+    departments.value = res.data
+  } catch {
+    // ignore
+  }
 })
-onUnmounted(() => { if (unsubscribeDepts) unsubscribeDepts() })
 
 // ─── Form state ────────────────────────────────────────────────────────────
 const blankEntry = () => ({
@@ -69,39 +67,20 @@ const submitForm = async () => {
     receiptNo: entry.value.receiptNo,
     bookNo: entry.value.bookNo,
     amount: entry.value.amount,
-    driverName: entry.value.driverName
+    driverName: entry.value.driverName,
   }
 
   try {
     isSubmitting.value = true
-    const batch = writeBatch(db)
-    const newDocRef = doc(collection(db, 'fuel_receipts'))
-
-    // Operation 1: Create the new receipt document
-    batch.set(newDocRef, {
+    await api.post('/FuelReceipt', {
       departmentId: isSuperAdmin.value ? '' : currentUserDepartment.value,
-      entries: [singleEntry],
-      receiptDate: entryDate.value, // Add timestamp for querying
+      entriesJson: JSON.stringify([singleEntry]),
       totalAmount: totalAmount.value,
       recordedByName: authStore.user?.displayName || authStore.user?.email?.split('@')[0] || 'ไม่ระบุชื่อ',
-      recordedByUid: authStore.user?.uid || 'unknown',
-      createdAt: serverTimestamp(),
+      recordedByUid: authStore.user?.uid || authStore.user?.id || 'unknown',
     })
 
-    // Operation 2: Update the monthly summary
-    const monthKey = toMonthKey(entryDate.value)
-    if (monthKey) {
-      batchUpdateSummary(batch, monthKey, 'fuel_receipt', {
-        totalAmount: totalAmount.value,
-        count: 1,
-      })
-    }
-
-    await batch.commit()
-
     successMessage.value = 'บันทึกใบรับรองแทนใบเสร็จรับเงินสำเร็จ'
-
-    // Reset amount but keep other values for quick entry
     entry.value = { ...entry.value, amount: null, receiptNo: '', bookNo: '' }
   } catch (e: unknown) {
     errorMessage.value = e instanceof Error ? `เกิดข้อผิดพลาด: ${e.message}` : 'เกิดข้อผิดพลาด'

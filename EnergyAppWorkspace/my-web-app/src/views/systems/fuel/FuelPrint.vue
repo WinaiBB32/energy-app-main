@@ -47,7 +47,7 @@ onMounted(async () => {
       api.get('/FuelRecord', { params }),
       api.get('/Department'),
     ])
-    historyRecords.value = recordsRes.data
+    historyRecords.value = recordsRes.data.items || []
     departments.value = deptsRes.data
   } finally {
     isLoading.value = false

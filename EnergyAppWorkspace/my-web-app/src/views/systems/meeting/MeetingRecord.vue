@@ -41,7 +41,7 @@ const errorMessage = ref<string>('')
 onMounted(async () => {
     try {
         const { data } = await api.get('/MeetingRoom')
-        roomEntries.value = (data.items || []).map((room: any) => ({
+        roomEntries.value = (Array.isArray(data) ? data : []).map((room: any) => ({
             roomId: room.id,
             roomName: room.name,
             usageCount: null

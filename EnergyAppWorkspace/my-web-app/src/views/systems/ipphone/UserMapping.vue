@@ -1,10 +1,6 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue'
-import {
-  collection, updateDoc, doc,
-  query, onSnapshot, getDocs,
-} from 'firebase/firestore'
-// Firebase Removed
+import { ref, computed, onMounted } from 'vue'
+import api from '@/services/api'
 import { useAuthStore } from '@/stores/auth'
 import { logAudit } from '@/utils/auditLogger'
 
@@ -63,26 +59,27 @@ const selectedExt = ref<Extension | null>(null)
 // array ของ uid ที่เลือก
 const selectedUids = ref<string[]>([])
 
-let unsubExt: (() => void) | null = null
-let unsubDepts: (() => void) | null = null
-
-// ─── Firestore ────────────────────────────────────────────────────────────────
+// ─── Data Fetching ────────────────────────────────────────────────────────────
 onMounted(async () => {
-  unsubDepts = onSnapshot(query(collection(db, 'departments')), (snap) => {
+  try {
+    const deptsRes = await api.get('/Department')
     const map: Record<string, string> = {}
-    snap.forEach((d) => { map[d.id] = d.data().name as string })
+    for (const d of deptsRes.data) map[d.id] = d.name
     departments.value = map
-  })
+  } catch {
+    // ignore
+  }
 
   try {
-    const usersSnap = await getDocs(collection(db, 'users'))
-    userOptions.value = usersSnap.docs
-      .filter((d) => d.data().status === 'active')
-      .map((d) => {
-        const data = d.data()
-        const name = (data.displayName as string) ?? (data.email as string) ?? d.id
-        const email = (data.email as string) ?? ''
-        return { uid: d.id, displayName: name, email, label: `${name}  —  ${email}` }
+    const usersRes = await api.get('/User', { params: { take: '1000' } })
+    const users = usersRes.data.items ?? usersRes.data
+    userOptions.value = users
+      .filter((u: { status?: string }) => u.status === 'active')
+      .map((u: { uid?: string; id?: string; displayName?: string; email?: string }) => {
+        const uid = u.uid ?? u.id ?? ''
+        const name = u.displayName ?? u.email ?? uid
+        const email = u.email ?? ''
+        return { uid, displayName: name, email, label: `${name}  —  ${email}` }
       })
     if (userOptions.value.length === 0) {
       errorMsg.value = 'ไม่พบบัญชีผู้ใช้งานที่มีสถานะ Active ในระบบ'
@@ -93,26 +90,18 @@ onMounted(async () => {
     loadingUsers.value = false
   }
 
-  unsubExt = onSnapshot(
-    collection(db, 'ipphone_directory'),
-    (snap) => {
-      const rows = snap.docs.map((d) => ({ id: d.id, ...d.data() } as Extension))
-      rows.sort((a, b) =>
-        (a.ipPhoneNumber || '').localeCompare(b.ipPhoneNumber || '', undefined, { numeric: true }),
-      )
-      extensions.value = rows
-      loadingExt.value = false
-    },
-    (err) => {
-      errorMsg.value = `โหลดข้อมูลเบอร์โทรไม่สำเร็จ: ${err.message}`
-      loadingExt.value = false
-    },
-  )
-})
-
-onUnmounted(() => {
-  if (unsubExt) unsubExt()
-  if (unsubDepts) unsubDepts()
+  try {
+    const extRes = await api.get('/IPPhoneDirectory', { params: { take: '1000' } })
+    const rows: Extension[] = extRes.data.items ?? extRes.data
+    rows.sort((a, b) =>
+      (a.ipPhoneNumber || '').localeCompare(b.ipPhoneNumber || '', undefined, { numeric: true }),
+    )
+    extensions.value = rows
+  } catch (err: unknown) {
+    errorMsg.value = `โหลดข้อมูลเบอร์โทรไม่สำเร็จ: ${String(err)}`
+  } finally {
+    loadingExt.value = false
+  }
 })
 
 // ─── Computed ─────────────────────────────────────────────────────────────────
@@ -155,7 +144,8 @@ async function saveMapping() {
       .filter(Boolean) as LinkedUser[]
 
     const extNum = selectedExt.value.ipPhoneNumber
-    await updateDoc(doc(db, 'ipphone_directory', selectedExt.value.id), {
+    await api.put(`/IPPhoneDirectory/${selectedExt.value.id}`, {
+      ...selectedExt.value,
       linkedUsers: linked,
       linkedUserEmails: linked.map((u) => u.email),
     })
@@ -166,6 +156,12 @@ async function saveMapping() {
         ? `ผูกเบอร์ ${extNum} กับ: ${linked.map((u) => u.email).join(', ')}`
         : `ยกเลิกการผูกเบอร์ ${extNum}`,
     )
+    // update local state
+    const idx = extensions.value.findIndex((e) => e.id === selectedExt.value!.id)
+    const existingExt = extensions.value[idx]
+    if (idx !== -1 && existingExt) {
+      extensions.value[idx] = { ...existingExt, linkedUsers: linked, linkedUserEmails: linked.map((u) => u.email) }
+    }
     mapVisible.value = false
     successMsg.value = linked.length > 0
       ? `ผูกเบอร์ ${extNum} กับ ${linked.length} ผู้ใช้งานเรียบร้อยแล้ว`

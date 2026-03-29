@@ -1,8 +1,7 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-// Firebase Removed
-// Firebase Removed
+import api from '@/services/api'
 import { useAuthStore } from '@/stores/auth'
 import { logAudit } from '@/utils/auditLogger'
 import { usePermissions } from '@/composables/usePermissions'
@@ -31,8 +30,8 @@ interface ServiceRequest {
   requesterEmail: string
   assignedTo?: string
   note?: string
-  createdAt: Timestamp | null
-  updatedAt?: Timestamp | null
+  createdAt: string | null
+  updatedAt?: string | null
 }
 
 // ─── Store ────────────────────────────────────────────────────────────────────
@@ -89,19 +88,20 @@ const requestToDelete = ref<ServiceRequest | null>(null)
 const filterStatus = ref<string | null>(null)
 const filterSearch = ref('')
 
-// ─── Firestore ────────────────────────────────────────────────────────────────
-let unsub: (() => void) | null = null
+// ─── Data Fetching ────────────────────────────────────────────────────────────
+async function loadRequests() {
+  try {
+    const res = await api.get('/ServiceRequest', { params: { take: '500' } })
+    requests.value = (res.data.items ?? res.data) as ServiceRequest[]
+  } catch {
+    // ignore
+  } finally {
+    loading.value = false
+  }
+}
 
 onMounted(() => {
-  const q = query(collection(db, 'ipphone_service_requests'), orderBy('createdAt', 'desc'))
-  unsub = onSnapshot(q, (snap: QuerySnapshot) => {
-    requests.value = snap.docs.map((d: QueryDocumentSnapshot) => ({ id: d.id, ...d.data() } as ServiceRequest))
-    loading.value = false
-  })
-})
-
-onUnmounted(() => {
-  if (unsub) unsub()
+  loadRequests()
 })
 
 // ─── Computed ─────────────────────────────────────────────────────────────────
@@ -127,9 +127,9 @@ const statCounts = computed(() => ({
 }))
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
-function formatDate(ts: Timestamp | null | undefined): string {
-  if (!ts) return '-'
-  return ts.toDate().toLocaleString('th-TH', {
+function formatDate(dateStr: string | null | undefined): string {
+  if (!dateStr) return '-'
+  return new Date(dateStr).toLocaleString('th-TH', {
     year: 'numeric', month: 'short', day: 'numeric',
     hour: '2-digit', minute: '2-digit',
   })
@@ -164,17 +164,17 @@ async function submitRequest() {
   if (!form.value.description.trim()) { formError.value = 'กรุณาระบุรายละเอียด'; return }
   saving.value = true
   try {
-    await addDoc(collection(db, 'ipphone_service_requests'), {
+    await api.post('/ServiceRequest', {
       ...form.value,
       status: 'pending',
       requesterName: authStore.user?.displayName ?? authStore.user?.email ?? '',
       requesterEmail: authStore.user?.email ?? '',
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
+      requesterUid: authStore.user?.uid ?? authStore.user?.id ?? '',
     })
     formVisible.value = false
     successMsg.value = 'ส่งคำร้องเรียบร้อยแล้ว'
     setTimeout(() => (successMsg.value = ''), 4000)
+    await loadRequests()
   } catch {
     formError.value = 'เกิดข้อผิดพลาด กรุณาลองใหม่'
   } finally {
@@ -200,11 +200,11 @@ async function saveEdit() {
   if (!selectedRequest.value) return
   saving.value = true
   try {
-    await updateDoc(doc(db, 'ipphone_service_requests', selectedRequest.value.id), {
+    await api.put(`/ServiceRequest/${selectedRequest.value.id}`, {
+      ...selectedRequest.value,
       status: editForm.value.status,
       assignedTo: editForm.value.assignedTo,
       note: editForm.value.note,
-      updatedAt: serverTimestamp(),
     })
     logAudit(
       { uid: authStore.user?.uid ?? '', displayName: authStore.userProfile?.displayName ?? authStore.user?.email ?? '', email: authStore.user?.email ?? '', role: authStore.userProfile?.role ?? 'user' },
@@ -213,6 +213,7 @@ async function saveEdit() {
     editVisible.value = false
     successMsg.value = 'อัปเดตสถานะเรียบร้อยแล้ว'
     setTimeout(() => (successMsg.value = ''), 4000)
+    await loadRequests()
   } catch {
     alert('เกิดข้อผิดพลาด')
   } finally {
@@ -229,7 +230,7 @@ async function deleteRequest() {
   if (!requestToDelete.value) return
   try {
     const req = requestToDelete.value
-    await deleteDoc(doc(db, 'ipphone_service_requests', req.id))
+    await api.delete(`/ServiceRequest/${req.id}`)
     logAudit(
       { uid: authStore.user?.uid ?? '', displayName: authStore.userProfile?.displayName ?? authStore.user?.email ?? '', email: authStore.user?.email ?? '', role: authStore.userProfile?.role ?? 'user' },
       'DELETE', 'ServiceRequest', `ลบคำร้อง: ${req.title} (${req.requesterEmail})`,
@@ -237,6 +238,7 @@ async function deleteRequest() {
     deleteVisible.value = false
     successMsg.value = 'ลบคำร้องเรียบร้อยแล้ว'
     setTimeout(() => (successMsg.value = ''), 4000)
+    await loadRequests()
   } catch {
     alert('เกิดข้อผิดพลาด')
   }
