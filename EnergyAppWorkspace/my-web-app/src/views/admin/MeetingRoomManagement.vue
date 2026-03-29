@@ -1,9 +1,7 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue'
-import {
-    collection, query, onSnapshot, doc, addDoc, updateDoc, deleteDoc, orderBy, serverTimestamp
-} from 'firebase/firestore'
-// Firebase Removed
+import { ref, onMounted } from 'vue'
+import axios from 'axios'
+import api from '@/services/api'
 import { useAuthStore } from '@/stores/auth'
 import { logAudit } from '@/utils/auditLogger'
 import { useAppToast } from '@/composables/useAppToast'
@@ -30,7 +28,6 @@ const toast = useAppToast()
 
 const meetingRooms = ref<MeetingRoom[]>([])
 const isLoading = ref<boolean>(true)
-let unsubscribe: () => void
 
 const dialogVisible = ref<boolean>(false)
 const isSaving = ref<boolean>(false)
@@ -43,21 +40,20 @@ const currentRoom = ref<RoomFormData>({
 })
 
 // ─── Fetch Data ─────────────────────────────────────────────────────────────
-onMounted(() => {
-    const q = query(collection(db, 'meeting_rooms'), orderBy('createdAt', 'asc'))
-    unsubscribe = onSnapshot(q, (snapshot) => {
-        const fetched: MeetingRoom[] = []
-        snapshot.forEach((d) => fetched.push({ id: d.id, ...d.data() } as MeetingRoom))
-        meetingRooms.value = fetched
-        isLoading.value = false
-    }, (error: unknown) => {
+const fetchMeetingRooms = async (): Promise<void> => {
+    isLoading.value = true
+    try {
+        const res = await api.get('/MeetingRoom')
+        meetingRooms.value = res.data
+    } catch (error) {
         toast.fromError(error, 'ไม่สามารถโหลดข้อมูลห้องประชุมได้')
+    } finally {
         isLoading.value = false
-    })
-})
+    }
+}
 
-onUnmounted(() => {
-    if (unsubscribe) unsubscribe()
+onMounted(() => {
+    fetchMeetingRooms()
 })
 
 // ─── Actions ────────────────────────────────────────────────────────────────
@@ -88,32 +84,38 @@ const saveRoom = async (): Promise<void> => {
         errorMessage.value = ''
 
         const actor = {
-            uid: authStore.user?.uid ?? '',
-            displayName: authStore.userProfile?.displayName ?? authStore.user?.email ?? '',
+            uid: authStore.user?.id ?? '',
+            displayName: authStore.userProfile?.displayName ?? authStore.user?.firstName ?? authStore.user?.email ?? '',
             email: authStore.user?.email ?? '',
-            role: authStore.userProfile?.role ?? 'user'
+            role: authStore.userProfile?.role ?? authStore.user?.role?.toLowerCase?.() ?? 'user'
         }
 
         if (isEditMode.value) {
-            await updateDoc(doc(db, 'meeting_rooms', currentRoom.value.id), {
+            await api.put(`/MeetingRoom/${currentRoom.value.id}`, {
                 name: currentRoom.value.name.trim(),
                 description: currentRoom.value.description.trim(),
             })
             logAudit(actor, 'UPDATE', 'MeetingRoomManagement', `แก้ไขห้องประชุม: ${currentRoom.value.name.trim()}`)
             successMessage.value = 'แก้ไขข้อมูลสำเร็จ'
         } else {
-            await addDoc(collection(db, 'meeting_rooms'), {
+            await api.post('/MeetingRoom', {
                 name: currentRoom.value.name.trim(),
                 description: currentRoom.value.description.trim(),
-                createdAt: serverTimestamp(),
             })
             logAudit(actor, 'CREATE', 'MeetingRoomManagement', `เพิ่มห้องประชุม: ${currentRoom.value.name.trim()}`)
             successMessage.value = 'เพิ่มห้องประชุมใหม่สำเร็จ'
         }
 
+        await fetchMeetingRooms()
         setTimeout(() => { dialogVisible.value = false }, 900)
     } catch (error: unknown) {
-        errorMessage.value = error instanceof Error ? `Error: ${error.message}` : 'เกิดข้อผิดพลาดในการบันทึกข้อมูล'
+        if (axios.isAxiosError(error)) {
+            errorMessage.value = error.response?.data?.message || 'เกิดข้อผิดพลาดในการบันทึกข้อมูล'
+        } else if (error instanceof Error) {
+            errorMessage.value = `Error: ${error.message}`
+        } else {
+            errorMessage.value = 'เกิดข้อผิดพลาดในการบันทึกข้อมูล'
+        }
     } finally {
         isSaving.value = false
     }
@@ -122,16 +124,17 @@ const saveRoom = async (): Promise<void> => {
 const deleteRoom = async (id: string, name: string): Promise<void> => {
     if (confirm(`ยืนยันการลบ "${name}" ?\n(ข้อมูลสถิติที่เคยบันทึกไว้ในเดือนก่อนหน้าจะยังคงอยู่ แต่จะไม่แสดงชื่อห้องนี้ให้บันทึกในอนาคต)`)) {
         try {
-            await deleteDoc(doc(db, 'meeting_rooms', id))
+            await api.delete(`/MeetingRoom/${id}`)
             logAudit(
                 {
-                    uid: authStore.user?.uid ?? '',
-                    displayName: authStore.userProfile?.displayName ?? authStore.user?.email ?? '',
+                    uid: authStore.user?.id ?? '',
+                    displayName: authStore.userProfile?.displayName ?? authStore.user?.firstName ?? authStore.user?.email ?? '',
                     email: authStore.user?.email ?? '',
-                    role: authStore.userProfile?.role ?? 'user'
+                    role: authStore.userProfile?.role ?? authStore.user?.role?.toLowerCase?.() ?? 'user'
                 },
                 'DELETE', 'MeetingRoomManagement', `ลบห้องประชุม: ${name}`,
             )
+            await fetchMeetingRooms()
         } catch (error: unknown) {
             toast.fromError(error, 'ไม่สามารถลบข้อมูลห้องประชุมได้')
         }

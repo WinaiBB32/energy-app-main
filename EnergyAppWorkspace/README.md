@@ -50,7 +50,7 @@
     ```bash
     dotnet run --project EnergyApp.API
     ```
-    _API จะรันอยู่ที่ `https://localhost:7187` (ตรวจสอบ Port ได้ใน `launchSettings.json`)_
+    _API จะรันอยู่ที่ `http://localhost:5007` (ตรวจสอบ Port ได้ใน `launchSettings.json`)_
 
 ### 3. การตั้งค่า Frontend (Vue 3)
 
@@ -66,7 +66,7 @@
     - คัดลอกไฟล์ `.env.example` เป็น `.env`
     - ตรวจสอบค่า `VITE_API_URL` ให้ตรงกับ URL ของ Backend API:
       ```env
-      VITE_API_URL=https://localhost:7187/api/v1
+      VITE_API_URL=http://localhost:5007/api/v1
       ```
 4.  **รัน Frontend:**
     ```bash

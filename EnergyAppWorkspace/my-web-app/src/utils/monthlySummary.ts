@@ -37,9 +37,16 @@ export interface SummaryDelta {
 }
 
 /** แปลง Date หรือ Timestamp เป็น 'yyyy-MM' */
-export function toMonthKey(date: Date | string | null | undefined): string | null {
+export function toMonthKey(
+  date: Date | string | { toDate: () => Date } | null | undefined,
+): string | null {
   if (!date) return null
-  const d = date instanceof Date ? date : new Date(date)
+  const d =
+    date instanceof Date
+      ? date
+      : typeof date === 'string'
+        ? new Date(date)
+        : date.toDate()
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
 }
 
@@ -57,7 +64,12 @@ export function updateSummary(monthKey: string, system: SystemKey, delta: Summar
 /**
  * Mock version for batch updates
  */
-export function batchUpdateSummary(batch: any, monthKey: string, system: SystemKey, delta: SummaryDelta): void {
+export function batchUpdateSummary(
+  batch: unknown,
+  monthKey: string,
+  system: SystemKey,
+  delta: SummaryDelta,
+): void {
   // Mock implementation for UI stability
   console.log(`[Mock] Batch update summary for ${monthKey} in ${system}`, delta)
 }

@@ -30,7 +30,7 @@ npm install
 สร้างไฟล์ `.env` โดยคัดลอกมาจาก `.env.example`:
 
 ```env
-VITE_API_URL=https://localhost:7187/api/v1
+VITE_API_URL=http://localhost:5007/api/v1
 ```
 
 ### 3. รัน Development Server

@@ -1,9 +1,7 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue'
-import {
-  collection, query, onSnapshot, doc, addDoc, updateDoc, deleteDoc, orderBy, serverTimestamp, Timestamp
-} from 'firebase/firestore'
-// Firebase Removed
+import { ref, onMounted } from 'vue'
+import axios from 'axios'
+import api from '@/services/api'
 import { useAuthStore } from '@/stores/auth'
 import { logAudit } from '@/utils/auditLogger'
 import { useAppToast } from '@/composables/useAppToast'
@@ -24,20 +22,26 @@ interface FuelType {
   id: string
   name: string
   severity: string
-  createdAt?: Timestamp
 }
 
 const severityOptions = [
-  { value: 'danger',    label: 'แดง (ดีเซล)',        color: 'bg-red-100 text-red-600 border-red-200' },
-  { value: 'warn',      label: 'เหลือง (แก๊สโซฮอล์)', color: 'bg-amber-100 text-amber-600 border-amber-200' },
-  { value: 'info',      label: 'ฟ้า (พรีเมียม)',      color: 'bg-blue-100 text-blue-600 border-blue-200' },
-  { value: 'success',   label: 'เขียว (E20/E85)',     color: 'bg-green-100 text-green-600 border-green-200' },
-  { value: 'secondary', label: 'เทา (อื่นๆ)',          color: 'bg-gray-100 text-gray-600 border-gray-200' },
+  { value: 'danger', label: 'แดง (ดีเซล)', color: 'bg-red-100 text-red-600 border-red-200' },
+  {
+    value: 'warn',
+    label: 'เหลือง (แก๊สโซฮอล์)',
+    color: 'bg-amber-100 text-amber-600 border-amber-200',
+  },
+  { value: 'info', label: 'ฟ้า (พรีเมียม)', color: 'bg-blue-100 text-blue-600 border-blue-200' },
+  {
+    value: 'success',
+    label: 'เขียว (E20/E85)',
+    color: 'bg-green-100 text-green-600 border-green-200',
+  },
+  { value: 'secondary', label: 'เทา (อื่นๆ)', color: 'bg-gray-100 text-gray-600 border-gray-200' },
 ]
 
 const fuelTypes = ref<FuelType[]>([])
 const isLoading = ref(true)
-let unsubscribe: () => void
 
 const dialogVisible = ref(false)
 const isSaving = ref(false)
@@ -46,24 +50,25 @@ const successMessage = ref('')
 const errorMessage = ref('')
 
 const currentFuelType = ref<{ id: string; name: string; severity: string }>({
-  id: '', name: '', severity: 'secondary'
+  id: '',
+  name: '',
+  severity: 'secondary',
 })
+
+const fetchFuelTypes = async () => {
+  isLoading.value = true
+  try {
+    const res = await api.get('/FuelType')
+    fuelTypes.value = res.data
+  } catch (err) {
+    toast.fromError(err, 'ไม่สามารถโหลดข้อมูลประเภทน้ำมันได้')
+  } finally {
+    isLoading.value = false
+  }
+}
 
 onMounted(() => {
-  const q = query(collection(db, 'fuel_types'), orderBy('createdAt', 'asc'))
-  unsubscribe = onSnapshot(q, (snapshot) => {
-    const fetched: FuelType[] = []
-    snapshot.forEach((d) => fetched.push({ id: d.id, ...d.data() } as FuelType))
-    fuelTypes.value = fetched
-    isLoading.value = false
-  }, (error: unknown) => {
-    toast.fromError(error, 'ไม่สามารถโหลดข้อมูลประเภทน้ำมันได้')
-    isLoading.value = false
-  })
-})
-
-onUnmounted(() => {
-  if (unsubscribe) unsubscribe()
+  fetchFuelTypes()
 })
 
 const openNewDialog = () => {
@@ -88,52 +93,87 @@ const saveFuelType = async () => {
     return
   }
 
+  isSaving.value = true
+  errorMessage.value = ''
   try {
-    isSaving.value = true
-    errorMessage.value = ''
+    const actor = {
+      uid: authStore.user?.id ?? '',
+      displayName: authStore.user?.firstName ?? authStore.user?.email ?? '',
+      email: authStore.user?.email ?? '',
+      role: authStore.user?.role ?? 'User',
+    }
 
-    const actor = { uid: authStore.user?.uid ?? '', displayName: authStore.userProfile?.displayName ?? authStore.user?.email ?? '', email: authStore.user?.email ?? '', role: authStore.userProfile?.role ?? 'user' }
     if (isEditMode.value) {
-      await updateDoc(doc(db, 'fuel_types', currentFuelType.value.id), {
+      await api.put(`/FuelType/${currentFuelType.value.id}`, {
         name: currentFuelType.value.name.trim(),
         severity: currentFuelType.value.severity,
       })
-      logAudit(actor, 'UPDATE', 'FuelTypeManagement', `แก้ไขประเภทน้ำมัน: ${currentFuelType.value.name.trim()}`)
+      logAudit(
+        actor,
+        'UPDATE',
+        'FuelTypeManagement',
+        `แก้ไขประเภทน้ำมัน: ${currentFuelType.value.name.trim()}`,
+      )
       successMessage.value = 'แก้ไขข้อมูลสำเร็จ'
     } else {
-      await addDoc(collection(db, 'fuel_types'), {
+      await api.post('/FuelType', {
         name: currentFuelType.value.name.trim(),
         severity: currentFuelType.value.severity,
-        createdAt: serverTimestamp(),
       })
-      logAudit(actor, 'CREATE', 'FuelTypeManagement', `เพิ่มประเภทน้ำมัน: ${currentFuelType.value.name.trim()}`)
+      logAudit(
+        actor,
+        'CREATE',
+        'FuelTypeManagement',
+        `เพิ่มประเภทน้ำมัน: ${currentFuelType.value.name.trim()}`,
+      )
       successMessage.value = 'เพิ่มประเภทน้ำมันใหม่สำเร็จ'
     }
 
-    setTimeout(() => { dialogVisible.value = false }, 900)
+    await fetchFuelTypes()
+    setTimeout(() => {
+      dialogVisible.value = false
+    }, 900)
   } catch (error: unknown) {
-    errorMessage.value = error instanceof Error ? `Error: ${error.message}` : 'เกิดข้อผิดพลาด'
+    if (axios.isAxiosError(error)) {
+      errorMessage.value = error.response?.data?.message || 'เกิดข้อผิดพลาดในการเชื่อมต่อ'
+    } else if (error instanceof Error) {
+      errorMessage.value = error.message
+    } else {
+      errorMessage.value = 'เกิดข้อผิดพลาดในการเชื่อมต่อ'
+    }
   } finally {
     isSaving.value = false
   }
 }
 
 const deleteFuelType = async (id: string, name: string) => {
-  if (confirm(`ยืนยันการลบ "${name}" ?\n(ข้อมูลบันทึกที่ใช้ประเภทนี้จะยังคงอยู่ แต่จะไม่แสดงชื่อประเภทอีกต่อไป)`)) {
+  if (
+    confirm(
+      `ยืนยันการลบ "${name}" ?\n(ข้อมูลบันทึกที่ใช้ประเภทนี้จะยังคงอยู่ แต่จะไม่แสดงชื่อประเภทอีกต่อไป)`,
+    )
+  ) {
     try {
-      await deleteDoc(doc(db, 'fuel_types', id))
+      await api.delete(`/FuelType/${id}`)
       logAudit(
-        { uid: authStore.user?.uid ?? '', displayName: authStore.userProfile?.displayName ?? authStore.user?.email ?? '', email: authStore.user?.email ?? '', role: authStore.userProfile?.role ?? 'user' },
-        'DELETE', 'FuelTypeManagement', `ลบประเภทน้ำมัน: ${name}`,
+        {
+          uid: authStore.user?.id ?? '',
+          displayName: authStore.user?.firstName ?? authStore.user?.email ?? '',
+          email: authStore.user?.email ?? '',
+          role: authStore.user?.role ?? 'User',
+        },
+        'DELETE',
+        'FuelTypeManagement',
+        `ลบประเภทน้ำมัน: ${name}`,
       )
+      await fetchFuelTypes()
+      toast.success('ลบข้อมูลสำเร็จ')
     } catch (error) {
       toast.fromError(error, 'ไม่สามารถลบประเภทน้ำมันได้')
-      alert('เกิดข้อผิดพลาดในการลบข้อมูล')
     }
   }
 }
 
-const getSeverityLabel = (val: string) => severityOptions.find(o => o.value === val)?.label || val
+const getSeverityLabel = (val: string) => severityOptions.find((o) => o.value === val)?.label || val
 </script>
 
 <template>
@@ -143,15 +183,25 @@ const getSeverityLabel = (val: string) => severityOptions.find(o => o.value === 
         <h2 class="text-3xl font-bold text-gray-800">
           <i class="pi pi-gauge text-red-500 mr-2"></i>จัดการประเภทน้ำมันเชื้อเพลิง
         </h2>
-        <p class="text-gray-500 mt-1">เพิ่ม แก้ไข ลบ ประเภทน้ำมันที่ใช้ในระบบบันทึกน้ำมันเชื้อเพลิง</p>
+        <p class="text-gray-500 mt-1">
+          เพิ่ม แก้ไข ลบ ประเภทน้ำมันที่ใช้ในระบบบันทึกน้ำมันเชื้อเพลิง
+        </p>
       </div>
-      <Button label="เพิ่มประเภทน้ำมัน" icon="pi pi-plus" severity="danger" @click="openNewDialog" />
+      <Button
+        label="เพิ่มประเภทน้ำมัน"
+        icon="pi pi-plus"
+        severity="danger"
+        @click="openNewDialog"
+      />
     </div>
 
-    <!-- Stat Card -->
     <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
-      <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 flex items-center gap-4">
-        <div class="w-12 h-12 rounded-xl bg-linear-to-br from-red-400 to-rose-500 flex items-center justify-center text-white shadow-sm">
+      <div
+        class="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 flex items-center gap-4"
+      >
+        <div
+          class="w-12 h-12 rounded-xl bg-linear-to-br from-red-400 to-rose-500 flex items-center justify-center text-white shadow-sm"
+        >
           <i class="pi pi-gauge text-xl"></i>
         </div>
         <div>
@@ -197,17 +247,23 @@ const getSeverityLabel = (val: string) => severityOptions.find(o => o.value === 
             </template>
           </Column>
 
-          <Column header="รหัสอ้างอิง (ID)" style="width: 14rem">
-            <template #body="sp">
-              <span class="text-xs text-gray-400 font-mono">{{ sp.data.id }}</span>
-            </template>
-          </Column>
-
           <Column header="จัดการ" style="width: 8rem">
             <template #body="sp">
               <div class="flex gap-1">
-                <Button icon="pi pi-pencil" severity="secondary" text rounded @click="openEditDialog(sp.data)" />
-                <Button icon="pi pi-trash" severity="danger" text rounded @click="deleteFuelType(sp.data.id, sp.data.name)" />
+                <Button
+                  icon="pi pi-pencil"
+                  severity="secondary"
+                  text
+                  rounded
+                  @click="openEditDialog(sp.data)"
+                />
+                <Button
+                  icon="pi pi-trash"
+                  severity="danger"
+                  text
+                  rounded
+                  @click="deleteFuelType(sp.data.id, sp.data.name)"
+                />
               </div>
             </template>
           </Column>
@@ -215,7 +271,6 @@ const getSeverityLabel = (val: string) => severityOptions.find(o => o.value === 
       </template>
     </Card>
 
-    <!-- Add / Edit Dialog -->
     <Dialog
       v-model:visible="dialogVisible"
       modal
@@ -223,8 +278,12 @@ const getSeverityLabel = (val: string) => severityOptions.find(o => o.value === 
       :style="{ width: '440px' }"
       :draggable="false"
     >
-      <Message v-if="successMessage" severity="success" :closable="false" class="mb-4">{{ successMessage }}</Message>
-      <Message v-if="errorMessage" severity="error" :closable="false" class="mb-4">{{ errorMessage }}</Message>
+      <Message v-if="successMessage" severity="success" :closable="false" class="mb-4">{{
+        successMessage
+      }}</Message>
+      <Message v-if="errorMessage" severity="error" :closable="false" class="mb-4">{{
+        errorMessage
+      }}</Message>
 
       <div class="flex flex-col gap-5 mt-2">
         <div class="flex flex-col gap-2">
@@ -241,7 +300,9 @@ const getSeverityLabel = (val: string) => severityOptions.find(o => o.value === 
         </div>
 
         <div class="flex flex-col gap-2">
-          <label class="font-semibold text-sm text-gray-700">สีแสดงผล (Tag) <span class="text-red-500">*</span></label>
+          <label class="font-semibold text-sm text-gray-700"
+            >สีแสดงผล (Tag) <span class="text-red-500">*</span></label
+          >
           <div class="flex flex-wrap gap-2">
             <button
               v-for="opt in severityOptions"
@@ -253,7 +314,7 @@ const getSeverityLabel = (val: string) => severityOptions.find(o => o.value === 
                 opt.color,
                 currentFuelType.severity === opt.value
                   ? 'ring-2 ring-offset-1 ring-gray-400 shadow-sm scale-105'
-                  : 'opacity-60 hover:opacity-100'
+                  : 'opacity-60 hover:opacity-100',
               ]"
             >
               {{ opt.label }}
@@ -261,7 +322,11 @@ const getSeverityLabel = (val: string) => severityOptions.find(o => o.value === 
           </div>
           <div class="mt-1 flex items-center gap-2 text-sm text-gray-500">
             ตัวอย่าง:
-            <Tag :value="currentFuelType.name || 'ตัวอย่าง'" :severity="currentFuelType.severity" rounded />
+            <Tag
+              :value="currentFuelType.name || 'ตัวอย่าง'"
+              :severity="currentFuelType.severity"
+              rounded
+            />
           </div>
         </div>
       </div>

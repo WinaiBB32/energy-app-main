@@ -1,4 +1,4 @@
-﻿using EnergyApp.API.Models;
+using EnergyApp.API.Models;
 using Microsoft.EntityFrameworkCore;
 
 namespace EnergyApp.API.Data
@@ -11,5 +11,7 @@ namespace EnergyApp.API.Data
         public DbSet<Department> Departments { get; set; }
         public DbSet<Building> Buildings { get; set; }
         public DbSet<AuditLog> AuditLogs { get; set; }
+        public DbSet<FuelType> FuelTypes { get; set; }
+        public DbSet<MeetingRoom> MeetingRooms { get; set; }
     }
 }

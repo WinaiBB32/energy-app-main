@@ -1,9 +1,7 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue'
-import {
-  collection, query, onSnapshot, doc, addDoc, updateDoc, deleteDoc, orderBy, serverTimestamp, Timestamp
-} from 'firebase/firestore'
-// Firebase Removed
+import { ref, onMounted } from 'vue'
+import axios from 'axios'
+import api from '@/services/api'
 import { useAuthStore } from '@/stores/auth'
 import { logAudit } from '@/utils/auditLogger'
 import { useAppToast } from '@/composables/useAppToast'
@@ -25,12 +23,10 @@ interface Building {
   id: string
   name: string
   description: string
-  createdAt?: Timestamp
 }
 
 const buildings = ref<Building[]>([])
 const isLoading = ref(true)
-let unsubscribe: () => void
 
 const dialogVisible = ref(false)
 const isSaving = ref(false)
@@ -39,24 +35,25 @@ const successMessage = ref('')
 const errorMessage = ref('')
 
 const currentBuilding = ref<{ id: string; name: string; description: string }>({
-  id: '', name: '', description: ''
+  id: '',
+  name: '',
+  description: '',
 })
+
+const fetchBuildings = async () => {
+  isLoading.value = true
+  try {
+    const res = await api.get('/Building')
+    buildings.value = res.data
+  } catch (err) {
+    toast.fromError(err, 'ไม่สามารถโหลดข้อมูลอาคารได้')
+  } finally {
+    isLoading.value = false
+  }
+}
 
 onMounted(() => {
-  const q = query(collection(db, 'buildings'), orderBy('createdAt', 'asc'))
-  unsubscribe = onSnapshot(q, (snapshot) => {
-    const fetched: Building[] = []
-    snapshot.forEach((d) => fetched.push({ id: d.id, ...d.data() } as Building))
-    buildings.value = fetched
-    isLoading.value = false
-  }, (error: unknown) => {
-    toast.fromError(error, 'ไม่สามารถโหลดข้อมูลอาคารได้')
-    isLoading.value = false
-  })
-})
-
-onUnmounted(() => {
-  if (unsubscribe) unsubscribe()
+  fetchBuildings()
 })
 
 const openNewDialog = () => {
@@ -71,7 +68,11 @@ const openEditDialog = (building: Building) => {
   successMessage.value = ''
   errorMessage.value = ''
   isEditMode.value = true
-  currentBuilding.value = { id: building.id, name: building.name, description: building.description || '' }
+  currentBuilding.value = {
+    id: building.id,
+    name: building.name,
+    description: building.description || '',
+  }
   dialogVisible.value = true
 }
 
@@ -81,47 +82,82 @@ const saveBuilding = async () => {
     return
   }
 
+  isSaving.value = true
+  errorMessage.value = ''
   try {
-    isSaving.value = true
-    errorMessage.value = ''
+    const actor = {
+      uid: authStore.user?.id ?? '',
+      displayName: authStore.user?.firstName ?? authStore.user?.email ?? '',
+      email: authStore.user?.email ?? '',
+      role: authStore.user?.role ?? 'User',
+    }
 
-    const actor = { uid: authStore.user?.uid ?? '', displayName: authStore.userProfile?.displayName ?? authStore.user?.email ?? '', email: authStore.user?.email ?? '', role: authStore.userProfile?.role ?? 'user' }
     if (isEditMode.value) {
-      await updateDoc(doc(db, 'buildings', currentBuilding.value.id), {
+      await api.put(`/Building/${currentBuilding.value.id}`, {
         name: currentBuilding.value.name.trim(),
         description: currentBuilding.value.description.trim(),
       })
-      logAudit(actor, 'UPDATE', 'BuildingManagement', `แก้ไขอาคาร: ${currentBuilding.value.name.trim()}`)
+      logAudit(
+        actor,
+        'UPDATE',
+        'BuildingManagement',
+        `แก้ไขอาคาร: ${currentBuilding.value.name.trim()}`,
+      )
       successMessage.value = 'แก้ไขข้อมูลสำเร็จ'
     } else {
-      await addDoc(collection(db, 'buildings'), {
+      await api.post('/Building', {
         name: currentBuilding.value.name.trim(),
         description: currentBuilding.value.description.trim(),
-        createdAt: serverTimestamp(),
       })
-      logAudit(actor, 'CREATE', 'BuildingManagement', `เพิ่มอาคาร: ${currentBuilding.value.name.trim()}`)
+      logAudit(
+        actor,
+        'CREATE',
+        'BuildingManagement',
+        `เพิ่มอาคาร: ${currentBuilding.value.name.trim()}`,
+      )
       successMessage.value = 'เพิ่มอาคาร/มิเตอร์ใหม่สำเร็จ'
     }
 
-    setTimeout(() => { dialogVisible.value = false }, 900)
+    await fetchBuildings()
+    setTimeout(() => {
+      dialogVisible.value = false
+    }, 900)
   } catch (error: unknown) {
-    errorMessage.value = error instanceof Error ? `Error: ${error.message}` : 'เกิดข้อผิดพลาด'
+    if (axios.isAxiosError(error)) {
+      errorMessage.value = error.response?.data?.message || 'เกิดข้อผิดพลาดในการเชื่อมต่อ'
+    } else if (error instanceof Error) {
+      errorMessage.value = error.message
+    } else {
+      errorMessage.value = 'เกิดข้อผิดพลาดในการเชื่อมต่อ'
+    }
   } finally {
     isSaving.value = false
   }
 }
 
 const deleteBuilding = async (id: string, name: string) => {
-  if (confirm(`ยืนยันการลบ "${name}" ?\n(ข้อมูลบิลที่บันทึกไว้จะยังคงอยู่ แต่จะไม่แสดงชื่ออาคารอีกต่อไป)`)) {
+  if (
+    confirm(
+      `ยืนยันการลบ "${name}" ?\n(ข้อมูลบิลที่บันทึกไว้จะยังคงอยู่ แต่จะไม่แสดงชื่ออาคารอีกต่อไป)`,
+    )
+  ) {
     try {
-      await deleteDoc(doc(db, 'buildings', id))
+      await api.delete(`/Building/${id}`)
       logAudit(
-        { uid: authStore.user?.uid ?? '', displayName: authStore.userProfile?.displayName ?? authStore.user?.email ?? '', email: authStore.user?.email ?? '', role: authStore.userProfile?.role ?? 'user' },
-        'DELETE', 'BuildingManagement', `ลบอาคาร: ${name}`,
+        {
+          uid: authStore.user?.id ?? '',
+          displayName: authStore.user?.firstName ?? authStore.user?.email ?? '',
+          email: authStore.user?.email ?? '',
+          role: authStore.user?.role ?? 'User',
+        },
+        'DELETE',
+        'BuildingManagement',
+        `ลบอาคาร: ${name}`,
       )
+      await fetchBuildings()
+      toast.success('ลบข้อมูลสำเร็จ')
     } catch (error) {
       toast.fromError(error, 'ไม่สามารถลบข้อมูลอาคารได้')
-      alert('เกิดข้อผิดพลาดในการลบข้อมูล')
     }
   }
 }
@@ -134,15 +170,20 @@ const deleteBuilding = async (id: string, name: string) => {
         <h2 class="text-3xl font-bold text-gray-800">
           <i class="pi pi-building text-yellow-500 mr-2"></i>จัดการอาคาร / มิเตอร์
         </h2>
-        <p class="text-gray-500 mt-1">เพิ่ม แก้ไข รายชื่ออาคารและจุดติดตั้งสำหรับระบบค่าไฟฟ้าและ Solar</p>
+        <p class="text-gray-500 mt-1">
+          เพิ่ม แก้ไข รายชื่ออาคารและจุดติดตั้งสำหรับระบบค่าไฟฟ้าและ Solar
+        </p>
       </div>
       <Button label="เพิ่มอาคาร / มิเตอร์" icon="pi pi-plus" @click="openNewDialog" />
     </div>
 
-    <!-- Stat Card -->
     <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
-      <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 flex items-center gap-4">
-        <div class="w-12 h-12 rounded-xl bg-linear-to-br from-yellow-400 to-orange-500 flex items-center justify-center text-white shadow-sm">
+      <div
+        class="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 flex items-center gap-4"
+      >
+        <div
+          class="w-12 h-12 rounded-xl bg-linear-to-br from-yellow-400 to-orange-500 flex items-center justify-center text-white shadow-sm"
+        >
           <i class="pi pi-building text-xl"></i>
         </div>
         <div>
@@ -172,12 +213,16 @@ const deleteBuilding = async (id: string, name: string) => {
           <Column header="ชื่ออาคาร / จุดติดตั้ง">
             <template #body="sp">
               <div class="flex items-center gap-3">
-                <div class="w-9 h-9 rounded-lg bg-yellow-50 border border-yellow-100 flex items-center justify-center shrink-0">
+                <div
+                  class="w-9 h-9 rounded-lg bg-yellow-50 border border-yellow-100 flex items-center justify-center shrink-0"
+                >
                   <i class="pi pi-building text-yellow-500"></i>
                 </div>
                 <div>
                   <p class="font-bold text-gray-800">{{ sp.data.name }}</p>
-                  <p v-if="sp.data.description" class="text-xs text-gray-400 mt-0.5">{{ sp.data.description }}</p>
+                  <p v-if="sp.data.description" class="text-xs text-gray-400 mt-0.5">
+                    {{ sp.data.description }}
+                  </p>
                 </div>
               </div>
             </template>
@@ -192,17 +237,23 @@ const deleteBuilding = async (id: string, name: string) => {
             </template>
           </Column>
 
-          <Column header="รหัสอ้างอิง (ID)" style="width: 14rem">
-            <template #body="sp">
-              <span class="text-xs text-gray-400 font-mono">{{ sp.data.id }}</span>
-            </template>
-          </Column>
-
           <Column header="จัดการ" style="width: 8rem">
             <template #body="sp">
               <div class="flex gap-1">
-                <Button icon="pi pi-pencil" severity="secondary" text rounded @click="openEditDialog(sp.data)" />
-                <Button icon="pi pi-trash" severity="danger" text rounded @click="deleteBuilding(sp.data.id, sp.data.name)" />
+                <Button
+                  icon="pi pi-pencil"
+                  severity="secondary"
+                  text
+                  rounded
+                  @click="openEditDialog(sp.data)"
+                />
+                <Button
+                  icon="pi pi-trash"
+                  severity="danger"
+                  text
+                  rounded
+                  @click="deleteBuilding(sp.data.id, sp.data.name)"
+                />
               </div>
             </template>
           </Column>
@@ -210,7 +261,6 @@ const deleteBuilding = async (id: string, name: string) => {
       </template>
     </Card>
 
-    <!-- Add / Edit Dialog -->
     <Dialog
       v-model:visible="dialogVisible"
       modal
@@ -218,8 +268,12 @@ const deleteBuilding = async (id: string, name: string) => {
       :style="{ width: '440px' }"
       :draggable="false"
     >
-      <Message v-if="successMessage" severity="success" :closable="false" class="mb-4">{{ successMessage }}</Message>
-      <Message v-if="errorMessage" severity="error" :closable="false" class="mb-4">{{ errorMessage }}</Message>
+      <Message v-if="successMessage" severity="success" :closable="false" class="mb-4">{{
+        successMessage
+      }}</Message>
+      <Message v-if="errorMessage" severity="error" :closable="false" class="mb-4">{{
+        errorMessage
+      }}</Message>
 
       <div class="flex flex-col gap-4 mt-2">
         <div class="flex flex-col gap-2">

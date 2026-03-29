@@ -456,9 +456,9 @@ const filterTabs = [
               </div>
               <div class="flex flex-col items-end gap-0.5 shrink-0">
                 <Tag v-if="selectedUserHasAccess(sys.id)" value="User" severity="success"
-                  class="text-[10px] !px-1.5 !py-0" />
+                  class="text-[10px] px-1.5! py-0!" />
                 <Tag v-if="selectedUserIsAdmin(sys.id)" value="Admin" severity="warn"
-                  class="text-[10px] !px-1.5 !py-0" />
+                  class="text-[10px] px-1.5! py-0!" />
                 <span v-if="!selectedUserHasAccess(sys.id) && !selectedUserIsAdmin(sys.id)"
                   class="text-[10px] text-gray-400">—</span>
               </div>

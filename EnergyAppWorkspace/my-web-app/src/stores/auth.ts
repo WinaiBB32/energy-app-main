@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import api from '@/services/api'
-import type { User, UserProfile } from '@/types'
+import type { User, UserProfile, UserRole } from '@/types'
 import axios from 'axios' // <--- Import axios เพื่อมาทำ Type Guard
 
 export const useAuthStore = defineStore('auth', {
@@ -17,9 +17,12 @@ export const useAuthStore = defineStore('auth', {
     isSuperAdmin: (state): boolean => state.user?.role === 'SuperAdmin',
     userProfile: (state): UserProfile | null => {
       if (!state.user) return null
+      const roleText = state.user.role.toLowerCase()
+      const role: UserRole =
+        roleText === 'superadmin' ? 'superadmin' : roleText === 'admin' ? 'admin' : 'user'
       return {
         departmentId: '', // Default values for compatibility
-        role: state.user.role.toLowerCase() as any,
+        role,
         status: 'active',
         accessibleSystems: [],
         adminSystems: [],
@@ -38,7 +41,10 @@ export const useAuthStore = defineStore('auth', {
 
         // Assert type ให้ชัดเจน
         this.token = response.data.token as string
-        this.user = response.data.user as User
+        const u = response.data.user as User
+        u.uid = u.id
+        u.displayName = u.displayName || `${u.firstName} ${u.lastName}`.trim()
+        this.user = u
 
         localStorage.setItem('jwt_token', this.token)
         localStorage.setItem('user_data', JSON.stringify(this.user))
