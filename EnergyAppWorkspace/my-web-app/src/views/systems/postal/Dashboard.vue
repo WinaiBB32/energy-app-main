@@ -1,9 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
+import api from '@/services/api'
 import { useAppToast } from '@/composables/useAppToast'
-import { toMonthKey } from '@/utils/monthlySummary'
-// Firebase Removed
-// Firebase Removed
 
 import Card from 'primevue/card'
 import Chart from 'primevue/chart'
@@ -14,14 +12,13 @@ defineOptions({ name: 'PostalDashboard' })
 const toast = useAppToast()
 
 // ─── Interfaces ─────────────────────────────────────────────────────────────
-interface MonthlySummary {
-    postal?: {
-        normalMail?: number
-        registeredMail?: number
-        emsMail?: number
-        totalAmount?: number
-        count?: number
-    }
+interface PostalRecord {
+  id: string;
+  recordMonth: string;
+  normalMail: number;
+  registeredMail: number;
+  emsMail: number;
+  totalMail: number;
 }
 
 interface MonthlyData {
@@ -31,21 +28,18 @@ interface MonthlyData {
     total: number
 }
 
-// ─── Auth & State ───────────────────────────────────────────────────────────
-
-const monthlySummaries = ref<Record<string, MonthlySummary>>({})
+// ─── State ──────────────────────────────────────────────────────────────────
+const rawRecords = ref<PostalRecord[]>([])
 const isLoading = ref<boolean>(true)
 
-// KPIs
 const sumNormal = ref<number>(0)
 const sumRegistered = ref<number>(0)
 const sumEms = ref<number>(0)
 const sumTotal = ref<number>(0)
 
-// Filters (Default: ย้อนหลัง 6 เดือน)
 const getDefaultDateRange = (): Date[] => {
     const now = new Date()
-    const first = new Date(now.getFullYear(), now.getMonth() - 5, 1) // ย้อนหลัง 5 เดือน + เดือนนี้
+    const first = new Date(now.getFullYear(), now.getMonth() - 5, 1)
     const last = new Date(now.getFullYear(), now.getMonth() + 1, 0)
     return [first, last]
 }
@@ -60,34 +54,17 @@ const dateRangeLabel = computed(() => {
     return s === e ? s : `${s} – ${e}`
 })
 
-// Charts State
 const trendChartData = ref()
 const trendChartOptions = ref()
 const proportionChartData = ref()
 const proportionChartOptions = ref()
 
-// ─── ดึงข้อมูล (One-time Fetch) ─────────────────────────────────────────────
+// ─── Data Fetching & Processing ─────────────────────────────────────────────
 const fetchData = async (): Promise<void> => {
     isLoading.value = true
     try {
-        const startDate = selectedDateRange.value?.[0] || null
-        const endDate = selectedDateRange.value?.[1] ? new Date(selectedDateRange.value[1]) : null
-        if (endDate) endDate.setHours(23, 59, 59, 999)
-
-        const startMonthKey = startDate ? toMonthKey(startDate) : null
-        const endMonthKey = endDate ? toMonthKey(endDate) : null
-
-        // 1. ดึงข้อมูล Summary (Aggregation) - ประหยัด Read มหาศาล
-        const summaryRef = collection(db, 'monthly_summaries')
-        const summaryConstraints: QueryConstraint[] = []
-        if (startMonthKey) summaryConstraints.push(where('__name__', '>=', startMonthKey))
-        if (endMonthKey) summaryConstraints.push(where('__name__', '<=', endMonthKey))
-
-        const summarySnap = await getDocs(query(summaryRef, ...summaryConstraints))
-        monthlySummaries.value = Object.fromEntries(
-            summarySnap.docs.map((doc: QueryDocumentSnapshot) => [doc.id, doc.data() as MonthlySummary])
-        )
-
+        const { data } = await api.get('/PostalRecord?take=10000')
+        rawRecords.value = data.items || []
         processData()
     } catch (error: unknown) {
         toast.fromError(error, 'ไม่สามารถโหลดข้อมูล Dashboard ไปรษณีย์ได้')
@@ -96,39 +73,54 @@ const fetchData = async (): Promise<void> => {
     }
 }
 
-onMounted(() => fetchData())
-watch(selectedDateRange, () => fetchData())
-const clearDateFilter = () => { selectedDateRange.value = getDefaultDateRange() }
-
-// ─── ประมวลผลข้อมูล ─────────────────────────────────────────────────────────
 const processData = (): void => {
-    let tNormal = 0, tRegistered = 0, tEms = 0, tTotal = 0
+    let tNormal = 0, tRegistered = 0, tEms = 0
     const monthlyTrend: Record<string, MonthlyData> = {}
+    
+    const start = selectedDateRange.value?.[0]
+    const end = selectedDateRange.value?.[1]
 
-    // ประมวลผลจาก Summary
-    Object.entries(monthlySummaries.value).forEach(([monthKey, summary]) => {
-        if (summary.postal) {
-            const n = summary.postal.normalMail || 0
-            const r = summary.postal.registeredMail || 0
-            const e = summary.postal.emsMail || 0
-            const t = summary.postal.totalAmount || 0
+    rawRecords.value.forEach(record => {
+        if (!record.recordMonth) return;
 
-            tNormal += n
-            tRegistered += r
-            tEms += e
-            tTotal += t
-
-            monthlyTrend[monthKey] = { normal: n, registered: r, ems: e, total: t }
+        const recordDate = new Date(record.recordMonth)
+        if (start && end) {
+            if (recordDate < start || recordDate > end) {
+                return
+            }
         }
-    })
+        
+        const monthKey = `${recordDate.getFullYear()}-${String(recordDate.getMonth() + 1).padStart(2, '0')}`
 
+        if (!monthlyTrend[monthKey]) {
+            monthlyTrend[monthKey] = { normal: 0, registered: 0, ems: 0, total: 0 }
+        }
+
+        const n = record.normalMail || 0
+        const r = record.registeredMail || 0
+        const e = record.emsMail || 0
+        
+        monthlyTrend[monthKey].normal += n
+        monthlyTrend[monthKey].registered += r
+        monthlyTrend[monthKey].ems += e
+        monthlyTrend[monthKey].total += (n + r + e)
+
+        tNormal += n
+        tRegistered += r
+        tEms += e
+    })
+    
     sumNormal.value = tNormal
     sumRegistered.value = tRegistered
     sumEms.value = tEms
-    sumTotal.value = tTotal
+    sumTotal.value = tNormal + tRegistered + tEms
 
     setupCharts(monthlyTrend)
 }
+
+onMounted(() => fetchData())
+watch(selectedDateRange, () => processData())
+const clearDateFilter = () => { selectedDateRange.value = getDefaultDateRange() }
 
 const formatChartLabel = (sortKey: string): string => {
     const parts = sortKey.split('-')
@@ -137,12 +129,11 @@ const formatChartLabel = (sortKey: string): string => {
     return `${thaiMonthShort[parseInt(monthStr, 10) - 1]} ${yearStr}`
 }
 
-// ─── ตั้งค่า Chart.js ────────────────────────────────────────────────────────
+// ─── Chart Setup ────────────────────────────────────────────────────────
 const setupCharts = (monthlyData: Record<string, MonthlyData>): void => {
     const sortedKeys = Object.keys(monthlyData).sort()
     const labels = sortedKeys.map(k => formatChartLabel(k))
 
-    // 1. กราฟแนวโน้ม (Stacked Bar)
     trendChartData.value = {
         labels,
         datasets: [
@@ -157,7 +148,6 @@ const setupCharts = (monthlyData: Record<string, MonthlyData>): void => {
         scales: { x: { stacked: true, grid: { display: false } }, y: { stacked: true, title: { display: true, text: 'จำนวน (ชิ้น)' } } }
     }
 
-    // 2. กราฟสัดส่วน (Doughnut)
     proportionChartData.value = {
         labels: ['ธรรมดา', 'ลงทะเบียน', 'EMS'],
         datasets: [{

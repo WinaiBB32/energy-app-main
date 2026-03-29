@@ -1,19 +1,9 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
+import api from '@/services/api'
 import { useAuthStore } from '@/stores/auth'
 import { useAppToast } from '@/composables/useAppToast'
 import { usePermissions } from '@/composables/usePermissions'
-import { toMonthKey, batchUpdateSummary } from '@/utils/monthlySummary'
-import {
-    collection, query, where, getDocs, doc, writeBatch, serverTimestamp, orderBy, limit, startAfter, Timestamp,
-    type QueryConstraint, type QueryDocumentSnapshot, type DocumentData
-} from 'firebase/firestore'
-// Firebase Removed
-
-defineOptions({ name: 'PostalSystem' })
-
-const toast = useAppToast()
-const authStore = useAuthStore()
 
 import Card from 'primevue/card'
 import InputNumber from 'primevue/inputnumber'
@@ -30,6 +20,11 @@ import TabPanels from 'primevue/tabpanels'
 import TabPanel from 'primevue/tabpanel'
 import InputText from 'primevue/inputtext'
 
+defineOptions({ name: 'PostalSystem' })
+
+const toast = useAppToast()
+const authStore = useAuthStore()
+
 // ─── Interfaces ─────────────────────────────────────────────────────────────
 interface PostalRecord {
     departmentId: string
@@ -42,13 +37,13 @@ interface PostalRecord {
 interface FetchedPostalRecord {
     id: string
     departmentId: string
-    recordMonth: Timestamp | null
+    recordMonth: string | null
     normalMail: number
     registeredMail: number
     emsMail: number
     totalMail: number
     recordedByName: string
-    createdAt: Timestamp
+    createdAt: string
 }
 
 interface Department {
@@ -77,8 +72,9 @@ const errorMessage = ref<string>('')
 // ─── History State (Pagination) ─────────────────────────────────────────────
 const historyRecords = ref<FetchedPostalRecord[]>([])
 const isLoadingHistory = ref<boolean>(true)
-const lastVisibleDoc = ref<QueryDocumentSnapshot<DocumentData> | null>(null)
+const isLoadingMore = ref<boolean>(false)
 const hasMoreData = ref<boolean>(true)
+const page = ref(0)
 const FETCH_LIMIT = 15
 
 // ─── Computed ───────────────────────────────────────────────────────────────
@@ -89,19 +85,16 @@ const computedTotalMail = computed<number>(() => {
 })
 
 const getDeptName = (id: string): string => departments.value.find((x) => x.id === id)?.name || id
-const formatThaiMonth = (ts: Timestamp | null | undefined): string => {
-    if (!ts) return '-'
-    return ts.toDate().toLocaleDateString('th-TH', { year: 'numeric', month: 'long' })
+const formatThaiMonth = (dateStr: string | null | undefined): string => {
+    if (!dateStr) return '-'
+    return new Date(dateStr).toLocaleDateString('th-TH', { year: 'numeric', month: 'long' })
 }
 
-// ─── ดึงข้อมูลตอนเปิดหน้า (One-time fetch) ──────────────────────────────────
+// ─── Data Fetching ──────────────────────────────────
 onMounted(async () => {
     try {
-        // โหลดรายชื่อหน่วยงาน
-        const deptSnap = await getDocs(query(collection(db, 'departments'), orderBy('name')))
-        departments.value = deptSnap.docs.map((d) => ({ id: d.id, name: d.data().name as string }))
-
-        // โหลดประวัติหน้าแรก
+        const { data } = await api.get('/Department');
+        departments.value = data.items || [];
         await fetchHistory(true)
     } catch {
         toast.error('ไม่สามารถโหลดข้อมูลเริ่มต้นได้')
@@ -110,56 +103,44 @@ onMounted(async () => {
     }
 })
 
-// ─── ฟังก์ชันดึงประวัติ (รองรับ Load More ลดการใช้ Read Quota) ───────────────
+// ─── ฟังก์ชันดึงประวัติ (รองรับ Load More) ───────────────
 const fetchHistory = async (isFirstPage: boolean = false) => {
     if (isFirstPage) {
         isLoadingHistory.value = true
+        page.value = 0;
         historyRecords.value = []
-        lastVisibleDoc.value = null
         hasMoreData.value = true
+    } else {
+        if (!hasMoreData.value) return
+        isLoadingMore.value = true;
+        page.value++;
     }
 
-    if (!hasMoreData.value) return
-
     try {
-        const postalRef = collection(db, 'postal_records')
-
-        const constraints: QueryConstraint[] = []
-        if (!isAdmin) {
-            constraints.push(where('departmentId', '==', currentUserDepartment.value))
+        const params = {
+            skip: page.value * FETCH_LIMIT,
+            take: FETCH_LIMIT,
         }
-        constraints.push(orderBy('createdAt', 'desc'))
-        if (lastVisibleDoc.value) constraints.push(startAfter(lastVisibleDoc.value))
-        constraints.push(limit(FETCH_LIMIT))
+        const { data } = await api.get('/PostalRecord', { params });
+        const newRecords = data.items || [];
 
-        const q = query(postalRef, ...constraints)
-        const snapshot = await getDocs(q)
-
-        if (snapshot.empty) {
-            hasMoreData.value = false
-            return
+        if (isFirstPage) {
+            historyRecords.value = newRecords
+        } else {
+            historyRecords.value.push(...newRecords)
         }
 
-        lastVisibleDoc.value = snapshot.docs[snapshot.docs.length - 1] ?? null
+        hasMoreData.value = newRecords.length === FETCH_LIMIT
 
-        const newRecords: FetchedPostalRecord[] = []
-        snapshot.forEach((doc) => {
-            newRecords.push({ id: doc.id, ...doc.data() } as FetchedPostalRecord)
-        })
-
-        historyRecords.value = [...historyRecords.value, ...newRecords]
-
-        if (snapshot.docs.length < FETCH_LIMIT) {
-            hasMoreData.value = false
-        }
     } catch {
         toast.error('ไม่สามารถโหลดข้อมูลประวัติได้')
     } finally {
         isLoadingHistory.value = false
+        isLoadingMore.value = false;
     }
 }
 
-// ─── บันทึกข้อมูล (Batch + Increment Aggregation) ───────────────────────────
+// ─── บันทึกข้อมูล ───────────────────────────
 const submitForm = async (): Promise<void> => {
     successMessage.value = ''
     errorMessage.value = ''
@@ -171,52 +152,23 @@ const submitForm = async (): Promise<void> => {
 
     try {
         isSubmitting.value = true
-        const batch = writeBatch(db)
-
-        // 1. เตรียมข้อมูล Record ใหม่
+        
         const saveDeptId = isSuperAdmin.value ? formData.value.departmentId : currentUserDepartment.value
-        const dateObj = formData.value.recordMonth
 
-        const nMail = formData.value.normalMail || 0
-        const rMail = formData.value.registeredMail || 0
-        const eMail = formData.value.emsMail || 0
-        const tMail = computedTotalMail.value
-
-        const newRecordRef = doc(collection(db, 'postal_records'))
         const docData = {
+            ...formData.value,
             departmentId: saveDeptId,
-            recordMonth: Timestamp.fromDate(dateObj),
-            normalMail: nMail,
-            registeredMail: rMail,
-            emsMail: eMail,
-            totalMail: tMail,
+            totalMail: computedTotalMail.value,
             recordedByName: authStore.userProfile?.displayName || authStore.user?.email || 'ไม่ระบุชื่อ',
-            recordedByUid: authStore.user?.uid || 'unknown',
-            createdAt: serverTimestamp(),
-        }
-        batch.set(newRecordRef, docData)
-
-        // 2. อัปเดต Summary สำหรับ Dashboard ทันที (Aggregation)
-        const monthKey = toMonthKey(dateObj)
-        if (monthKey) {
-            batchUpdateSummary(batch, monthKey, 'postal', {
-                normalMail: nMail,
-                registeredMail: rMail,
-                emsMail: eMail,
-                totalAmount: tMail, // ใน postal เราเก็บ totalMail ในฟิลด์ totalAmount ของ summary เพื่อความง่าย
-                count: 1
-            })
+            recordedBy: authStore.user?.uid || 'unknown',
         }
 
-        // 3. Commit คำสั่งทั้งหมดพร้อมกัน
-        await batch.commit()
+        await api.post('/PostalRecord', docData)
 
         successMessage.value = 'บันทึกสถิติไปรษณีย์สำเร็จ'
 
-        // โหลดประวัติใหม่เพื่อแสดงข้อมูลที่พึ่งบันทึก
         await fetchHistory(true)
 
-        // เคลียร์ฟอร์มบางส่วน
         formData.value.normalMail = null
         formData.value.registeredMail = null
         formData.value.emsMail = null

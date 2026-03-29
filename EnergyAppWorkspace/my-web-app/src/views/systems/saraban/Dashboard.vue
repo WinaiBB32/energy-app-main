@@ -1,7 +1,6 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, watch, computed } from 'vue'
-// Firebase Removed
-// Firebase Removed
+import { ref, onMounted, watch, computed } from 'vue'
+import api from '@/services/api'
 import { useAuthStore } from '@/stores/auth'
 import { useAppToast } from '@/composables/useAppToast'
 import { usePermissions } from '@/composables/usePermissions'
@@ -16,20 +15,21 @@ defineOptions({ name: 'SarabanDashboard' })
 
 // ─── Interfaces ───────────────────────────────────────────────────────────────
 interface SarabanRecord {
+    id: string;
     departmentId: string
     bookName?: string
     personName?: string
-    receiverName?: string       // old
-    recordDate?: Timestamp | null
-    recordMonth?: Timestamp | null // old
+    receiverName?: string
+    recordDate?: string | null
+    recordMonth?: string | null
     receivedCount?: number
     externalPaperCount?: number
     externalDigitalCount?: number
     forwardedCount?: number
     internalCount?: number
-    digitalCount?: number       // old
-    paperCount?: number         // old
-    recordType?: string         // old
+    digitalCount?: number
+    paperCount?: number
+    recordType?: string
 }
 
 interface SarabanBook { id: string; name: string }
@@ -45,8 +45,6 @@ const currentUserDepartment = computed(() => authStore.userProfile?.departmentId
 const rawRecords = ref<SarabanRecord[]>([])
 const sarabanBooks = ref<SarabanBook[]>([])
 const isLoading = ref(true)
-let unsubRecords: () => void
-let unsubBooks: () => void
 
 // ─── Filters ──────────────────────────────────────────────────────────────────
 const getThisYearRange = (): Date[] => {
@@ -96,12 +94,11 @@ const filteredRecords = computed(() => {
     const end = endRaw ? new Date(new Date(endRaw).setHours(23, 59, 59, 999)) : null
 
     return rawRecords.value.filter(r => {
-        // กรองตาม department สำหรับ non-admin
         if (!isAdmin && r.departmentId !== currentUserDepartment.value) return false
 
-        const dateTs = r.recordDate ?? r.recordMonth
-        if (!dateTs) return false
-        const d = dateTs.toDate()
+        const dateStr = r.recordDate ?? r.recordMonth
+        if (!dateStr) return false
+        const d = new Date(dateStr)
         if (start && d < start) return false
         if (end && d > end) return false
         if (selectedBookNames.value.length > 0 && !selectedBookNames.value.includes(r.bookName ?? '')) return false
@@ -126,7 +123,6 @@ const kpi = computed(() => {
             internal   += r.internalCount       || 0
             forwarded  += r.forwardedCount      || 0
         } else {
-            // old format: map to nearest fields
             received   += (r.digitalCount || 0) + (r.paperCount || 0)
             extPaper   += r.paperCount   || 0
             extDigital += r.digitalCount || 0
@@ -153,14 +149,13 @@ const topPersonChartOptions = ref()
 watch(filteredRecords, buildCharts, { immediate: false })
 
 function buildCharts() {
-    // Group by month
     const monthly: Record<string, { received: number; paper: number; digital: number; forwarded: number }> = {}
     const personStats: Record<string, number> = {}
 
     filteredRecords.value.forEach(r => {
-        const dateTs = r.recordDate ?? r.recordMonth
-        if (!dateTs) return
-        const d = dateTs.toDate()
+        const dateStr = r.recordDate ?? r.recordMonth
+        if (!dateStr) return
+        const d = new Date(dateStr)
         const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
 
         if (!monthly[key]) monthly[key] = { received: 0, paper: 0, digital: 0, forwarded: 0 }
@@ -178,7 +173,6 @@ function buildCharts() {
             monthly[key].digital    += r.digitalCount || 0
         }
 
-        // Top person
         const name = r.personName ?? r.receiverName ?? 'ไม่ระบุ'
         personStats[name] = (personStats[name] || 0) + (r.receivedCount ?? ((r.digitalCount || 0) + (r.paperCount || 0)))
     })
@@ -189,7 +183,6 @@ function buildCharts() {
         return `${thaiMonthShort[parseInt(m ?? '1') - 1] ?? ''} ${y ?? ''}`
     })
 
-    // Trend chart
     trendChartData.value = {
         labels: monthLabels,
         datasets: [
@@ -236,7 +229,6 @@ function buildCharts() {
         },
     }
 
-    // Ratio doughnut
     ratioChartData.value = {
         labels: ['ดิจิทัล (ภายนอก)', 'กระดาษ (ภายนอก + ภายใน)'],
         datasets: [{
@@ -247,7 +239,6 @@ function buildCharts() {
     }
     ratioChartOptions.value = { plugins: { legend: { position: 'bottom' } }, cutout: '65%' }
 
-    // Top 10 persons by received
     const top10 = Object.entries(personStats).sort((a, b) => b[1] - a[1]).slice(0, 10)
     topPersonChartData.value = {
         labels: top10.map(x => x[0]),
@@ -269,31 +260,32 @@ function buildCharts() {
     }
 }
 
-// ─── Fetch ────────────────────────────────────────────────────────────────────
-onMounted(() => {
-    const sarabanRef = collection(db, 'saraban_records')
-    // ไม่ filter departmentId ใน Firestore เพื่อหลีกเลี่ยง composite index
-    // กรองฝั่ง client แทนใน filteredRecords computed
-    const q = query(sarabanRef, orderBy('createdAt', 'desc'))
+const fetchData = async () => {
+    isLoading.value = true
+    try {
+        const { data } = await api.get('/SarabanRecord', {
+            params: { take: 20000 }
+        })
+        rawRecords.value = data.items || []
 
-    unsubRecords = onSnapshot(q, snap => {
-        rawRecords.value = snap.docs.map(d => d.data() as SarabanRecord)
-        isLoading.value = false
+        const books = new Map<string, SarabanBook>()
+        rawRecords.value.forEach(r => {
+            if (r.bookName && !books.has(r.bookName)) {
+                books.set(r.bookName, { id: r.bookName, name: r.bookName })
+            }
+        })
+        sarabanBooks.value = Array.from(books.values()).sort((a, b) => a.name.localeCompare(b.name));
+
         buildCharts()
-    }, err => {
+    } catch (err) {
         toast.fromError(err, 'ไม่สามารถโหลดข้อมูลสารบรรณได้')
+    } finally {
         isLoading.value = false
-    })
+    }
+}
 
-    unsubBooks = onSnapshot(
-        query(collection(db, 'saraban_books'), orderBy('name')),
-        snap => { sarabanBooks.value = snap.docs.map(d => ({ id: d.id, name: d.data().name as string })) },
-    )
-})
-
-onUnmounted(() => {
-    if (unsubRecords) unsubRecords()
-    if (unsubBooks) unsubBooks()
+onMounted(() => {
+    fetchData()
 })
 </script>
 

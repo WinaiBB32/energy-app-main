@@ -46,10 +46,16 @@ namespace EnergyApp.API.Controllers
                 query = query.Where(r => r.Type == type);
 
             if (!string.IsNullOrEmpty(fromDate) && DateTime.TryParse(fromDate, out var fd))
-                query = query.Where(r => r.CreatedAt >= fd);
+            {
+                var fdu = fd.ToUniversalTime();
+                query = query.Where(r => r.CreatedAt >= fdu);
+            }
 
             if (!string.IsNullOrEmpty(toDate) && DateTime.TryParse(toDate, out var td))
-                query = query.Where(r => r.CreatedAt <= td);
+            {
+                var tdu = td.ToUniversalTime();
+                query = query.Where(r => r.CreatedAt <= tdu);
+            }
 
             var total = await query.CountAsync();
             var items = await query

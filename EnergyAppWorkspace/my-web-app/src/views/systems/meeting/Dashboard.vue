@@ -1,18 +1,9 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
-import {
-    collection,
-    query,
-    getDocs,
-    where,
-    orderBy,
-    Timestamp,
-    type QueryConstraint // <-- Import Type ที่ถูกต้องมาใช้
-} from 'firebase/firestore'
-// Firebase Removed
+import api from '@/services/api'
 import { useAuthStore } from '@/stores/auth'
 import { useAppToast } from '@/composables/useAppToast'
-import type { MeetingRoom, MeetingRecord } from '@/types'
+import type { MeetingRoom } from '@/types'
 
 import Card from 'primevue/card'
 import Chart from 'primevue/chart'
@@ -29,11 +20,18 @@ const toast = useAppToast()
 const authStore = useAuthStore()
 const currentUserRole = computed(() => authStore.userProfile?.role || 'user')
 
+interface MeetingRecord {
+  id: string;
+  roomId: string;
+  roomName?: string;
+  usageCount?: number;
+  recordMonth: string;
+}
+
 const rawRecords = ref<MeetingRecord[]>([])
 const meetingRooms = ref<MeetingRoom[]>([])
 const isLoading = ref<boolean>(true)
 
-// ฟิลเตอร์ช่วงเวลาแบบ เดือน/ปี (Default: เดือนที่ผ่านมา)
 const getDefaultDateRange = (): Date[] => {
     const now = new Date()
     const firstDayOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1)
@@ -52,7 +50,6 @@ interface RoomStat {
 const roomStatsList = ref<RoomStat[]>([])
 const totalUsage = ref<number>(0)
 
-// Chart (กำหนด Type แบบ Record แทน any)
 const barChartData = ref<Record<string, unknown> | undefined>()
 const barChartOptions = ref<Record<string, unknown> | undefined>()
 
@@ -123,36 +120,28 @@ const processData = (): void => {
 const fetchData = async (): Promise<void> => {
     isLoading.value = true
     try {
-        const startDate = selectedDateRange.value?.[0] || null
-        // ใช้ startDate เป็น endDate หากผู้ใช้เลือกแค่เดือนเดียว
-        let endDate = selectedDateRange.value?.[1] || startDate
-
-        if (endDate) {
-            endDate = new Date(endDate.getFullYear(), endDate.getMonth() + 1, 0)
-            endDate.setHours(23, 59, 59, 999)
+        const [roomsResponse, recordsResponse] = await Promise.all([
+            api.get('/MeetingRoom'),
+            api.get('/MeetingRecord?take=10000') // Fetch all records
+        ])
+        
+        meetingRooms.value = roomsResponse.data.items || []
+        
+        const allRecords = recordsResponse.data.items || []
+        const start = selectedDateRange.value?.[0]
+        const end = selectedDateRange.value?.[1]
+        
+        if (start && end) {
+            start.setHours(0, 0, 0, 0)
+            end.setHours(23, 59, 59, 999)
+            rawRecords.value = allRecords.filter((r: MeetingRecord) => {
+                if (!r.recordMonth) return false
+                const recordDate = new Date(r.recordMonth)
+                return recordDate >= start && recordDate <= end
+            })
+        } else {
+            rawRecords.value = allRecords
         }
-
-        // 1. ดึงรายชื่อห้องประชุม (Master Data)
-        const roomSnap = await getDocs(query(collection(db, 'meeting_rooms'), orderBy('name')))
-        meetingRooms.value = roomSnap.docs.map(d => ({
-            id: d.id,
-            name: d.data().name as string,
-            description: d.data().description as string
-        }))
-
-        // 2. ดึงสถิติการใช้งาน
-        const recordsRef = collection(db, 'meeting_records')
-
-        // เปลี่ยนจาก any[] เป็น QueryConstraint[]
-        const constraints: QueryConstraint[] = []
-
-        if (startDate && endDate) {
-            constraints.push(where('recordMonthTs', '>=', Timestamp.fromDate(startDate)))
-            constraints.push(where('recordMonthTs', '<=', Timestamp.fromDate(endDate)))
-        }
-
-        const snapshot = await getDocs(query(recordsRef, ...constraints))
-        rawRecords.value = snapshot.docs.map(doc => doc.data() as MeetingRecord)
 
         processData()
     } catch (error: unknown) {

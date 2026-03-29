@@ -1,26 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-
-defineOptions({ name: 'WaterSystem' })
-const toast = useAppToast()
-import {
-  collection,
-  serverTimestamp,
-  writeBatch,
-  query,
-  orderBy,
-  where,
-  getDocs,
-  startAfter,
-  limit,
-  Timestamp,
-  doc,
-  updateDoc,
-  type QueryDocumentSnapshot,
-  type QueryConstraint,
-} from 'firebase/firestore'
-import { toMonthKey, batchUpdateSummary } from '@/utils/monthlySummary'
-// Firebase Removed
+import api from '@/services/api'
 import { useAuthStore } from '@/stores/auth'
 import { useAppToast } from '@/composables/useAppToast'
 import { usePermissions } from '@/composables/usePermissions'
@@ -40,25 +20,25 @@ import TabPanels from 'primevue/tabpanels'
 import TabPanel from 'primevue/tabpanel'
 import Dialog from 'primevue/dialog'
 
-// 1. Interfaces อัปเดตฟิลด์ตามบิลประปาจริง
+defineOptions({ name: 'WaterSystem' })
+const toast = useAppToast()
+
+// 1. Interfaces
 interface WaterRecord {
-  docReceiveNumber: string // เลขที่รับหน่วยงาน
-  docNumber: string // เลขที่หนังสือ
-  invoiceNumber: string // เลขที่ใบแจ้งค่าน้ำประปา
-  billingCycle: Date | null // รอบบิล (เดือน/ปี)
-
-  registrationNo: string // ทะเบียนผู้ใช้น้ำ
-  userName: string // ชื่อ
-  usageAddress: string // ที่ใช้น้ำ
-
-  readingDate: Date | null // วันที่อ่านน้ำครั้งนี้
-  currentMeter: number | null // เลขที่อ่านน้ำครั้งนี้
-  waterUnitUsed: number | null // จำนวนหน่วยที่ใช้
-
-  rawWaterCharge: number | null // ค่าน้ำดิบ
-  waterAmount: number | null // จำนวนเงินค่าน้ำ
-  monthlyServiceFee: number | null // ค่าบริการรายเดือน
-  vatAmount: number | null // ภาษีมูลค่าเพิ่ม
+  docReceiveNumber: string
+  docNumber: string
+  invoiceNumber: string
+  billingCycle: Date | null
+  registrationNo: string
+  userName: string
+  usageAddress: string
+  readingDate: Date | null
+  currentMeter: number | null
+  waterUnitUsed: number | null
+  rawWaterCharge: number | null
+  waterAmount: number | null
+  monthlyServiceFee: number | null
+  vatAmount: number | null
 }
 
 interface FetchedWaterRecord {
@@ -66,20 +46,20 @@ interface FetchedWaterRecord {
   docReceiveNumber: string
   docNumber: string
   invoiceNumber: string
-  billingCycle: Timestamp | null
+  billingCycle: string | null
   registrationNo: string
   userName: string
   usageAddress: string
-  readingDate: Timestamp | null
+  readingDate: string | null
   currentMeter: number
   waterUnitUsed: number
   rawWaterCharge: number
   waterAmount: number
   monthlyServiceFee: number
   vatAmount: number
-  totalAmount: number // รวมเงิน (บันทึกลง DB ด้วย)
+  totalAmount: number
   recordedBy: string
-  createdAt: Timestamp
+  createdAt: string
 }
 
 const authStore = useAuthStore()
@@ -111,10 +91,9 @@ const historyRecords = ref<FetchedWaterRecord[]>([])
 const isLoadingHistory = ref<boolean>(true)
 const isLoadingMore = ref<boolean>(false)
 const hasMore = ref<boolean>(false)
-const lastDoc = ref<QueryDocumentSnapshot | null>(null)
+const page = ref(0)
 const PAGE_SIZE = 20
 
-// 2. ระบบคำนวณ "รวมเงิน (ออโต้)"
 const computedTotalAmount = computed<number>(() => {
   const raw = formData.value.rawWaterCharge || 0
   const water = formData.value.waterAmount || 0
@@ -123,22 +102,30 @@ const computedTotalAmount = computed<number>(() => {
   return raw + water + service + vat
 })
 
-// 3. ฟังก์ชันดึงประวัติ (Load-once + Pagination)
 const fetchHistory = async (loadMore = false): Promise<void> => {
-  if (loadMore) isLoadingMore.value = true
-  else { isLoadingHistory.value = true; historyRecords.value = []; lastDoc.value = null }
+  if (loadMore) {
+    isLoadingMore.value = true
+    page.value++
+  } else {
+    isLoadingHistory.value = true
+    historyRecords.value = []
+    page.value = 0
+  }
   try {
-    const isAdmin = isSystemAdmin('water')
-    const constraints: QueryConstraint[] = [orderBy('createdAt', 'desc'), limit(PAGE_SIZE + 1)]
-    if (!isAdmin) constraints.unshift(where('departmentId', '==', currentUserDepartment.value))
-    if (loadMore && lastDoc.value) constraints.push(startAfter(lastDoc.value))
-    const snap = await getDocs(query(collection(db, 'water_records'), ...constraints))
-    const docs = snap.docs.slice(0, PAGE_SIZE)
-    hasMore.value = snap.docs.length > PAGE_SIZE
-    if (docs.length > 0) lastDoc.value = docs[docs.length - 1] ?? null
-    const records = docs.map((d) => ({ id: d.id, ...d.data() } as FetchedWaterRecord))
-    if (loadMore) historyRecords.value.push(...records)
-    else historyRecords.value = records
+    const params = {
+      skip: page.value * PAGE_SIZE,
+      take: PAGE_SIZE,
+    }
+    const { data } = await api.get('/WaterRecord', { params })
+    const newRecords = data.items || []
+    
+    if (loadMore) {
+      historyRecords.value.push(...newRecords)
+    } else {
+      historyRecords.value = newRecords
+    }
+    hasMore.value = newRecords.length === PAGE_SIZE
+    
   } catch (error: unknown) {
     toast.fromError(error, 'ไม่สามารถโหลดข้อมูลน้ำประปาได้')
   } finally {
@@ -149,12 +136,10 @@ const fetchHistory = async (loadMore = false): Promise<void> => {
 
 onMounted(() => { fetchHistory() })
 
-// 4. ฟังก์ชันบันทึกข้อมูล
 const submitForm = async (): Promise<void> => {
   successMessage.value = ''
   errorMessage.value = ''
 
-  // ตรวจสอบข้อมูลบังคับกรอก
   if (
     !formData.value.billingCycle ||
     !formData.value.registrationNo ||
@@ -167,45 +152,16 @@ const submitForm = async (): Promise<void> => {
   try {
     isSubmitting.value = true
     const docData = {
-      departmentId: currentUserDepartment.value,
-      docReceiveNumber: formData.value.docReceiveNumber,
-      docNumber: formData.value.docNumber,
-      invoiceNumber: formData.value.invoiceNumber,
-      billingCycle: formData.value.billingCycle,
-
-      registrationNo: formData.value.registrationNo,
-      userName: formData.value.userName,
-      usageAddress: formData.value.usageAddress,
-
-      readingDate: formData.value.readingDate,
-      currentMeter: formData.value.currentMeter || 0,
-      waterUnitUsed: formData.value.waterUnitUsed || 0,
-
-      rawWaterCharge: formData.value.rawWaterCharge || 0,
-      waterAmount: formData.value.waterAmount || 0,
-      monthlyServiceFee: formData.value.monthlyServiceFee || 0,
-      vatAmount: formData.value.vatAmount || 0,
-
-      totalAmount: computedTotalAmount.value, // บันทึกยอดรวมออโต้ลงฐานข้อมูลด้วย
-
+      ...formData.value,
+      totalAmount: computedTotalAmount.value,
       recordedBy: authStore.user?.uid || 'unknown',
-      createdAt: serverTimestamp(),
     }
 
-    const newDocRef = doc(collection(db, 'water_records'))
-    const batch = writeBatch(db)
-    batch.set(newDocRef, docData)
-    const monthKey = toMonthKey(formData.value.billingCycle)
-    if (monthKey) {
-      batchUpdateSummary(batch, monthKey, 'water', {
-        totalAmount: computedTotalAmount.value,
-        count: 1,
-      })
-    }
-    await batch.commit()
+    await api.post('/WaterRecord', docData)
+    
     successMessage.value = 'บันทึกข้อมูลค่าน้ำประปาสำเร็จ'
+    await fetchHistory()
 
-    // เคลียร์ฟอร์ม
     formData.value = {
       docReceiveNumber: '',
       docNumber: '',
@@ -230,16 +186,16 @@ const submitForm = async (): Promise<void> => {
   }
 }
 
-const formatThaiMonth = (ts: Timestamp | null | undefined): string => {
-  if (!ts) return '-'
-  return ts.toDate().toLocaleDateString('th-TH', { year: 'numeric', month: 'long' })
+const formatThaiMonth = (dateStr: string | null | undefined): string => {
+  if (!dateStr) return '-'
+  return new Date(dateStr).toLocaleDateString('th-TH', { year: 'numeric', month: 'long' })
 }
+
 const formatCurrency = (val: number | null | undefined): string => {
   if (val === null || val === undefined) return '-'
   return new Intl.NumberFormat('th-TH', { style: 'currency', currency: 'THB' }).format(val)
 }
 
-// Detail / Edit dialog
 const selectedRecord = ref<FetchedWaterRecord | null>(null)
 const detailVisible = ref(false)
 const editVisible = ref(false)
@@ -286,11 +242,11 @@ const openEdit = () => {
     docReceiveNumber: r.docReceiveNumber,
     docNumber: r.docNumber,
     invoiceNumber: r.invoiceNumber,
-    billingCycle: r.billingCycle ? r.billingCycle.toDate() : null,
+    billingCycle: r.billingCycle ? new Date(r.billingCycle) : null,
     registrationNo: r.registrationNo,
     userName: r.userName,
     usageAddress: r.usageAddress,
-    readingDate: r.readingDate ? r.readingDate.toDate() : null,
+    readingDate: r.readingDate ? new Date(r.readingDate) : null,
     currentMeter: r.currentMeter,
     waterUnitUsed: r.waterUnitUsed,
     rawWaterCharge: r.rawWaterCharge,
@@ -306,24 +262,13 @@ const saveEdit = async () => {
   if (!selectedRecord.value) return
   isSaving.value = true
   try {
-    await updateDoc(doc(db, 'water_records', selectedRecord.value.id), {
-      docReceiveNumber: editForm.value.docReceiveNumber,
-      docNumber: editForm.value.docNumber,
-      invoiceNumber: editForm.value.invoiceNumber,
-      billingCycle: editForm.value.billingCycle,
-      registrationNo: editForm.value.registrationNo,
-      userName: editForm.value.userName,
-      usageAddress: editForm.value.usageAddress,
-      readingDate: editForm.value.readingDate,
-      currentMeter: editForm.value.currentMeter || 0,
-      waterUnitUsed: editForm.value.waterUnitUsed || 0,
-      rawWaterCharge: editForm.value.rawWaterCharge || 0,
-      waterAmount: editForm.value.waterAmount || 0,
-      monthlyServiceFee: editForm.value.monthlyServiceFee || 0,
-      vatAmount: editForm.value.vatAmount || 0,
+    const editData = {
+      ...editForm.value,
       totalAmount: editTotal.value,
-    })
+    }
+    await api.put(`/WaterRecord/${selectedRecord.value.id}`, editData)
     editVisible.value = false
+    await fetchHistory()
   } catch (e: unknown) {
     toast.fromError(e, 'เกิดข้อผิดพลาด กรุณาลองใหม่')
   } finally {
@@ -335,20 +280,11 @@ const deleteRecord = async () => {
   if (!selectedRecord.value) return
   if (!confirm('ยืนยันการลบข้อมูลนี้?')) return
   try {
-    const record = selectedRecord.value
-    const batch = writeBatch(db)
-    batch.delete(doc(db, 'water_records', record.id))
-    const monthKey = toMonthKey(record.billingCycle)
-    if (monthKey) {
-      batchUpdateSummary(batch, monthKey, 'water', {
-        totalAmount: -(record.totalAmount || 0),
-        count: -1,
-      })
-    }
-    await batch.commit()
+    await api.delete(`/WaterRecord/${selectedRecord.value.id}`)
     editVisible.value = false
     detailVisible.value = false
     selectedRecord.value = null
+    await fetchHistory()
   } catch (e: unknown) {
     toast.fromError(e, 'เกิดข้อผิดพลาด กรุณาลองใหม่')
   }

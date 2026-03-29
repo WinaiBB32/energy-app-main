@@ -1,9 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
-import {
-    collection, doc, writeBatch, serverTimestamp, query, orderBy, getDocs, Timestamp, increment
-} from 'firebase/firestore'
-// Firebase Removed
+import api from '@/services/api'
 import { useAuthStore } from '@/stores/auth'
 import { useAppToast } from '@/composables/useAppToast'
 
@@ -22,7 +19,6 @@ import Tag from 'primevue/tag'
 // ─── State ──────────────────────────────────────────────────────────────────
 const currentUserRole = computed(() => authStore.userProfile?.role || 'user')
 
-// กำหนด Default เป็นเดือนที่แล้ว
 const getLastMonth = () => {
     const now = new Date()
     return new Date(now.getFullYear(), now.getMonth() - 1, 1)
@@ -44,10 +40,10 @@ const errorMessage = ref<string>('')
 // ─── ดึงข้อมูล (One-time fetch) ─────────────────────────────────────────────
 onMounted(async () => {
     try {
-        const roomSnap = await getDocs(query(collection(db, 'meeting_rooms'), orderBy('name')))
-        roomEntries.value = roomSnap.docs.map(d => ({
-            roomId: d.id,
-            roomName: d.data().name as string,
+        const { data } = await api.get('/MeetingRoom')
+        roomEntries.value = (data.items || []).map((room: any) => ({
+            roomId: room.id,
+            roomName: room.name,
             usageCount: null
         }))
     } catch {
@@ -57,7 +53,7 @@ onMounted(async () => {
     }
 })
 
-// ─── บันทึกข้อมูล (Batch + Aggregation) ──────────────────────────────────────
+// ─── บันทึกข้อมูล ─────────────────────────────────────────────────────────────
 const submitForm = async (): Promise<void> => {
     successMessage.value = ''
     errorMessage.value = ''
@@ -76,38 +72,21 @@ const submitForm = async (): Promise<void> => {
 
     try {
         isSubmitting.value = true
-        const batch = writeBatch(db)
-
-        // บังคับให้เป็นวันที่ 1 ของเดือนนั้นๆ เสมอ เพื่อความเป็นระเบียบ
+        
         const targetDate = new Date(selectedMonth.value.getFullYear(), selectedMonth.value.getMonth(), 1)
-        const recordMonthTs = Timestamp.fromDate(targetDate)
-        const monthKey = `${targetDate.getFullYear()}-${String(targetDate.getMonth() + 1).padStart(2, '0')}`
 
-        let totalUsageForMonth = 0
-
-        filledEntries.forEach(entry => {
-            const newRecordRef = doc(collection(db, 'meeting_records'))
-            batch.set(newRecordRef, {
-                recordMonthTs: recordMonthTs,
+        const promises = filledEntries.map(entry => {
+            const recordDto = {
+                recordMonth: targetDate.toISOString(),
                 roomId: entry.roomId,
-                roomName: entry.roomName,
                 usageCount: entry.usageCount,
                 recordedByName: authStore.userProfile?.displayName || authStore.user?.email || 'ไม่ระบุชื่อ',
                 recordedByUid: authStore.user?.uid || 'unknown',
-                createdAt: serverTimestamp()
-            })
-            totalUsageForMonth += (entry.usageCount || 0)
+            }
+            return api.post('/MeetingRecord', recordDto)
         })
 
-        const summaryRef = doc(db, 'monthly_summaries', `MEETING_${monthKey}`)
-
-        batch.set(summaryRef, {
-            monthKey: monthKey,
-            totalUsage: increment(totalUsageForMonth),
-            updatedAt: serverTimestamp()
-        }, { merge: true })
-
-        await batch.commit()
+        await Promise.all(promises)
 
         successMessage.value = `บันทึกข้อมูลสถิติประจำเดือนสำเร็จ (${filledEntries.length} ห้อง)`
         roomEntries.value.forEach(r => r.usageCount = null)

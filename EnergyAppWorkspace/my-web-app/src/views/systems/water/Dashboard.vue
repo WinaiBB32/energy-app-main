@@ -1,9 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
-// Firebase Removed
-// Firebase Removed
+import api from '@/services/api'
 import { useAppToast } from '@/composables/useAppToast'
-import { toMonthKey } from '@/utils/monthlySummary'
 
 import Card from 'primevue/card'
 import Chart from 'primevue/chart'
@@ -14,14 +12,6 @@ defineOptions({ name: 'WaterDashboard' })
 
 const toast = useAppToast()
 
-// 1. Interface อัปเดตให้รองรับฟิลด์ใหม่ทั้งหมด
-interface MonthlySummary {
-  water?: {
-    totalAmount?: number
-    count?: number
-  }
-}
-
 interface FetchedWaterRecord {
   buildingId?: string
   waterAmount?: number
@@ -29,8 +19,8 @@ interface FetchedWaterRecord {
   rawWaterCharge?: number
   monthlyServiceFee?: number
   vatAmount?: number
-  totalAmount?: number // ใช้ยอดรวมสุทธิ
-  billingCycle?: Timestamp
+  totalAmount?: number
+  billingCycle?: string // API returns string
 }
 
 interface MonthlyData {
@@ -39,20 +29,16 @@ interface MonthlyData {
 }
 
 const rawRecords = ref<FetchedWaterRecord[]>([])
-const monthlySummaries = ref<Record<string, MonthlySummary>>({})
 
-// 2. State สำหรับ KPIs และข้อมูลสรุป
 const totalExpense = ref<number>(0)
 const totalUnit = ref<number>(0)
 const avgCostPerUnit = ref<number>(0)
 
-// State สำหรับโครงสร้างค่าใช้จ่าย (Cost Breakdown)
 const sumRawWater = ref<number>(0)
 const sumWaterAmount = ref<number>(0)
 const sumServiceFee = ref<number>(0)
 const sumVat = ref<number>(0)
 
-// เริ่มต้นด้วยช่วงเดือนที่แล้ว
 const getLastMonthRange = (): Date[] => {
   const now = new Date()
   const first = new Date(now.getFullYear(), now.getMonth() - 1, 1)
@@ -70,7 +56,6 @@ const dateRangeLabel = computed(() => {
   return s === e ? s : `${s} – ${e}`
 })
 
-// 3. State สำหรับกราฟทั้ง 3 ตัว
 const trendChartData = ref()
 const trendChartOptions = ref()
 const breakdownChartData = ref()
@@ -80,49 +65,33 @@ const buildingChartOptions = ref()
 
 const isLoading = ref<boolean>(true)
 
-const buildings = ref([
-  { id: 'BLD-01', name: 'อาคารสำนักงานใหญ่' },
-  { id: 'BLD-02', name: 'อาคารโรงอาหาร' },
-  { id: 'BLD-03', name: 'โรงงานผลิต' },
-])
+const buildings = ref<{id: string, name: string}[]>([])
+
 const getBuildingName = (id: string): string => buildings.value.find((x) => x.id === id)?.name || id
 
-// 4. ดึงข้อมูลแบบ One-time (ลด Reads)
+const fetchBuildings = async () => {
+    try {
+        const { data } = await api.get('/Building');
+        buildings.value = data.items || [];
+    } catch (error) {
+        toast.fromError(error, 'ไม่สามารถโหลดข้อมูลอาคารได้')
+    }
+}
+
 const fetchData = async (): Promise<void> => {
   isLoading.value = true
   try {
-    const startDate = selectedDateRange.value?.[0] || null
-    const endDate = selectedDateRange.value?.[1] ? new Date(selectedDateRange.value[1]) : null
-    if (endDate) endDate.setHours(23, 59, 59, 999)
+    const fromDate = selectedDateRange.value?.[0]?.toISOString()
+    const toDate = selectedDateRange.value?.[1]?.toISOString()
 
-    const startMonthKey = startDate ? toMonthKey(startDate) : null
-    const endMonthKey = endDate ? toMonthKey(endDate) : null
+    const params = new URLSearchParams()
+    if (fromDate) params.append('fromDate', fromDate)
+    if (toDate) params.append('toDate', toDate)
+    params.append('take', '10000') // Fetch all for dashboard
 
-    // 1. ดึงข้อมูล Summary (ประหยัด Read)
-    const summaryRef = collection(db, 'monthly_summaries')
-    const summaryConstraints = []
-    if (startMonthKey) summaryConstraints.push(where('__name__', '>=', startMonthKey))
-    if (endMonthKey) summaryConstraints.push(where('__name__', '<=', endMonthKey))
-
-    // 2. ดึงข้อมูล Raw เฉพาะที่จำเป็น (สำหรับรายละเอียดปลีกย่อย)
-    const waterRef = collection(db, 'water_records')
-    const waterConstraints = []
-    if (startDate && endDate) {
-      waterConstraints.push(where('billingCycle', '>=', Timestamp.fromDate(startDate)))
-      waterConstraints.push(where('billingCycle', '<=', Timestamp.fromDate(endDate)))
-    }
-    waterConstraints.push(orderBy('billingCycle', 'desc'))
-
-    const [summarySnap, waterSnap] = await Promise.all([
-      getDocs(query(summaryRef, ...summaryConstraints)),
-      getDocs(query(waterRef, ...waterConstraints))
-    ])
-
-    monthlySummaries.value = Object.fromEntries(
-      summarySnap.docs.map((doc: QueryDocumentSnapshot) => [doc.id, doc.data() as MonthlySummary])
-    )
-    rawRecords.value = waterSnap.docs.map((doc) => doc.data() as FetchedWaterRecord)
-
+    const { data } = await api.get('/WaterRecord', { params })
+    
+    rawRecords.value = data.items || []
     processData()
   } catch (error: unknown) {
     toast.fromError(error, 'ไม่สามารถโหลดข้อมูล Dashboard น้ำประปาได้')
@@ -131,13 +100,15 @@ const fetchData = async (): Promise<void> => {
   }
 }
 
-onMounted(() => fetchData())
+onMounted(() => {
+    fetchBuildings();
+    fetchData();
+})
 watch(selectedDateRange, () => fetchData())
 const clearDateFilter = (): void => {
   selectedDateRange.value = getLastMonthRange()
 }
 
-// 5. ประมวลผลและคำนวณข้อมูล
 const processData = (): void => {
   let tempExpense = 0
   let tempUnit = 0
@@ -149,43 +120,31 @@ const processData = (): void => {
   const monthlyData: Record<string, MonthlyData> = {}
   const buildingExpenses: Record<string, number> = {}
 
-  // 1. ประมวลผลจาก Summary (สำหรับรายจ่ายรวมรายเดือน)
-  Object.entries(monthlySummaries.value).forEach(([monthKey, summary]) => {
-    if (summary.water) {
-      const amount = summary.water.totalAmount || 0
-      tempExpense += amount
-      if (!monthlyData[monthKey]) monthlyData[monthKey] = { expense: 0, unit: 0 }
-      monthlyData[monthKey].expense += amount
-    }
-  })
-
-  // 2. ประมวลผลจาก Raw Records (สำหรับหน่วยน้ำและรายละเอียดปลีกย่อย)
   rawRecords.value.forEach((data) => {
     if (!data.billingCycle) return
-    const recordDateObj = data.billingCycle.toDate()
+    const recordDateObj = new Date(data.billingCycle)
 
     const sortKey = `${recordDateObj.getFullYear()}-${String(recordDateObj.getMonth() + 1).padStart(2, '0')}`
     if (!monthlyData[sortKey]) monthlyData[sortKey] = { expense: 0, unit: 0 }
 
-    // หมายเหตุ: tempExpense และ monthlyData[sortKey].expense นับจาก Summary แล้ว
+    const totalAmount = data.totalAmount || 0
     const unit = data.waterUnitUsed || 0
 
-    // บวกเลขสะสมรายละเอียด
+    tempExpense += totalAmount
     tempUnit += unit
     tempRaw += data.rawWaterCharge || 0
     tempWater += data.waterAmount || 0
     tempService += data.monthlyServiceFee || 0
     tempVat += data.vatAmount || 0
 
-    // จัดกลุ่มหน่วยน้ำ
+    monthlyData[sortKey].expense += totalAmount
     monthlyData[sortKey].unit += unit
 
     const bId = data.buildingId || 'Unknown'
     if (!buildingExpenses[bId]) buildingExpenses[bId] = 0
-    buildingExpenses[bId] += (data.totalAmount || data.waterAmount || 0)
+    buildingExpenses[bId] += totalAmount
   })
 
-  // อัปเดต State
   totalExpense.value = tempExpense
   totalUnit.value = tempUnit
   avgCostPerUnit.value = tempUnit > 0 ? tempExpense / tempUnit : 0
@@ -201,23 +160,12 @@ const processData = (): void => {
 const formatChartLabel = (sortKey: string): string => {
   const [yearStr = '', monthStr = '1'] = sortKey.split('-')
   const monthNames = [
-    'ม.ค.',
-    'ก.พ.',
-    'มี.ค.',
-    'เม.ย.',
-    'พ.ค.',
-    'มิ.ย.',
-    'ก.ค.',
-    'ส.ค.',
-    'ก.ย.',
-    'ต.ค.',
-    'พ.ย.',
-    'ธ.ค.',
+    'ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.',
+    'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.',
   ]
   return `${monthNames[parseInt(monthStr, 10) - 1]} ${yearStr}`
 }
 
-// 6. ตั้งค่า Chart.js ทั้ง 3 กราฟ
 const setupCharts = (
   monthlyData: Record<string, MonthlyData>,
   buildingExpenses: Record<string, number>,
@@ -225,7 +173,6 @@ const setupCharts = (
   const sortedKeys = Object.keys(monthlyData).sort()
   const labels = sortedKeys.map((key) => formatChartLabel(key))
 
-  // กราฟที่ 1: แนวโน้มรายเดือน
   trendChartData.value = {
     labels,
     datasets: [
@@ -271,13 +218,12 @@ const setupCharts = (
     },
   }
 
-  // กราฟที่ 2: โครงสร้างค่าใช้จ่าย (Breakdown - Doughnut)
   breakdownChartData.value = {
     labels: ['ค่าน้ำดิบ', 'ค่าน้ำประปา', 'ค่าบริการรายเดือน', 'ภาษีมูลค่าเพิ่ม (VAT)'],
     datasets: [
       {
         data: [sumRawWater.value, sumWaterAmount.value, sumServiceFee.value, sumVat.value],
-        backgroundColor: ['#60a5fa', '#3b82f6', '#1d4ed8', '#93c5fd'], // โทนสีน้ำเงินไล่ระดับ
+        backgroundColor: ['#60a5fa', '#3b82f6', '#1d4ed8', '#93c5fd'],
         borderWidth: 0,
       },
     ],
@@ -287,7 +233,6 @@ const setupCharts = (
     cutout: '50%',
   }
 
-  // กราฟที่ 3: จัดอันดับอาคาร
   const sortedBuildings = Object.entries(buildingExpenses).sort((a, b) => b[1] - a[1])
   buildingChartData.value = {
     labels: sortedBuildings.map((item) => getBuildingName(item[0])),
@@ -315,7 +260,6 @@ const setupCharts = (
 const formatCurrency = (val: number): string =>
   new Intl.NumberFormat('th-TH', { style: 'currency', currency: 'THB' }).format(val)
 </script>
-
 <template>
   <div class="max-w-7xl mx-auto pb-10">
     <div class="mb-6 flex flex-col md:flex-row md:items-end justify-between gap-4">

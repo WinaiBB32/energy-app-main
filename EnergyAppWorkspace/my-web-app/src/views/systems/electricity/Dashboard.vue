@@ -16,7 +16,6 @@ import TabPanels from 'primevue/tabpanels'
 import TabPanel from 'primevue/tabpanel'
 import Select from 'primevue/select'
 
-// ฟังก์ชันสำหรับส่งสัญญาณไปบอกหน้าจอหลัก (Parent Window)
 function notifySignage() {
   if (window.parent && window.parent !== window) {
     window.parent.postMessage('user_is_touching', '*')
@@ -61,14 +60,10 @@ interface Building {
 }
 
 const buildings = ref<Building[]>([])
-
 const buildingOptions = computed(() => [{ id: null, name: 'ทุกอาคาร' }, ...buildings.value])
-
 const getBuildingName = (id: string): string => buildings.value.find((x) => x.id === id)?.name || id
-
 const rawRecords = ref<FetchedRecord[]>([])
 
-// 2. State สำหรับตัวเลขสรุป (KPIs & Insights)
 const totalExpense = ref<number>(0)
 const totalPeaUnit = ref<number>(0)
 const totalSolarUnit = ref<number>(0)
@@ -76,7 +71,6 @@ const avgCostPerUnit = ref<number>(0)
 const solarSavings = ref<number>(0)
 const carbonSaved = ref<number>(0)
 
-// ข้อมูลเชิงลึกของ Solar
 const sumConsumptionKwh = ref<number>(0)
 const sumFromGridKwh = ref<number>(0)
 const sumToGridKwh = ref<number>(0)
@@ -85,7 +79,6 @@ const sumFromBatteryKwh = ref<number>(0)
 const sumToBatteryKwh = ref<number>(0)
 const sumFromSolarKwh = ref<number>(0)
 
-// เริ่มต้นด้วยช่วงเดือนที่แล้ว
 const getLastMonthRange = (): Date[] => {
   const now = new Date()
   const first = new Date(now.getFullYear(), now.getMonth() - 1, 1)
@@ -95,30 +88,15 @@ const getLastMonthRange = (): Date[] => {
 const selectedDateRange = ref<Date[] | null>(getLastMonthRange())
 const selectedBuildingFilter = ref<string | null>(null)
 
-const thaiMonthShort = [
-  'ม.ค.',
-  'ก.พ.',
-  'มี.ค.',
-  'เม.ย.',
-  'พ.ค.',
-  'มิ.ย.',
-  'ก.ค.',
-  'ส.ค.',
-  'ก.ย.',
-  'ต.ค.',
-  'พ.ย.',
-  'ธ.ค.',
-]
+const thaiMonthShort = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.']
 const dateRangeLabel = computed(() => {
   const r = selectedDateRange.value
   if (!r || r.length < 2 || !r[0] || !r[1]) return 'ทุกช่วงเวลา'
   const fmt = (d: Date) => `${thaiMonthShort[d.getMonth()]} ${d.getFullYear() + 543}`
-  const s = fmt(r[0]),
-    e = fmt(r[1])
+  const s = fmt(r[0]), e = fmt(r[1])
   return s === e ? s : `${s} – ${e}`
 })
 
-// 3. State สำหรับกราฟทั้ง 4 แบบ
 const expenseChartData = ref()
 const expenseChartOptions = ref()
 const solarChartData = ref()
@@ -135,7 +113,6 @@ const overviewChartOptions = ref()
 const toast = useAppToast()
 const isLoading = ref<boolean>(true)
 
-// 4. ดึงข้อมูลจาก REST API
 const fetchData = async (): Promise<void> => {
   isLoading.value = true
   try {
@@ -143,7 +120,7 @@ const fetchData = async (): Promise<void> => {
     const endDate = selectedDateRange.value?.[1] ? new Date(selectedDateRange.value[1]) : null
     if (endDate) endDate.setHours(23, 59, 59, 999)
 
-    const params: Record<string, unknown> = { take: 500 }
+    const params: Record<string, unknown> = { take: 10000 }
     if (startDate) params.fromDate = startDate.toISOString()
     if (endDate) params.toDate = endDate.toISOString()
 
@@ -153,11 +130,11 @@ const fetchData = async (): Promise<void> => {
       api.get('/ElectricityRecord', { params: { ...params, type: 'SOLAR_PRODUCTION' } }),
     ])
 
-    buildings.value = buildingsRes.data.map((b: { id: string; name: string }) => ({ id: b.id, name: b.name }))
-    rawRecords.value = [
-      ...(peaRes.data as FetchedRecord[]),
-      ...(solarRes.data as FetchedRecord[]),
-    ]
+    buildings.value = buildingsRes.data.items || []
+    const peaRecords = peaRes.data.items || []
+    const solarRecords = solarRes.data.items || []
+    
+    rawRecords.value = [...peaRecords, ...solarRecords]
 
     processDashboardData()
   } catch (error: unknown) {
@@ -177,18 +154,9 @@ const clearDateFilter = (): void => {
   selectedBuildingFilter.value = null
 }
 
-// 5. ลอจิกการคำนวณขั้นสูง (Data Processing)
 const processDashboardData = (): void => {
-  let sumExpense = 0
-  let sumPeaUnit = 0
-  let sumSolar = 0
-  let tConsumption = 0,
-    tFromGrid = 0,
-    tToGrid = 0,
-    tToHome = 0,
-    tFromBat = 0,
-    tToBat = 0,
-    tFromSolar = 0
+  let sumExpense = 0, sumPeaUnit = 0, sumSolar = 0
+  let tConsumption = 0, tFromGrid = 0, tToGrid = 0, tToHome = 0, tFromBat = 0, tToBat = 0, tFromSolar = 0
 
   const monthlyData: Record<string, MonthlyAggregatedData> = {}
   const buildingExpenses: Record<string, number> = {}
@@ -253,24 +221,10 @@ const processDashboardData = (): void => {
 
 const formatChartLabel = (sortKey: string): string => {
   const [yearStr = '', monthStr = '1'] = sortKey.split('-')
-  const monthNames = [
-    'ม.ค.',
-    'ก.พ.',
-    'มี.ค.',
-    'เม.ย.',
-    'พ.ค.',
-    'มิ.ย.',
-    'ก.ค.',
-    'ส.ค.',
-    'ก.ย.',
-    'ต.ค.',
-    'พ.ย.',
-    'ธ.ค.',
-  ]
+  const monthNames = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.']
   return `${monthNames[parseInt(monthStr, 10) - 1]} ${yearStr}`
 }
 
-// 6. ฟังก์ชันวาดกราฟทั้ง 4 ตัว
 const setupCharts = (
   monthlyData: Record<string, MonthlyAggregatedData>,
   totalPea: number,

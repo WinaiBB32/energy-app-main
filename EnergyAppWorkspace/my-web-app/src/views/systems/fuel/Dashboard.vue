@@ -1,11 +1,9 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
+import api from '@/services/api'
 import { useAuthStore } from '@/stores/auth'
 import { useAppToast } from '@/composables/useAppToast'
-import { toMonthKey } from '@/utils/monthlySummary'
 import { usePermissions } from '@/composables/usePermissions'
-// Firebase Removed
-// Firebase Removed
 import type { FetchedReceipt } from '@/types'
 
 import Card from 'primevue/card'
@@ -17,17 +15,13 @@ defineOptions({ name: 'FuelDashboard' })
 const toast = useAppToast()
 
 // 1. Interfaces
-interface MonthlySummary {
-  fuel?: { totalAmount?: number; totalLiters?: number; count?: number }
-  fuel_receipt?: { totalAmount?: number; count?: number }
-  [key: string]: { totalAmount?: number; totalLiters?: number; count?: number } | undefined
-}
 interface FetchedFuelRecord {
   departmentId: string
   vehiclePlate: string
-  fuelType: string
+  fuelTypeName: string
   totalAmount: number
-  refuelDate: Timestamp | null
+  liters: number
+  refuelDate: string | null
 }
 interface FuelType { id: string; name: string }
 
@@ -38,7 +32,6 @@ const isAdmin = isSystemAdmin('fuel')
 const currentUserDepartment = computed(() => authStore.userProfile?.departmentId || '')
 
 // Data stores
-const monthlySummaries = ref<Record<string, MonthlySummary>>({})
 const fuelTypes = ref<FuelType[]>([])
 const rawFuelRecords = ref<FetchedFuelRecord[]>([])
 const rawReceipts = ref<FetchedReceipt[]>([])
@@ -79,51 +72,27 @@ const receiptTrendChartData = ref(); const receiptTrendChartOptions = ref()
 const receiptDetailChartData = ref(); const receiptDetailChartOptions = ref()
 const receiptDriverChartData = ref(); const receiptDriverChartOptions = ref()
 
-// 3. Data Fetching (Refactored)
+// 3. Data Fetching
 const fetchData = async (): Promise<void> => {
   isLoading.value = true
   try {
-    const startDate = selectedDateRange.value?.[0] || null
-    const endDate = selectedDateRange.value?.[1] ? new Date(selectedDateRange.value[1]) : null
-    if (endDate) endDate.setHours(23, 59, 59, 999)
+    const fromDate = selectedDateRange.value?.[0]?.toISOString()
+    const toDate = selectedDateRange.value?.[1]?.toISOString()
 
-    const startMonthKey = startDate ? toMonthKey(startDate) : null
-    const endMonthKey = endDate ? toMonthKey(endDate) : null
+    const params = new URLSearchParams()
+    if (fromDate) params.append('fromDate', fromDate)
+    if (toDate) params.append('toDate', toDate)
+    params.append('take', '10000')
 
-    // --- Query 1: Monthly Summaries (for totals and trends) ---
-    const summaryRef = collection(db, 'monthly_summaries')
-    const summaryConstraints = []
-    if (startMonthKey) summaryConstraints.push(where('__name__', '>=', startMonthKey))
-    if (endMonthKey) summaryConstraints.push(where('__name__', '<=', endMonthKey))
-    const summaryQuery = query(summaryRef, ...summaryConstraints)
-
-    // --- Query 2: Raw data for detailed charts ---
-    const buildRawQuery = (collName: string, dateField: string) => {
-      const rawRef = collection(db, collName)
-      const constraints = []
-      if (startDate && endDate) {
-        constraints.push(where(dateField, '>=', Timestamp.fromDate(startDate)))
-        constraints.push(where(dateField, '<=', Timestamp.fromDate(endDate)))
-      }
-      // No department filter here, will be applied on client
-      return query(rawRef, ...constraints)
-    }
-
-    const fuelTypesQuery = query(collection(db, 'fuel_types'), orderBy('createdAt', 'asc'))
-
-    // --- Execute All Queries in Parallel ---
-    const [summarySnap, fuelSnap, receiptSnap, fuelTypesSnap] = await Promise.all([
-      getDocs(summaryQuery),
-      getDocs(buildRawQuery('fuel_records', 'refuelDate')),
-      getDocs(buildRawQuery('fuel_receipts', 'receiptDate')),
-      getDocs(fuelTypesQuery),
+    const [fuelTypesResponse, fuelRecordsResponse, fuelReceiptsResponse] = await Promise.all([
+      api.get('/FuelType'),
+      api.get('/FuelRecord', { params }),
+      api.get('/FuelReceipt', { params })
     ])
 
-    // --- Process Results ---
-    monthlySummaries.value = Object.fromEntries(summarySnap.docs.map((doc: QueryDocumentSnapshot) => [doc.id, doc.data() as MonthlySummary]))
-    rawFuelRecords.value = fuelSnap.docs.map((doc: QueryDocumentSnapshot) => doc.data() as FetchedFuelRecord)
-    rawReceipts.value = receiptSnap.docs.map((doc: QueryDocumentSnapshot) => doc.data() as FetchedReceipt)
-    fuelTypes.value = fuelTypesSnap.docs.map((d: QueryDocumentSnapshot) => ({ id: d.id, name: d.data().name as string }))
+    fuelTypes.value = fuelTypesResponse.data.items || []
+    rawFuelRecords.value = fuelRecordsResponse.data.items || []
+    rawReceipts.value = fuelReceiptsResponse.data.items || []
 
     processData()
 
@@ -137,26 +106,37 @@ const fetchData = async (): Promise<void> => {
 onMounted(fetchData)
 watch(selectedDateRange, fetchData)
 
-// 4. Data Processing (Refactored)
+// 4. Data Processing
 const processData = (): void => {
   let tempExpense = 0, tempLiters = 0, tempReceiptExpense = 0, tempReceiptEntries = 0
   const monthlyFuelData: Record<string, { expense: number, liters: number }> = {}
   const monthlyReceiptData: Record<string, number> = {}
 
-  // 1. Process Monthly Summaries (Totals & Trends)
-  Object.entries(monthlySummaries.value).forEach(([monthKey, summary]: [string, MonthlySummary]) => {
-    if (summary.fuel) {
-      const expense = summary.fuel.totalAmount || 0
-      const liters = summary.fuel.totalLiters || 0
-      tempExpense += expense
-      tempLiters += liters
-      monthlyFuelData[monthKey] = { expense, liters }
+  rawFuelRecords.value.forEach((record) => {
+    if (!isAdmin && record.departmentId !== currentUserDepartment.value) return
+
+    const expense = record.totalAmount || 0
+    const liters = record.liters || 0
+    tempExpense += expense
+    tempLiters += liters
+
+    if (record.refuelDate) {
+      const date = new Date(record.refuelDate)
+      const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
+      if (!monthlyFuelData[monthKey]) monthlyFuelData[monthKey] = { expense: 0, liters: 0 }
+      monthlyFuelData[monthKey].expense += expense
+      monthlyFuelData[monthKey].liters += liters
     }
-    if (summary.fuel_receipt) {
-      const expense = summary.fuel_receipt.totalAmount || 0
-      const count = summary.fuel_receipt.count || 0
-      tempReceiptExpense += expense
-      tempReceiptEntries += count
+  })
+  
+  rawReceipts.value.forEach((receipt) => {
+    const expense = receipt.totalAmount || 0
+    tempReceiptExpense += expense
+    tempReceiptEntries += 1
+
+     if (receipt.receiptDate) {
+      const date = new Date(receipt.receiptDate)
+      const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
       monthlyReceiptData[monthKey] = (monthlyReceiptData[monthKey] || 0) + expense
     }
   })
@@ -167,16 +147,15 @@ const processData = (): void => {
   totalReceiptExpense.value = tempReceiptExpense
   totalReceiptEntries.value = tempReceiptEntries
 
-  // 2. Process Raw Data (for detailed breakdown charts)
   const vehicleExpenses: Record<string, number> = {}
   const fuelTypeExpenses: Record<string, number> = {}
-  const getFuelTypeName = (id: string) => fuelTypes.value.find((x: FuelType) => x.id === id)?.name || id
 
   rawFuelRecords.value.forEach((record: FetchedFuelRecord) => {
     if (!isAdmin && record.departmentId !== currentUserDepartment.value) return
     const amount = record.totalAmount || 0
     vehicleExpenses[record.vehiclePlate || 'ไม่ระบุ'] = (vehicleExpenses[record.vehiclePlate || 'ไม่ระบุ'] || 0) + amount
-    fuelTypeExpenses[getFuelTypeName(record.fuelType || '') || 'ไม่ระบุ'] = (fuelTypeExpenses[getFuelTypeName(record.fuelType || '') || 'ไม่ระบุ'] || 0) + amount
+    const fuelTypeName = record.fuelTypeName || 'ไม่ระบุ'
+    fuelTypeExpenses[fuelTypeName] = (fuelTypeExpenses[fuelTypeName] || 0) + amount
   })
 
   const receiptDetailExpenses: Record<string, number> = {}
@@ -188,8 +167,7 @@ const processData = (): void => {
       receiptDriverExpenses[entry.driverName || 'ไม่ระบุ พขร.'] = (receiptDriverExpenses[entry.driverName || 'ไม่ระบุ พขร.'] || 0) + amount
     })
   })
-
-  // 3. Setup all charts
+  
   setupCharts(monthlyFuelData, vehicleExpenses, fuelTypeExpenses, monthlyReceiptData, receiptDetailExpenses, receiptDriverExpenses)
 }
 
@@ -201,7 +179,7 @@ const formatChartLabel = (sortKey: string): string => {
   return `${monthNames[parseInt(monthStr, 10) - 1]} ${yearStr}`
 }
 
-// 5. Chart Setup (Handles both summary and raw data)
+// 5. Chart Setup
 const setupCharts = (
   monthlyFuelData: Record<string, { expense: number; liters: number }>,
   vehicleExpenses: Record<string, number>,
@@ -210,7 +188,6 @@ const setupCharts = (
   receiptDetailExpenses: Record<string, number>,
   receiptDriverExpenses: Record<string, number>,
 ): void => {
-  // Fuel Trend Chart (from summary)
   const fuelSortedKeys = Object.keys(monthlyFuelData).sort()
   trendChartData.value = {
     labels: fuelSortedKeys.map(key => formatChartLabel(key)),
@@ -221,16 +198,13 @@ const setupCharts = (
   }
   trendChartOptions.value = { maintainAspectRatio: false, aspectRatio: 0.6, scales: { x: { grid: { display: false } }, y: { type: 'linear', position: 'left', title: { display: true, text: 'บาท' } }, y1: { type: 'linear', position: 'right', title: { display: true, text: 'ลิตร' }, grid: { drawOnChartArea: false } } } }
 
-  // Fuel Type Donut (from raw)
   fuelTypeChartData.value = { labels: Object.keys(fuelTypeExpenses), datasets: [{ data: Object.values(fuelTypeExpenses), backgroundColor: ['#ef4444', '#f97316', '#eab308', '#22c55e', '#3b82f6'], borderWidth: 0 }] }
   fuelTypeChartOptions.value = { plugins: { legend: { position: 'bottom' } }, cutout: '50%' }
 
-  // Top Vehicles Bar Chart (from raw)
   const sortedVehicles = Object.entries(vehicleExpenses).sort((a, b) => b[1] - a[1]).slice(0, 10)
   vehicleChartData.value = { labels: sortedVehicles.map(item => item[0]), datasets: [{ label: 'ค่าน้ำมัน (บาท)', data: sortedVehicles.map(item => item[1]), backgroundColor: '#f87171', borderRadius: 4 }] }
   vehicleChartOptions.value = { indexAxis: 'y', maintainAspectRatio: false, aspectRatio: 0.8, plugins: { legend: { display: false } } }
 
-  // Receipt Trend Chart (from summary)
   const receiptSortedKeys = Object.keys(monthlyReceiptData).sort()
   receiptTrendChartData.value = {
     labels: receiptSortedKeys.map(key => formatChartLabel(key)),
@@ -238,7 +212,6 @@ const setupCharts = (
   }
   receiptTrendChartOptions.value = { maintainAspectRatio: false, aspectRatio: 0.4, scales: { x: { grid: { display: false } }, y: { type: 'linear', position: 'left', title: { display: true, text: 'บาท' } } } }
 
-  // Receipt Details Donut (from raw)
   const topDetails = Object.entries(receiptDetailExpenses).sort((a, b) => b[1] - a[1]).slice(0, 5)
   if (Object.keys(receiptDetailExpenses).length > 5) {
     const otherAmount = Object.entries(receiptDetailExpenses).slice(5).reduce((sum, item) => sum + item[1], 0)
@@ -247,7 +220,6 @@ const setupCharts = (
   receiptDetailChartData.value = { labels: topDetails.map(item => item[0]), datasets: [{ data: topDetails.map(item => item[1]), backgroundColor: ['#6366f1', '#a855f7', '#ec4899', '#f43f5e', '#f97316', '#94a3b8'], borderWidth: 0 }] }
   receiptDetailChartOptions.value = { plugins: { legend: { position: 'bottom' } }, cutout: '60%' }
 
-  // Top Drivers Bar Chart (from raw)
   const topDrivers = Object.entries(receiptDriverExpenses).sort((a, b) => b[1] - a[1]).slice(0, 10)
   receiptDriverChartData.value = { labels: topDrivers.map(item => item[0]), datasets: [{ label: 'ยอดเบิก (บาท)', data: topDrivers.map(item => item[1]), backgroundColor: '#8b5cf6', borderRadius: 4 }] }
   receiptDriverChartOptions.value = { indexAxis: 'y', maintainAspectRatio: false, aspectRatio: 0.8, plugins: { legend: { display: false } } }
