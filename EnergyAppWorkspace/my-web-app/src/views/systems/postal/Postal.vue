@@ -8,7 +8,7 @@ import {
     collection, query, where, getDocs, doc, writeBatch, serverTimestamp, orderBy, limit, startAfter, Timestamp,
     type QueryConstraint, type QueryDocumentSnapshot, type DocumentData
 } from 'firebase/firestore'
-import { db } from '@/firebase/config'
+// Firebase Removed
 
 defineOptions({ name: 'PostalSystem' })
 

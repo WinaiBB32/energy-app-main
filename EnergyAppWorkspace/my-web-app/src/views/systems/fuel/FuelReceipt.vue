@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue'
-import { collection, query, orderBy, onSnapshot, doc, writeBatch, serverTimestamp, type QuerySnapshot, type QueryDocumentSnapshot } from 'firebase/firestore'
-import { db } from '@/firebase/config'
+// Firebase Removed
+// Firebase Removed
 import { useAuthStore } from '@/stores/auth'
 import { toMonthKey, batchUpdateSummary } from '@/utils/monthlySummary'
 import { usePermissions } from '@/composables/usePermissions'

@@ -14,7 +14,7 @@ import {
   getDocs,
   deleteDoc,
 } from 'firebase/firestore'
-import { db } from '@/firebase/config'
+// Firebase Removed
 import { useAuthStore } from '@/stores/auth'
 import { logAudit } from '@/utils/auditLogger'
 

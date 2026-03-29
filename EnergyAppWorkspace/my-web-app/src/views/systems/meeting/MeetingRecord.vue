@@ -3,7 +3,7 @@ import { ref, onMounted, computed } from 'vue'
 import {
     collection, doc, writeBatch, serverTimestamp, query, orderBy, getDocs, Timestamp, increment
 } from 'firebase/firestore'
-import { db } from '@/firebase/config'
+// Firebase Removed
 import { useAuthStore } from '@/stores/auth'
 import { useAppToast } from '@/composables/useAppToast'
 

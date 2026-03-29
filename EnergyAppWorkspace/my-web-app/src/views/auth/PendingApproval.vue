@@ -2,10 +2,12 @@
 import { watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+import { useAuth } from '@/composables/useAuth'
 import Button from 'primevue/button'
 
 const authStore = useAuthStore()
 const router = useRouter()
+const { logout } = useAuth()
 
 // เมื่อ admin อนุมัติ → userProfile.status เปลี่ยนเป็น 'active' แบบ real-time
 // → redirect ไปหน้า Portal ทันที โดยไม่ต้องรอให้ผู้ใช้กดอะไร
@@ -13,7 +15,7 @@ watch(
   () => authStore.userProfile?.status,
   (newStatus) => {
     if (newStatus === 'active') router.replace('/')
-    if (newStatus === 'suspended') authStore.logout()
+    if (newStatus === 'suspended') logout()
   }
 )
 </script>
@@ -89,7 +91,7 @@ watch(
         severity="secondary"
         outlined
         class="w-full"
-        @click="authStore.logout"
+        @click="logout"
       />
     </div>
   </div>

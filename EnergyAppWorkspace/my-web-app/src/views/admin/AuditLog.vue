@@ -8,7 +8,7 @@ import {
   onSnapshot,
   Timestamp,
 } from 'firebase/firestore'
-import { db } from '@/firebase/config'
+// Firebase Removed
 import type { AuditAction } from '@/utils/auditLogger'
 import { useAppToast } from '@/composables/useAppToast'
 

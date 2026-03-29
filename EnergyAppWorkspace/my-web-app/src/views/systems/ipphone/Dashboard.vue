@@ -1,7 +1,5 @@
 <script setup lang="ts">
 import { ref, onMounted, watch, computed } from 'vue'
-import { collection, query, getDocs, orderBy, where, Timestamp } from 'firebase/firestore'
-import { db } from '@/firebase/config'
 import { useAuthStore } from '@/stores/auth'
 import { useAppToast } from '@/composables/useAppToast'
 
@@ -25,7 +23,7 @@ import TabPanel from 'primevue/tabpanel'
 
 // ─── 1. Interfaces ────────────────────────────────────────────────────────────
 interface FetchedCallLog {
-  statId: string; reportMonth: Timestamp | null; extension: string;
+  statId: string; reportMonth: string | null; extension: string;
   answeredInbound: number; noAnswerInbound: number; busyInbound: number; failedInbound: number; voicemailInbound: number; totalInbound: number;
   answeredOutbound: number; noAnswerOutbound: number; busyOutbound: number; failedOutbound: number; voicemailOutbound: number; totalOutbound: number;
   totalCalls: number; totalTalkDuration: string;
@@ -72,7 +70,7 @@ const pinnedExtStats = computed((): ExtStat[] => {
     const logsForExt = rawLogs.value.filter((l) => {
       if (l.extension !== ext) return false
       if (!l.reportMonth) return false
-      const d = l.reportMonth.toDate()
+      const d = new Date(l.reportMonth)
       const startDate = selectedDateRange.value?.[0] || null
       let endDate = selectedDateRange.value?.[1] ? new Date(selectedDateRange.value[1]) : null
       if (endDate) endDate = new Date(endDate.getFullYear(), endDate.getMonth() + 1, 0, 23, 59, 59, 999)
@@ -117,7 +115,7 @@ const buildPinnedCharts = () => {
 
   rawLogs.value.forEach((log) => {
     if (!PINNED_EXTENSIONS.includes(log.extension) || !log.reportMonth) return
-    const d = log.reportMonth.toDate(); if (startDate && d < startDate) return; if (endDate && d > endDate) return;
+    const d = new Date(log.reportMonth); if (startDate && d < startDate) return; if (endDate && d > endDate) return;
     const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
     const extData = monthlyByExt[log.extension]; if (extData) { if (!extData[key]) extData[key] = 0; extData[key] += (log.totalCalls || 0) }
   })
@@ -161,25 +159,11 @@ const fetchData = async (): Promise<void> => {
     let endDate = selectedDateRange.value?.[1] ? new Date(selectedDateRange.value[1]) : null
     if (endDate) endDate = new Date(endDate.getFullYear(), endDate.getMonth() + 1, 0, 23, 59, 59, 999)
 
-    const logConstraints: Parameters<typeof query>[1][] = []
-    if (startDate && endDate) {
-      logConstraints.push(where('reportMonth', '>=', Timestamp.fromDate(startDate)))
-      logConstraints.push(where('reportMonth', '<=', Timestamp.fromDate(endDate)))
-    }
-    logConstraints.push(orderBy('reportMonth', 'desc'))
-
-    const [dirSnap, logSnap, deptSnap] = await Promise.all([
-      getDocs(query(collection(db, 'ipphone_directory'))),
-      getDocs(query(collection(db, 'ipphone_call_logs'), ...logConstraints)),
-      getDocs(query(collection(db, 'departments'), orderBy('name'))),
-    ])
-
-    deptList.value = deptSnap.docs.map((d) => ({ id: d.id, name: d.data().name as string }))
-    directoryMap.value = Object.fromEntries(dirSnap.docs.map(doc => {
-      const data = doc.data()
-      return [data.ipPhoneNumber, { ownerName: data.ownerName || 'ไม่ระบุชื่อ', departmentId: data.departmentId || '' }]
-    }))
-    rawLogs.value = logSnap.docs.map((doc) => doc.data() as FetchedCallLog)
+    // TODO: เรียก API .NET จริง
+    // ตัวอย่าง: const { data } = await api.get('/ipphone/dashboard', { params: { startDate, endDate } })
+    deptList.value = []
+    directoryMap.value = {}
+    rawLogs.value = []
 
     processData()
     buildPinnedCharts()
@@ -211,7 +195,7 @@ const processData = (): void => {
     if (filterExt.value.trim() && !log.extension.includes(filterExt.value.trim())) return
     if (filterDept.value) { const info = directoryMap.value[log.extension]; if (!info || info.departmentId !== filterDept.value) return }
 
-    const recordDateObj = log.reportMonth!.toDate()
+    const recordDateObj = new Date(log.reportMonth!)
     const sortKey = `${recordDateObj.getFullYear()}-${String(recordDateObj.getMonth() + 1).padStart(2, '0')}`
     if (!monthlyData[sortKey]) monthlyData[sortKey] = { inbound: 0, outbound: 0, total: 0 }
 

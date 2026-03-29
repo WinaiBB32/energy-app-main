@@ -31,10 +31,32 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 
-# Firebase credentials
+# Firebase (Safety measure)
 serviceAccount.json
 firebase-key.json
 *-adminsdk-*.json
 
 # Other
 .eslintcache
+
+
+# .NET / Visual Studio
+bin/
+obj/
+.vs/
+*.user
+*.userosscache
+*.sln.docstates
+*.suo
+*.userprefs
+TestResults/
+[Dd]ebug/
+[Rr]elease/
+x64/
+x86/
+build/
+*.db-shm
+*.db-wal
+appsettings.Development.json
+appsettings.Local.json
+

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
-import { collection, query, getDocs, where, orderBy, Timestamp, type QueryDocumentSnapshot } from 'firebase/firestore'
-import { db } from '@/firebase/config'
+// Firebase Removed
+// Firebase Removed
 import { useAppToast } from '@/composables/useAppToast'
 import { toMonthKey } from '@/utils/monthlySummary'
 

@@ -2,11 +2,13 @@
 // Composable wrapping the auth store for convenient use in components
 
 import { computed } from 'vue'
+import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import type { UserRole, UserStatus } from '@/types'
 
 export function useAuth() {
   const authStore = useAuthStore()
+  const router = useRouter()
 
   const user = computed(() => authStore.user)
   const userProfile = computed(() => authStore.userProfile)
@@ -33,15 +35,11 @@ export function useAuth() {
   )
 
   const email = computed(() => authStore.user?.email ?? '')
-  const uid = computed(() => authStore.user?.uid ?? '')
+  const uid = computed(() => authStore.user?.id ?? '')
 
-  const accessibleSystems = computed(
-    () => authStore.userProfile?.accessibleSystems ?? [],
-  )
+  const accessibleSystems = computed(() => authStore.userProfile?.accessibleSystems ?? [])
 
-  const adminSystems = computed(
-    () => authStore.userProfile?.adminSystems ?? [],
-  )
+  const adminSystems = computed(() => authStore.userProfile?.adminSystems ?? [])
 
   function hasSystemAccess(system: string): boolean {
     if (role.value === 'superadmin') return true
@@ -50,7 +48,10 @@ export function useAuth() {
     return accessibleSystems.value.includes(system) || adm.includes(system)
   }
 
-  const logout = () => authStore.logout()
+  const logout = () => {
+    authStore.logout()
+    if (router) router.push('/login')
+  }
 
   return {
     // Raw refs

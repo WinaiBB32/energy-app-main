@@ -2,14 +2,19 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
-import { collection, query, where, getDocs } from 'firebase/firestore'
-import { db } from '@/firebase/config'
+import { useAuth } from '@/composables/useAuth'
+
+
 import { usePermissions } from '@/composables/usePermissions'
 
 import Button from 'primevue/button'
+import Tooltip from 'primevue/tooltip'
+
+const vTooltip = Tooltip
 
 const router = useRouter()
 const authStore = useAuthStore()
+const { logout } = useAuth()
 const { isSuperAdmin } = usePermissions()
 
 // ─── Sidebar state ────────────────────────────────────────────────────────────
@@ -30,29 +35,13 @@ onMounted(async () => {
   window.addEventListener('resize', checkMobile)
   const email = authStore.user?.email
   if (!email) return
-  // รองรับทั้งรูปแบบเก่า (linkedUserEmail: string) และใหม่ (linkedUserEmails: string[])
   try {
-    const [snapNew, snapOld, deptSnap] = await Promise.all([
-      getDocs(query(collection(db, 'ipphone_directory'), where('linkedUserEmails', 'array-contains', email))),
-      getDocs(query(collection(db, 'ipphone_directory'), where('linkedUserEmail', '==', email))),
-      getDocs(collection(db, 'departments')),
-    ])
-    const deptMap = new Map<string, string>()
-    deptSnap.docs.forEach((d) => deptMap.set(d.id, d.data().name as string))
-
-    const seen = new Set<string>()
-    const merged = [...snapNew.docs, ...snapOld.docs].filter((d) => {
-      if (seen.has(d.id)) return false
-      seen.add(d.id)
-      return true
-    })
-    myLinkedExtensions.value = merged.map((d) => ({
-      id: d.id,
-      ipPhoneNumber: d.data().ipPhoneNumber as string,
-      departmentName: deptMap.get(d.data().departmentId as string) ?? (d.data().departmentId as string),
-      workgroup: d.data().workgroup as string | undefined,
-    }))
-  } catch { /* ignore */ }
+    // TODO: เรียก API .NET เพื่อดึงข้อมูลเบอร์โทรศัพท์ที่ผูกกับ user
+    // ตัวอย่าง: const response = await api.get('/ipphone/my-extensions')
+    // myLinkedExtensions.value = response.data
+  } catch (error) {
+    console.error('Failed to load linked extensions:', error)
+  }
 })
 onUnmounted(() => window.removeEventListener('resize', checkMobile))
 
@@ -255,8 +244,8 @@ const visibleAdminTools = computed(() =>
         :class="sidebarOpen || isMobile ? 'p-4' : 'py-3 flex justify-center'">
         <Button v-if="sidebarOpen || isMobile" label="ออกจากระบบ" icon="pi pi-sign-out" text
           class="w-full text-slate-400! hover:text-red-400! hover:bg-red-500/10! justify-start"
-          @click="authStore.logout" />
-        <button v-else @click="authStore.logout"
+          @click="logout" />
+        <button v-else @click="logout"
           class="p-2 rounded-lg text-slate-400 hover:text-red-400 hover:bg-red-500/10 transition-colors"
           v-tooltip.right="'ออกจากระบบ'">
           <i class="pi pi-sign-out text-sm"></i>

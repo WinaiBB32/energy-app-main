@@ -17,7 +17,7 @@ import {
   type QueryDocumentSnapshot,
   type QueryConstraint,
 } from 'firebase/firestore'
-import { db } from '@/firebase/config'
+// Firebase Removed
 import { toMonthKey, batchUpdateSummary } from '@/utils/monthlySummary'
 
 import { useAuthStore } from '@/stores/auth'

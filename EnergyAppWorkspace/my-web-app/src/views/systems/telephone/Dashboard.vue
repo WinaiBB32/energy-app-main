@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted, watch, computed } from 'vue'
-import { collection, query, getDocs, where, orderBy, Timestamp } from 'firebase/firestore'
-import { db } from '@/firebase/config'
+// Firebase Removed
+// Firebase Removed
 import { useAuthStore } from '@/stores/auth'
 import { useAppToast } from '@/composables/useAppToast'
 import { usePermissions } from '@/composables/usePermissions'

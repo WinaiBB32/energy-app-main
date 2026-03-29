@@ -1,13 +1,18 @@
 // src/types/index.ts
 // Centralized shared TypeScript interfaces for the energy-app
 
-import type { Timestamp } from 'firebase/firestore'
-import type { User } from 'firebase/auth'
-
 // ─── Auth / User ──────────────────────────────────────────────────────────────
 
 export type UserRole = 'user' | 'admin' | 'superadmin'
 export type UserStatus = 'pending' | 'active' | 'suspended'
+
+export interface User {
+  id: string
+  email: string
+  firstName: string
+  lastName: string
+  role: string
+}
 
 export interface UserProfile {
   departmentId: string
@@ -27,7 +32,7 @@ export interface AppUser {
   status: UserStatus
   departmentId?: string
   accessibleSystems?: string[]
-  createdAt?: Timestamp
+  createdAt?: string
 }
 
 // ─── Audit ────────────────────────────────────────────────────────────────────
@@ -41,7 +46,7 @@ export interface AuditLog {
   action: string
   module: string
   detail: string
-  createdAt: Timestamp | null
+  createdAt: string | null
 }
 
 // ─── Common / Shared ──────────────────────────────────────────────────────────
@@ -74,12 +79,12 @@ export interface FetchedElectricityRecord {
   docReceiveNumber: string
   docNumber: string
   buildingId: string
-  billingCycle: Timestamp | null
+  billingCycle: string | null
   peaUnitUsed: number
   peaAmount: number
   ftRate: number
   recordedBy: string
-  createdAt: Timestamp
+  createdAt: string
 }
 
 export interface SolarRecord {
@@ -92,12 +97,12 @@ export interface SolarRecord {
 export interface FetchedSolarRecord {
   id: string
   type: string
-  recordDate: Timestamp | null
+  recordDate: string | null
   buildingId: string
   solarUnitProduced: number
   note: string
   recordedBy: string
-  createdAt: Timestamp
+  createdAt: string
 }
 
 // ─── Water ────────────────────────────────────────────────────────────────────
@@ -124,11 +129,11 @@ export interface FetchedWaterRecord {
   docReceiveNumber: string
   docNumber: string
   invoiceNumber: string
-  billingCycle: Timestamp | null
+  billingCycle: string | null
   registrationNo: string
   userName: string
   usageAddress: string
-  readingDate: Timestamp | null
+  readingDate: string | null
   currentMeter: number
   waterUnitUsed: number
   rawWaterCharge: number
@@ -137,7 +142,7 @@ export interface FetchedWaterRecord {
   vatAmount: number
   totalAmount: number
   recordedBy: string
-  createdAt: Timestamp
+  createdAt: string
 }
 
 // ─── Fuel ─────────────────────────────────────────────────────────────────────
@@ -153,7 +158,7 @@ export interface FuelRecord {
   recordDate: Date | null
   note: string
   recordedBy: string
-  createdAt: Timestamp | null
+  createdAt: string | null
 }
 
 export interface OmitReceiptEntry {
@@ -182,7 +187,7 @@ export interface FetchedReceipt {
   note?: string
   recordedByName: string
   recordedByUid: string
-  createdAt: Timestamp
+  createdAt: string
 }
 
 // ─── Telephone ────────────────────────────────────────────────────────────────
@@ -202,14 +207,14 @@ export interface FetchedTelephoneRecord {
   id: string
   docReceiveNumber: string
   docNumber: string
-  billingCycle: Timestamp | null
+  billingCycle: string | null
   phoneNumber: string
   providerName: string
   usageAmount: number
   vatAmount: number
   totalAmount: number
   recordedBy: string
-  createdAt: Timestamp
+  createdAt: string
 }
 
 // ─── Saraban ──────────────────────────────────────────────────────────────────
@@ -229,7 +234,7 @@ export interface SarabanRecord {
   note?: string
   recordedBy: string
   departmentId: string
-  createdAt: Timestamp | null
+  createdAt: string | null
 }
 
 // ─── IP Phone ─────────────────────────────────────────────────────────────────
@@ -269,8 +274,8 @@ export interface ServiceRequest {
   requesterUid?: string
   assignedTo?: string
   note?: string
-  createdAt: Timestamp | null
-  updatedAt?: Timestamp | null
+  createdAt: string | null
+  updatedAt?: string | null
 }
 
 export interface ChatMessage {
@@ -280,7 +285,7 @@ export interface ChatMessage {
   senderEmail: string
   senderId: string
   senderRole: string
-  createdAt: Timestamp | null
+  createdAt: string | null
 }
 
 export interface PostalRecord {
@@ -298,20 +303,17 @@ export interface MeetingRoom {
   id: string
   name: string
   description: string
-  createdAt?: Timestamp
+  createdAt?: string
 }
 
 export interface MeetingRecord {
   id?: string
   recordMonth: Date | null
-  recordMonthTs?: Timestamp | null
+  recordMonthTs?: string | null
   roomId: string
   roomName?: string
   usageCount: number | null
   recordedByUid?: string
   recordedByName?: string
-  createdAt?: Timestamp
+  createdAt?: string
 }
-
-// Re-export firebase User for convenience
-export type { User }

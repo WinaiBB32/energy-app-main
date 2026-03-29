@@ -46,6 +46,7 @@ const router = createRouter({
       component: () => import('../components/layout/AppLayout.vue'),
       meta: { requiresAuth: true },
       children: [
+        // --- ระบบไฟฟ้า ---
         {
           path: '/electricity/dashboard',
           name: 'electricity-dashboard',
@@ -65,6 +66,7 @@ const router = createRouter({
           meta: { system: 'system1', requiresAdmin: true },
         },
 
+        // --- ระบบน้ำ ---
         {
           path: '/water/dashboard',
           name: 'water-dashboard',
@@ -78,6 +80,7 @@ const router = createRouter({
           meta: { system: 'system2', requiresAdmin: true },
         },
 
+        // --- ระบบน้ำมันเชื้อเพลิง ---
         {
           path: '/fuel/dashboard',
           name: 'fuel-dashboard',
@@ -120,7 +123,8 @@ const router = createRouter({
           component: () => import('../views/systems/fuel/FuelReceiptPrint.vue'),
           meta: { system: 'system3', requiresAdmin: true },
         },
-        // 📱 ระบบที่ 4: ค่าโทรศัพท์
+
+        // --- ระบบค่าโทรศัพท์ ---
         {
           path: '/telephone/dashboard',
           name: 'telephone-dashboard',
@@ -134,7 +138,7 @@ const router = createRouter({
           meta: { system: 'system4', requiresAdmin: true },
         },
 
-        // 📁 ระบบที่ 5: งานสารบรรณ
+        // --- งานสารบรรณ ---
         {
           path: '/saraban/dashboard',
           name: 'saraban-dashboard',
@@ -147,7 +151,8 @@ const router = createRouter({
           component: () => import('../views/systems/saraban/Saraban.vue'),
           meta: { system: 'system5', requiresAdmin: true },
         },
-        // 🖥️ ระบบที่ 6: สถิติ IP-Phone
+
+        // --- ระบบ IP-Phone ---
         {
           path: '/ipphone/dashboard',
           name: 'ipphone-dashboard',
@@ -191,6 +196,7 @@ const router = createRouter({
           meta: { system: 'system6', requiresSuperAdmin: true },
         },
 
+        // --- งานไปรษณีย์ ---
         {
           path: '/postal/dashboard',
           name: 'postal-dashboard',
@@ -204,7 +210,7 @@ const router = createRouter({
           meta: { system: 'system7', requiresAdmin: true },
         },
 
-        // 🏢 ระบบที่ 8: ห้องประชุม
+        // --- ห้องประชุม ---
         {
           path: '/meeting/dashboard',
           name: 'meeting-dashboard',
@@ -224,6 +230,7 @@ const router = createRouter({
           meta: { requiresSuperAdmin: true },
         },
 
+        // --- จัดการหลังบ้าน (SuperAdmin) ---
         {
           path: '/admin/users',
           name: 'admin-users',
@@ -265,79 +272,58 @@ const router = createRouter({
   ],
 })
 
-// 💂‍♂️ Navigation Guard
-router.beforeEach(async (to) => {
+// 💂‍♂️ Navigation Guard (อัปเดตใหม่สำหรับ .NET JWT)
+// 💂‍♂️ Navigation Guard (อัปเดตใหม่ ไร้รอยต่อ ไม่มี next())
+router.beforeEach(async (to, from) => {
   const authStore = useAuthStore()
 
-  if (authStore.loading) {
-    await new Promise((resolve) => {
-      const unsubscribe = authStore.$subscribe(() => {
-        if (!authStore.loading) {
-          unsubscribe()
-          resolve(true)
-        }
-      })
-    })
-  }
-
-  // อนุญาตให้เข้าถึงหน้า Dashboard แบบ iframe (embed=true) ได้โดยไม่ต้องล็อกอิน
+  // 1. อนุญาต iframe เข้า Dashboard ได้
   if (to.query.embed === 'true' && to.path.endsWith('/dashboard')) {
-    return true
+    return true // คืนค่า true คืออนุญาตให้ผ่าน
   }
 
   const requiresAuth = to.matched.some((record) => record.meta.requiresAuth)
   const requiresAdmin = to.matched.some((record) => record.meta.requiresAdmin)
   const requiresSuperAdmin = to.matched.some((record) => record.meta.requiresSuperAdmin)
-  const routeSystem = getMatchedSystemMeta(to.matched)
+  // const routeSystem = getMatchedSystemMeta(to.matched) // ปิดไว้ก่อนถ้ายังไม่ได้ใช้
 
-  if (requiresAuth && !authStore.user) return '/login'
-  if (to.path === '/login' && authStore.user) return '/'
+  // 2. ไม่ได้ล็อกอิน -> ไปหน้า Login
+  if (requiresAuth && !authStore.isAuthenticated) {
+    return '/login'
+  }
 
-  // user ล็อกอินแล้วแต่ profile ยังไม่โหลด → ส่งไปหน้า pending
-  if (authStore.user && !authStore.userProfile && to.path !== '/pending') return '/pending'
+  // 3. ล็อกอินแล้ว -> ห้ามเข้าหน้า Login ซ้ำ
+  if (to.path === '/login' && authStore.isAuthenticated) {
+    return '/'
+  }
 
-  if (authStore.user && authStore.userProfile) {
-    const profile = authStore.userProfile
+  // 4. จัดการสิทธิ์ (Role-based Access)
+  if (authStore.isAuthenticated && authStore.user) {
+    const userRole = authStore.user.role
 
-    // superadmin เข้าได้ทุกหน้า ไม่ต้องเช็คอะไรเพิ่ม
-    if (profile.role === 'superadmin') return
-
-    // 1. โดนระงับ: เตะออกจากระบบไปหน้า Login ทันที
-    if (profile.status === 'suspended') {
-      await authStore.logout()
-      return '/login'
+    // SuperAdmin ทะลวงด่าน
+    if (userRole === 'SuperAdmin') {
+      if (to.path === '/pending') return '/'
+      return true
     }
 
-    // 2. รออนุมัติ: บังคับให้อยู่หน้า pending เท่านั้น
-    if (profile.status === 'pending' && to.path !== '/pending') {
+    // User ธรรมดา รออนุมัติ
+    if (userRole === 'User' && to.path !== '/pending') {
       return '/pending'
     }
 
-    // 3. เช็คสิทธิ์ระบบย่อย: accessibleSystems หรือ adminSystems (ผู้ดูแลระบบย่อย)
-    if (routeSystem && profile.status === 'active') {
-      const acc = profile.accessibleSystems ?? []
-      const adm = profile.adminSystems ?? []
-      if (!acc.includes(routeSystem) && !adm.includes(routeSystem)) {
-        return '/'
-      }
+    // เช็คสิทธิ์หน้า SuperAdmin
+    if (requiresSuperAdmin && userRole !== 'SuperAdmin') {
+      return '/'
     }
 
-    // 4. หน้า requiresAdmin: admin องค์กร ผ่านทุกหน้า | user ที่มี adminSystems ตรงกับ route เท่านั้น
-    if (requiresAdmin && profile.role !== 'admin') {
-      if (!routeSystem) {
-        return '/'
-      }
-      const adm = profile.adminSystems ?? []
-      if (!adm.includes(routeSystem)) {
-        return '/'
-      }
-    }
-
-    // 5. หน้า superadmin เท่านั้น (superadmin ออกไปแล้วจาก early return บรรทัด 259)
-    if (requiresSuperAdmin) {
+    // เช็คสิทธิ์หน้า Admin
+    if (requiresAdmin && userRole !== 'Admin' && userRole !== 'SuperAdmin') {
       return '/'
     }
   }
+
+  return true // ผ่านทุกเงื่อนไข
 })
 
 export default router

@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { collection, query, doc, addDoc, updateDoc, onSnapshot, serverTimestamp, orderBy, Timestamp, type QuerySnapshot, type QueryDocumentSnapshot, type DocumentSnapshot } from 'firebase/firestore'
-import { db } from '@/firebase/config'
+// Firebase Removed
+// Firebase Removed
 import { useAuthStore } from '@/stores/auth'
 import { logAudit } from '@/utils/auditLogger'
 import { usePermissions } from '@/composables/usePermissions'

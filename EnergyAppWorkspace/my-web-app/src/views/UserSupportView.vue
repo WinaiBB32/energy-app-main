@@ -5,7 +5,7 @@ import {
   query, where, onSnapshot, getDocs, orderBy, limit, Timestamp,
 } from 'firebase/firestore'
 import { useRouter } from 'vue-router'
-import { db } from '@/firebase/config'
+// Firebase Removed
 import { useAuthStore } from '@/stores/auth'
 
 import Button from 'primevue/button'

@@ -2,8 +2,8 @@
 import { ref, computed, onMounted, watch } from 'vue'
 
 defineOptions({ name: 'ElectricityDashboard' })
-import { collection, query, getDocs, Timestamp, orderBy, where } from 'firebase/firestore'
-import { db } from '@/firebase/config'
+// Firebase Removed
+// Firebase Removed
 import { useAppToast } from '@/composables/useAppToast'
 import { toMonthKey } from '@/utils/monthlySummary'
 

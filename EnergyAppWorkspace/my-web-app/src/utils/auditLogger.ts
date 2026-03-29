@@ -1,5 +1,4 @@
-import { collection, addDoc, serverTimestamp } from 'firebase/firestore'
-import { db } from '@/firebase/config'
+import api from '@/services/api'
 
 export type AuditAction =
   | 'LOGIN'
@@ -54,7 +53,7 @@ export async function logAudit(
 ): Promise<void> {
   try {
     const ip = await fetchClientIp()
-    await addDoc(collection(db, 'audit_logs'), {
+    const logData = {
       uid: user.uid,
       displayName: user.displayName,
       email: user.email,
@@ -65,8 +64,9 @@ export async function logAudit(
       ipAddress: ip,
       browser: parseBrowser(navigator.userAgent),
       userAgent: navigator.userAgent.substring(0, 300),
-      createdAt: serverTimestamp(),
-    })
+    }
+    // TODO: เรียกใช้ API เพื่อบันทึก Audit Log ลงระบบ
+    await api.post('/Audit', logData)
   } catch (e) {
     console.warn('[AuditLogger] failed:', e)
   }

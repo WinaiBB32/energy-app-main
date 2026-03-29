@@ -2,12 +2,14 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+import { useAuth } from '@/composables/useAuth'
 import { usePermissions } from '@/composables/usePermissions'
 import Button from 'primevue/button'
 
 const router = useRouter()
 const route = useRoute()
 const authStore = useAuthStore()
+const { logout } = useAuth()
 const { isSystemAdmin, isSuperAdmin } = usePermissions()
 
 const isEmbed = computed(() => route.query.embed === 'true')
@@ -260,7 +262,7 @@ const navigateTo = (path: string) => {
             </span>
           </button>
           <Button icon="pi pi-sign-out" severity="danger" text rounded size="small" aria-label="Logout"
-            @click="authStore.logout" />
+            @click="logout" />
         </div>
       </header>
 

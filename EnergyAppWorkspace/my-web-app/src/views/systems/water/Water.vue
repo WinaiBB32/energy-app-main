@@ -20,7 +20,7 @@ import {
   type QueryConstraint,
 } from 'firebase/firestore'
 import { toMonthKey, batchUpdateSummary } from '@/utils/monthlySummary'
-import { db } from '@/firebase/config'
+// Firebase Removed
 import { useAuthStore } from '@/stores/auth'
 import { useAppToast } from '@/composables/useAppToast'
 import { usePermissions } from '@/composables/usePermissions'

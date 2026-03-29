@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue'
-import { collection, serverTimestamp, writeBatch, query, orderBy, where, onSnapshot, getDocs, startAfter, limit, doc, updateDoc, Timestamp, type QueryDocumentSnapshot, type QueryConstraint } from 'firebase/firestore'
+// Firebase Removed
 import { toMonthKey, batchUpdateSummary } from '@/utils/monthlySummary'
-import { db } from '@/firebase/config'
+// Firebase Removed
 import { useAuthStore } from '@/stores/auth'
 import { useAppToast } from '@/composables/useAppToast'
 import { usePermissions } from '@/composables/usePermissions'

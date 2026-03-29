@@ -2,8 +2,8 @@
 import { ref, computed, onMounted, watch } from 'vue'
 import { useAppToast } from '@/composables/useAppToast'
 import { toMonthKey } from '@/utils/monthlySummary'
-import { collection, query, where, getDocs, type QueryConstraint, type QueryDocumentSnapshot } from 'firebase/firestore'
-import { db } from '@/firebase/config'
+// Firebase Removed
+// Firebase Removed
 
 import Card from 'primevue/card'
 import Chart from 'primevue/chart'

@@ -16,7 +16,7 @@ import {
   type QueryConstraint,
   type QueryDocumentSnapshot
 } from 'firebase/firestore'
-import { db } from '@/firebase/config'
+// Firebase Removed
 import { useAuthStore } from '@/stores/auth'
 import { useAppToast } from '@/composables/useAppToast'
 

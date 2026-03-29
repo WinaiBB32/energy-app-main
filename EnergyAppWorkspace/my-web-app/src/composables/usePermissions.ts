@@ -1,7 +1,7 @@
 import { computed } from 'vue'
 import { useAuthStore } from '@/stores/auth'
 
-/** คีย์สั้นในโค้ด (saraban, ipphone, …) → รหัสใน Firestore / UserManagement (system5, …) */
+/** คีย์สั้นในโค้ด (saraban, ipphone, …) → รหัสใน Database / UserManagement (system5, …) */
 const MODULE_TO_SYSTEM_ID: Record<string, string> = {
   electricity: 'system1',
   water: 'system2',

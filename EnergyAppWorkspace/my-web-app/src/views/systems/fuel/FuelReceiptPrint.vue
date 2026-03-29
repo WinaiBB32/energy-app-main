@@ -9,7 +9,7 @@ import {
   limit,
   Timestamp,
 } from 'firebase/firestore'
-import { db } from '@/firebase/config'
+// Firebase Removed
 import { useAuthStore } from '@/stores/auth'
 
 import Card from 'primevue/card'

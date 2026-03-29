@@ -4,8 +4,8 @@ import { useAuthStore } from '@/stores/auth'
 import { useAppToast } from '@/composables/useAppToast'
 import { toMonthKey } from '@/utils/monthlySummary'
 import { usePermissions } from '@/composables/usePermissions'
-import { collection, query, where, getDocs, orderBy, Timestamp, type QueryDocumentSnapshot } from 'firebase/firestore'
-import { db } from '@/firebase/config'
+// Firebase Removed
+// Firebase Removed
 import type { FetchedReceipt } from '@/types'
 
 import Card from 'primevue/card'

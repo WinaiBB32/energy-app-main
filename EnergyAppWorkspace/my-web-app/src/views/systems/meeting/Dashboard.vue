@@ -9,7 +9,7 @@ import {
     Timestamp,
     type QueryConstraint // <-- Import Type ที่ถูกต้องมาใช้
 } from 'firebase/firestore'
-import { db } from '@/firebase/config'
+// Firebase Removed
 import { useAuthStore } from '@/stores/auth'
 import { useAppToast } from '@/composables/useAppToast'
 import type { MeetingRoom, MeetingRecord } from '@/types'

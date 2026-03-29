@@ -9,10 +9,10 @@ import {
   reauthenticateWithCredential,
   updatePassword,
 } from 'firebase/auth'
-import { doc, updateDoc, collection, onSnapshot } from 'firebase/firestore'
-import { auth, db } from '@/firebase/config'
+// Firebase Removed
+// Firebase Removed
 import { useAuthStore } from '@/stores/auth'
-import { FirebaseError } from 'firebase/app'
+// Firebase Removed
 
 import Button from 'primevue/button'
 import InputText from 'primevue/inputtext'
