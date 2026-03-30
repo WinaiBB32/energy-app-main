@@ -32,6 +32,34 @@ services:
       timeout: 5s
       retries: 5
 
+  api:
+    build:
+      context: ./EnergyApp.API
+      dockerfile: Dockerfile
+    container_name: energy_api
+    ports:
+      - "5008:5008"
+    environment:
+      ConnectionStrings__DefaultConnection: "Host=postgres;Database=${POSTGRES_DB:-EnergyAppDb};Username=${POSTGRES_USER:-admin};Password=${POSTGRES_PASSWORD:-securepassword123};Port=5432"
+      JwtSettings__Secret: ${JWT_SECRET:-MySuperSecretKeyForEnergyApp1234567890!!}
+      ASPNETCORE_ENVIRONMENT: Production
+      TZ: Asia/Bangkok
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: always
+
+  frontend:
+    build:
+      context: ./my-web-app
+      dockerfile: Dockerfile
+    container_name: energy_frontend
+    ports:
+      - "5173:80"
+    depends_on:
+      - api
+    restart: always
+
 volumes:
   pgdata:
   redisdata:

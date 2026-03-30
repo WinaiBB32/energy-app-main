@@ -93,3 +93,13 @@
 - `/my-web-app` - ซอร์สโค้ดฝั่ง Frontend (Vue 3, Pinia, PrimeVue, Tailwind CSS)
 - `docker-compose.yml` - ไฟล์คอนฟิกสำหรับ Infrastructure (DB, Cache)
 - `.gitignore` - ตั้งค่าการยกเว้นไฟล์ที่ไม่ควรขึ้น Git (bin, obj, node_modules, .env)
+
+
+Port ที่ว่างอยู่ (สำหรับ Docker ของเรา):
+
+Port	ใช้สำหรับ	สถานะ
+5173	Frontend	ว่าง ✓
+5008	Backend API	ว่าง ✓
+5432	PostgreSQL	ว่าง ✓
+6379	Redis	ว่าง ✓
+Docker compose ที่ทำไว้ใช้ port เหล่านี้ได้เลยครับ ไม่ชนกับอะไร
