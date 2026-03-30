@@ -58,7 +58,7 @@ const handleEmailAuth = async (): Promise<void> => {
       errorMessage.value = 'กรุณากรอกชื่อ-นามสกุล';
       return
     }
-    if (!selectedDepartmentId.value) {
+    if (!selectedDepartmentId.value && departments.value.length > 0) {
       errorMessage.value = 'กรุณาเลือกหน่วยงาน';
       return
     }
