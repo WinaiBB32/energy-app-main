@@ -14,6 +14,8 @@ namespace EnergyApp.API.Data
         public DbSet<FuelType> FuelTypes { get; set; }
         public DbSet<MeetingRoom> MeetingRooms { get; set; }
         public DbSet<ElectricityRecord> ElectricityRecords { get; set; }
+        public DbSet<ElectricityBill> ElectricityBills { get; set; }
+        public DbSet<SolarProduction> SolarProductions { get; set; }
         public DbSet<WaterRecord> WaterRecords { get; set; }
         public DbSet<FuelRecord> FuelRecords { get; set; }
         public DbSet<FuelReceipt> FuelReceipts { get; set; }

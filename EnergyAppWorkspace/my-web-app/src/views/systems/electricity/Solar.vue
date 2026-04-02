@@ -5,7 +5,6 @@ import api from '@/services/api'
 import { useAuthStore } from '@/stores/auth'
 import { useAppToast } from '@/composables/useAppToast'
 import { usePermissions } from '@/composables/usePermissions'
-
 defineOptions({ name: 'SolarSystem' })
 
 const toast = useAppToast()
@@ -39,8 +38,17 @@ interface FetchedSolarRecord {
   recordDate: string | null
   buildingId: string
   solarUnitProduced: number
+  productionWh: number
+  toBatteryWh: number
+  toGridWh: number
+  toHomeWh: number
+  consumptionWh: number
+  fromBatteryWh: number
+  fromGridWh: number
+  fromSolarWh: number
   note: string
   recordedBy: string
+  departmentId: string
   createdAt: string
 }
 
@@ -76,18 +84,19 @@ const fetchHistory = async (loadMore = false): Promise<void> => {
   if (loadMore) isLoadingMore.value = true
   else { isLoadingHistory.value = true; historyRecords.value = []; skip.value = 0 }
   try {
-    const response = await api.get('/ElectricityRecord', {
+    const response = await api.get('/SolarProduction', {
       params: {
-        type: 'SOLAR_PRODUCTION',
         skip: loadMore ? skip.value : 0,
         take: PAGE_SIZE,
       },
     })
-    const records: FetchedSolarRecord[] = response.data
-    hasMore.value = records.length === PAGE_SIZE
+    const data = response.data
+    const records: FetchedSolarRecord[] = Array.isArray(data) ? data : (data.items ?? [])
+    const total: number = Array.isArray(data) ? records.length : (data.total ?? records.length)
     if (loadMore) historyRecords.value.push(...records)
     else historyRecords.value = records
     skip.value = historyRecords.value.length
+    hasMore.value = historyRecords.value.length < total
   } catch (error: unknown) {
     toast.fromError(error, 'ไม่สามารถโหลดข้อมูล Solar ได้')
   } finally {
@@ -211,7 +220,7 @@ const submitForm = async (): Promise<void> => {
 
       // POST records one-by-one (or in batch if API supports)
       for (const record of records) {
-        await api.post('/ElectricityRecord', record)
+        await api.post('/SolarProduction', record)
       }
 
       successMessage.value = `นำเข้าข้อมูล Solar สำเร็จจำนวน ${records.length} รายการ`
@@ -230,6 +239,16 @@ const submitForm = async (): Promise<void> => {
   reader.readAsText(selectedFile.value)
 }
 
+const downloadTemplate = (): void => {
+  const header = 'Date,Production(Wh),To Battery(Wh),To Grid(Wh),To Home(Wh),Consumption(Wh),From Battery(Wh),From Grid(Wh),From Solar(Wh)'
+  const example = '04/01/2026,12500,2000,3000,7500,9800,500,800,8500'
+  const csv = `${header}\n${example}\n`
+  const a = document.createElement('a')
+  a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv)
+  a.download = 'solar_template.csv'
+  a.click()
+}
+
 const getBuildingName = (id: string): string => buildings.value.find((x) => x.id === id)?.name || id
 const formatThaiDate = (dateStr: string | null | undefined): string => {
   if (!dateStr) return '-'
@@ -246,12 +265,29 @@ interface SolarEditForm {
   buildingId: string
   recordDate: Date | null
   solarUnitProduced: number | null
+  productionWh: number
+  toBatteryWh: number
+  toGridWh: number
+  toHomeWh: number
+  consumptionWh: number
+  fromBatteryWh: number
+  fromGridWh: number
+  fromSolarWh: number
   note: string
 }
 
 const editForm = ref<SolarEditForm>({
-  buildingId: '', recordDate: null, solarUnitProduced: null, note: '',
+  buildingId: '', recordDate: null, solarUnitProduced: null,
+  productionWh: 0, toBatteryWh: 0, toGridWh: 0, toHomeWh: 0,
+  consumptionWh: 0, fromBatteryWh: 0, fromGridWh: 0, fromSolarWh: 0,
+  note: '',
 })
+
+const editFile = ref<File | null>(null)
+const handleEditFileSelect = (event: Event): void => {
+  const target = event.target as HTMLInputElement
+  editFile.value = target.files?.[0] || null
+}
 
 const openDetail = (event: { data: FetchedSolarRecord }) => {
   selectedRecord.value = event.data
@@ -265,8 +301,17 @@ const openEdit = () => {
     buildingId: r.buildingId,
     recordDate: r.recordDate ? new Date(r.recordDate) : null,
     solarUnitProduced: r.solarUnitProduced,
+    productionWh: r.productionWh || 0,
+    toBatteryWh: r.toBatteryWh || 0,
+    toGridWh: r.toGridWh || 0,
+    toHomeWh: r.toHomeWh || 0,
+    consumptionWh: r.consumptionWh || 0,
+    fromBatteryWh: r.fromBatteryWh || 0,
+    fromGridWh: r.fromGridWh || 0,
+    fromSolarWh: r.fromSolarWh || 0,
     note: r.note,
   }
+  editFile.value = null
   detailVisible.value = false
   editVisible.value = true
 }
@@ -274,31 +319,78 @@ const openEdit = () => {
 const saveEdit = async () => {
   if (!selectedRecord.value) return
   isSaving.value = true
-  try {
-    await api.put(`/ElectricityRecord/${selectedRecord.value.id}`, {
-      buildingId: editForm.value.buildingId,
-      recordDate: editForm.value.recordDate ? editForm.value.recordDate.toISOString() : null,
-      solarUnitProduced: editForm.value.solarUnitProduced || 0,
-      note: editForm.value.note,
+
+  const doSave = async (data: Partial<SolarEditForm> & { recordDate?: string | null }) => {
+    await api.put(`/SolarProduction/${selectedRecord.value!.id}`, {
+      buildingId: data.buildingId ?? editForm.value.buildingId,
+      recordDate: data.recordDate,
+      solarUnitProduced: data.solarUnitProduced ?? editForm.value.solarUnitProduced ?? 0,
+      productionWh: data.productionWh ?? editForm.value.productionWh,
+      toBatteryWh: data.toBatteryWh ?? editForm.value.toBatteryWh,
+      toGridWh: data.toGridWh ?? editForm.value.toGridWh,
+      toHomeWh: data.toHomeWh ?? editForm.value.toHomeWh,
+      consumptionWh: data.consumptionWh ?? editForm.value.consumptionWh,
+      fromBatteryWh: data.fromBatteryWh ?? editForm.value.fromBatteryWh,
+      fromGridWh: data.fromGridWh ?? editForm.value.fromGridWh,
+      fromSolarWh: data.fromSolarWh ?? editForm.value.fromSolarWh,
+      note: data.note ?? editForm.value.note,
     })
-    const index = historyRecords.value.findIndex(r => r.id === selectedRecord.value!.id)
-    if (index !== -1) {
-      const item = historyRecords.value[index]
-      if (item) {
-        historyRecords.value[index] = {
-          ...item,
-          buildingId: editForm.value.buildingId,
-          recordDate: editForm.value.recordDate ? editForm.value.recordDate.toISOString() : null,
-          solarUnitProduced: editForm.value.solarUnitProduced || 0,
-          note: editForm.value.note,
-        }
-      }
-    }
+    fetchHistory()
     toast.success('บันทึกข้อมูลสำเร็จ')
     editVisible.value = false
+  }
+
+  try {
+    if (editFile.value) {
+      // อ่าน CSV แล้วอัปเดตจากแถวแรก
+      const reader = new FileReader()
+      reader.onload = async (e) => {
+        try {
+          const text = e.target?.result
+          if (typeof text !== 'string') throw new Error('ไม่สามารถอ่านไฟล์ได้')
+          const rows = text.split('\n').map(r => r.trim()).filter(r => r.length > 0)
+          if (rows.length < 2) throw new Error('ไฟล์ไม่มีข้อมูล')
+          const cols = parseCSVRow(rows[1] || '')
+          if (cols.length < 9) throw new Error('รูปแบบไฟล์ไม่ถูกต้อง (ต้องมีอย่างน้อย 9 คอลัมน์)')
+
+          const rawDate = cols[0] || ''
+          const parts = rawDate.split('/')
+          if (parts.length !== 3) throw new Error('รูปแบบวันที่ไม่ถูกต้อง (MM/DD/YYYY)')
+          const mm = parseInt(parts[0] || '1', 10)
+          const dd = parseInt(parts[1] || '1', 10)
+          let yyyy = parseInt((parts[2] || '').split(' ')[0] || '2000', 10)
+          if (yyyy < 2000) yyyy += 2000
+
+          const productionWh = Number((cols[1] || '').replace(/,/g, '')) || 0
+          await doSave({
+            buildingId: editForm.value.buildingId,
+            recordDate: new Date(yyyy, mm - 1, dd).toISOString(),
+            solarUnitProduced: productionWh / 1000,
+            productionWh,
+            toBatteryWh: Number((cols[2] || '').replace(/,/g, '')) || 0,
+            toGridWh: Number((cols[3] || '').replace(/,/g, '')) || 0,
+            toHomeWh: Number((cols[4] || '').replace(/,/g, '')) || 0,
+            consumptionWh: Number((cols[5] || '').replace(/,/g, '')) || 0,
+            fromBatteryWh: Number((cols[6] || '').replace(/,/g, '')) || 0,
+            fromGridWh: Number((cols[7] || '').replace(/,/g, '')) || 0,
+            fromSolarWh: Number((cols[8] || '').replace(/,/g, '')) || 0,
+            note: editForm.value.note || editFile.value?.name || '',
+          })
+        } catch (err: unknown) {
+          toast.fromError(err, 'เกิดข้อผิดพลาดในการอ่านไฟล์')
+        } finally {
+          isSaving.value = false
+        }
+      }
+      reader.readAsText(editFile.value)
+    } else {
+      await doSave({
+        recordDate: editForm.value.recordDate ? editForm.value.recordDate.toISOString() : null,
+      })
+      isSaving.value = false
+    }
   } catch (e: unknown) {
     toast.fromError(e, 'เกิดข้อผิดพลาด กรุณาลองใหม่')
-  } finally {
     isSaving.value = false
   }
 }
@@ -307,7 +399,7 @@ const deleteRecord = async () => {
   if (!selectedRecord.value) return
   if (!confirm('ยืนยันการลบข้อมูลนี้?')) return
   try {
-    await api.delete(`/ElectricityRecord/${selectedRecord.value.id}`)
+    await api.delete(`/SolarProduction/${selectedRecord.value.id}`)
     historyRecords.value = historyRecords.value.filter(r => r.id !== selectedRecord.value!.id)
     skip.value = historyRecords.value.length
     toast.success('ลบข้อมูลสำเร็จ')
@@ -367,7 +459,18 @@ const deleteRecord = async () => {
                   </div>
 
                   <div class="flex flex-col gap-2">
-                    <label class="font-semibold text-sm text-gray-700">ไฟล์ข้อมูล Solar (.csv) <span class="text-red-500">*</span></label>
+                    <div class="flex items-center justify-between">
+                      <label class="font-semibold text-sm text-gray-700">ไฟล์ข้อมูล Solar (.csv) <span class="text-red-500">*</span></label>
+                      <Button
+                        type="button"
+                        label="ดาวน์โหลด Template"
+                        icon="pi pi-download"
+                        severity="secondary"
+                        size="small"
+                        text
+                        @click="downloadTemplate"
+                      />
+                    </div>
                     <div class="border-2 border-dashed border-gray-300 rounded-xl p-6 text-center hover:bg-gray-50 transition-colors">
                       <i class="pi pi-cloud-upload text-4xl text-gray-400 mb-3"></i>
                       <input type="file" id="solarCsv" accept=".csv" @change="handleFileSelect"
@@ -448,7 +551,7 @@ const deleteRecord = async () => {
 
           <!-- Detail Dialog -->
           <Dialog v-model:visible="detailVisible" modal header="รายละเอียดข้อมูล Solar"
-            :style="{ width: '480px' }" :draggable="false">
+            :style="{ width: '560px' }" :draggable="false">
             <div v-if="selectedRecord" class="flex flex-col gap-4">
               <div class="grid grid-cols-2 gap-3 text-sm">
                 <div class="bg-gray-50 rounded-lg p-3">
@@ -460,10 +563,55 @@ const deleteRecord = async () => {
                   <p class="font-semibold text-gray-800">{{ formatThaiDate(selectedRecord.recordDate) }}</p>
                 </div>
               </div>
+
               <div class="bg-green-50 rounded-xl p-4 border border-green-100 text-center">
                 <p class="text-gray-500 text-sm mb-1">พลังงานที่ผลิตได้</p>
                 <p class="font-bold text-green-700 text-3xl">{{ selectedRecord.solarUnitProduced || 0 }} <span class="text-lg">kWh</span></p>
               </div>
+
+              <div v-if="selectedRecord.productionWh || selectedRecord.consumptionWh"
+                class="border border-gray-200 rounded-xl overflow-hidden text-sm">
+                <div class="bg-gray-100 px-4 py-2 font-semibold text-gray-600 text-xs uppercase tracking-wide">
+                  รายละเอียดพลังงาน (Wh)
+                </div>
+                <div class="divide-y divide-gray-100">
+                  <div class="flex justify-between px-4 py-2">
+                    <span class="text-gray-500">ผลิตทั้งหมด</span>
+                    <span class="font-semibold text-green-600">{{ (selectedRecord.productionWh || 0).toLocaleString() }} Wh</span>
+                  </div>
+                  <div class="flex justify-between px-4 py-2">
+                    <span class="text-gray-500">การใช้รวม</span>
+                    <span class="font-semibold">{{ (selectedRecord.consumptionWh || 0).toLocaleString() }} Wh</span>
+                  </div>
+                  <div class="grid grid-cols-2 divide-x divide-gray-100">
+                    <div class="px-4 py-2">
+                      <p class="text-gray-400 text-xs mb-1">ส่งแบตเตอรี่</p>
+                      <p class="font-semibold text-blue-600">{{ (selectedRecord.toBatteryWh || 0).toLocaleString() }} Wh</p>
+                    </div>
+                    <div class="px-4 py-2">
+                      <p class="text-gray-400 text-xs mb-1">ส่งกริด</p>
+                      <p class="font-semibold text-blue-600">{{ (selectedRecord.toGridWh || 0).toLocaleString() }} Wh</p>
+                    </div>
+                    <div class="px-4 py-2">
+                      <p class="text-gray-400 text-xs mb-1">ส่งบ้าน</p>
+                      <p class="font-semibold text-blue-600">{{ (selectedRecord.toHomeWh || 0).toLocaleString() }} Wh</p>
+                    </div>
+                    <div class="px-4 py-2">
+                      <p class="text-gray-400 text-xs mb-1">รับจากแบตเตอรี่</p>
+                      <p class="font-semibold text-orange-500">{{ (selectedRecord.fromBatteryWh || 0).toLocaleString() }} Wh</p>
+                    </div>
+                    <div class="px-4 py-2">
+                      <p class="text-gray-400 text-xs mb-1">รับจากกริด</p>
+                      <p class="font-semibold text-orange-500">{{ (selectedRecord.fromGridWh || 0).toLocaleString() }} Wh</p>
+                    </div>
+                    <div class="px-4 py-2">
+                      <p class="text-gray-400 text-xs mb-1">รับจาก Solar</p>
+                      <p class="font-semibold text-orange-500">{{ (selectedRecord.fromSolarWh || 0).toLocaleString() }} Wh</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
               <div v-if="selectedRecord.note" class="bg-amber-50 rounded-lg p-3 border border-amber-100 text-sm">
                 <p class="text-gray-500 text-xs mb-1">หมายเหตุ</p>
                 <p class="text-gray-700 italic">{{ selectedRecord.note }}</p>
@@ -477,20 +625,71 @@ const deleteRecord = async () => {
 
           <!-- Edit Dialog -->
           <Dialog v-model:visible="editVisible" modal header="แก้ไขข้อมูล Solar"
-            :style="{ width: '480px' }" :draggable="false">
+            :style="{ width: '520px' }" :draggable="false">
             <div class="flex flex-col gap-4">
               <div class="flex flex-col gap-2">
                 <label class="text-sm font-semibold text-gray-700">จุดติดตั้ง</label>
                 <Select v-model="editForm.buildingId" :options="buildings" optionLabel="name" optionValue="id" class="w-full" />
               </div>
+
+              <!-- CSV Upload (แทนที่ข้อมูลทั้งหมด) -->
               <div class="flex flex-col gap-2">
-                <label class="text-sm font-semibold text-gray-700">วันที่จด</label>
-                <DatePicker v-model="editForm.recordDate" dateFormat="dd MM yy" class="w-full" showIcon />
+                <div class="flex items-center justify-between">
+                  <label class="text-sm font-semibold text-gray-700">อัปเดตจากไฟล์ CSV (ไม่บังคับ)</label>
+                  <Button type="button" label="ดาวน์โหลด Template" icon="pi pi-download"
+                    severity="secondary" size="small" text @click="downloadTemplate" />
+                </div>
+                <div class="border-2 border-dashed rounded-xl p-4 text-center transition-colors"
+                  :class="editFile ? 'border-green-400 bg-green-50' : 'border-gray-300 hover:bg-gray-50'">
+                  <input type="file" accept=".csv" @change="handleEditFileSelect"
+                    class="block w-full text-sm text-gray-500 file:mr-4 file:py-1.5 file:px-3 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 cursor-pointer" />
+                  <p v-if="editFile" class="text-xs text-green-600 mt-1">{{ editFile.name }}</p>
+                  <p v-else class="text-xs text-gray-400 mt-1">ถ้าเลือกไฟล์ จะอ่านแถวแรกของ CSV แทนที่ข้อมูลเดิม</p>
+                </div>
               </div>
-              <div class="flex flex-col gap-2">
-                <label class="text-sm font-semibold text-gray-700">พลังงานที่ผลิตได้ (kWh)</label>
-                <InputNumber v-model="editForm.solarUnitProduced" :minFractionDigits="0" :maxFractionDigits="2" class="w-full" />
+
+              <!-- Manual fields (ใช้เมื่อไม่ได้อัปโหลด CSV) -->
+              <div v-if="!editFile" class="flex flex-col gap-3">
+                <div class="flex flex-col gap-2">
+                  <label class="text-sm font-semibold text-gray-700">วันที่จด</label>
+                  <DatePicker v-model="editForm.recordDate" dateFormat="dd/mm/yy" class="w-full" showIcon />
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                  <div class="flex flex-col gap-1">
+                    <label class="text-xs text-gray-500">ผลิตทั้งหมด (Wh)</label>
+                    <InputNumber v-model="editForm.productionWh" :minFractionDigits="0" :maxFractionDigits="2" class="w-full" />
+                  </div>
+                  <div class="flex flex-col gap-1">
+                    <label class="text-xs text-gray-500">การใช้รวม (Wh)</label>
+                    <InputNumber v-model="editForm.consumptionWh" :minFractionDigits="0" :maxFractionDigits="2" class="w-full" />
+                  </div>
+                  <div class="flex flex-col gap-1">
+                    <label class="text-xs text-gray-500">ส่งแบตเตอรี่ (Wh)</label>
+                    <InputNumber v-model="editForm.toBatteryWh" :minFractionDigits="0" :maxFractionDigits="2" class="w-full" />
+                  </div>
+                  <div class="flex flex-col gap-1">
+                    <label class="text-xs text-gray-500">ส่งกริด (Wh)</label>
+                    <InputNumber v-model="editForm.toGridWh" :minFractionDigits="0" :maxFractionDigits="2" class="w-full" />
+                  </div>
+                  <div class="flex flex-col gap-1">
+                    <label class="text-xs text-gray-500">ส่งบ้าน (Wh)</label>
+                    <InputNumber v-model="editForm.toHomeWh" :minFractionDigits="0" :maxFractionDigits="2" class="w-full" />
+                  </div>
+                  <div class="flex flex-col gap-1">
+                    <label class="text-xs text-gray-500">รับจากแบตเตอรี่ (Wh)</label>
+                    <InputNumber v-model="editForm.fromBatteryWh" :minFractionDigits="0" :maxFractionDigits="2" class="w-full" />
+                  </div>
+                  <div class="flex flex-col gap-1">
+                    <label class="text-xs text-gray-500">รับจากกริด (Wh)</label>
+                    <InputNumber v-model="editForm.fromGridWh" :minFractionDigits="0" :maxFractionDigits="2" class="w-full" />
+                  </div>
+                  <div class="flex flex-col gap-1">
+                    <label class="text-xs text-gray-500">รับจาก Solar (Wh)</label>
+                    <InputNumber v-model="editForm.fromSolarWh" :minFractionDigits="0" :maxFractionDigits="2" class="w-full" />
+                  </div>
+                </div>
               </div>
+
               <div class="flex flex-col gap-2">
                 <label class="text-sm font-semibold text-gray-700">หมายเหตุ</label>
                 <InputText v-model="editForm.note" class="w-full" />

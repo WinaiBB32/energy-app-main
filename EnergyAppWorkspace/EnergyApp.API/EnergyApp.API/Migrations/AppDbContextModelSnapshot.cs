@@ -198,7 +198,35 @@ namespace EnergyApp.API.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<string>("DepartmentId")
+                        .IsRequired()
+                        .HasColumnType("text");
+
                     b.Property<decimal>("SolarUnitProduced")
+                        .HasColumnType("numeric");
+
+                    b.Property<decimal>("ProductionWh")
+                        .HasColumnType("numeric");
+
+                    b.Property<decimal>("ToBatteryWh")
+                        .HasColumnType("numeric");
+
+                    b.Property<decimal>("ToGridWh")
+                        .HasColumnType("numeric");
+
+                    b.Property<decimal>("ToHomeWh")
+                        .HasColumnType("numeric");
+
+                    b.Property<decimal>("ConsumptionWh")
+                        .HasColumnType("numeric");
+
+                    b.Property<decimal>("FromBatteryWh")
+                        .HasColumnType("numeric");
+
+                    b.Property<decimal>("FromGridWh")
+                        .HasColumnType("numeric");
+
+                    b.Property<decimal>("FromSolarWh")
                         .HasColumnType("numeric");
 
                     b.Property<string>("Type")

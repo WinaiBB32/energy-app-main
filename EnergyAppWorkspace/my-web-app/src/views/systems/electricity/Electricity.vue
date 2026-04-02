@@ -4,7 +4,6 @@ import api from '@/services/api'
 
 import { useAuthStore } from '@/stores/auth'
 import { useAppToast } from '@/composables/useAppToast'
-import { usePermissions } from '@/composables/usePermissions'
 
 defineOptions({ name: 'ElectricitySystem' })
 
@@ -47,6 +46,7 @@ interface FetchedElectricityRecord {
   peaAmount: number
   ftRate: number
   recordedBy: string
+  departmentId: string
   createdAt: string
 }
 
@@ -56,8 +56,7 @@ interface Building {
 }
 
 const authStore = useAuthStore()
-const { isSystemAdmin } = usePermissions()
-const isAdmin = isSystemAdmin('electricity')
+
 const currentUserDepartment = computed(() => authStore.userProfile?.departmentId || '')
 const buildings = ref<Building[]>([])
 
@@ -98,7 +97,6 @@ const fetchHistory = async (loadMore = false): Promise<void> => {
 
   try {
     const params: Record<string, unknown> = {
-      type: 'PEA_BILL',
       skip: loadMore ? skip.value : 0,
       take: PAGE_SIZE,
     }
@@ -119,8 +117,10 @@ const fetchHistory = async (loadMore = false): Promise<void> => {
       params.toDate = to.toISOString()
     }
 
-    const response = await api.get('/ElectricityRecord', { params })
-    const newRecords: FetchedElectricityRecord[] = response.data
+    const response = await api.get('/ElectricityBill', { params })
+    const data = response.data
+    const newRecords: FetchedElectricityRecord[] = Array.isArray(data) ? data : (data.items ?? [])
+    const total: number = Array.isArray(data) ? newRecords.length : (data.total ?? newRecords.length)
 
     if (loadMore) {
       historyRecords.value.push(...newRecords)
@@ -129,7 +129,7 @@ const fetchHistory = async (loadMore = false): Promise<void> => {
     }
 
     skip.value = historyRecords.value.length
-    hasMore.value = newRecords.length === PAGE_SIZE
+    hasMore.value = historyRecords.value.length < total
   } catch (error: unknown) {
     toast.fromError(error, 'ไม่สามารถโหลดข้อมูลไฟฟ้าได้')
     hasMore.value = false
@@ -164,6 +164,8 @@ const submitForm = async (): Promise<void> => {
   if (
     !formData.value.buildingId ||
     !formData.value.billingCycle ||
+    formData.value.peaUnitUsed === null ||
+    formData.value.ftRate === null ||
     formData.value.peaAmount === null
   ) {
     errorMessage.value = 'กรุณากรอกข้อมูลที่จำเป็น (*) ให้ครบถ้วน'
@@ -173,7 +175,6 @@ const submitForm = async (): Promise<void> => {
   try {
     isSubmitting.value = true
     const docData = {
-      type: 'PEA_BILL',
       departmentId: currentUserDepartment.value,
       docReceiveNumber: formData.value.docReceiveNumber,
       docNumber: formData.value.docNumber,
@@ -185,7 +186,7 @@ const submitForm = async (): Promise<void> => {
       recordedBy: authStore.user?.uid || authStore.user?.email || 'unknown',
     }
 
-    await api.post('/ElectricityRecord', docData)
+    await api.post('/ElectricityBill', docData)
     successMessage.value = 'บันทึกข้อมูลบิลค่าไฟฟ้าสำเร็จ'
     formData.value = {
       docReceiveNumber: '',
@@ -208,7 +209,7 @@ const submitForm = async (): Promise<void> => {
 const getBuildingName = (id: string): string => buildings.value.find((x) => x.id === id)?.name || id
 const formatThaiMonth = (dateStr: string | null | undefined): string => {
   if (!dateStr) return '-'
-  return new Date(dateStr).toLocaleDateString('th-TH', { year: 'numeric', month: 'long' })
+  return new Date(dateStr).toLocaleDateString('th-TH', { year: 'numeric', month: 'long', day: 'numeric' })
 }
 const formatCurrency = (val: number | null | undefined): string => {
   if (val === null || val === undefined) return '-'
@@ -270,7 +271,7 @@ const saveEdit = async () => {
       peaAmount: editForm.value.peaAmount || 0,
       ftRate: editForm.value.ftRate || 0,
     }
-    await api.put(`/ElectricityRecord/${selectedRecord.value.id}`, updatedData)
+    await api.put(`/ElectricityBill/${selectedRecord.value.id}`, updatedData)
 
     const index = historyRecords.value.findIndex(r => r.id === selectedRecord.value!.id)
     if (index !== -1) {
@@ -294,7 +295,7 @@ const deleteRecord = async () => {
   if (!confirm('ยืนยันการลบข้อมูลนี้?')) return
   isSaving.value = true
   try {
-    await api.delete(`/ElectricityRecord/${selectedRecord.value.id}`)
+    await api.delete(`/ElectricityBill/${selectedRecord.value.id}`)
     historyRecords.value = historyRecords.value.filter(r => r.id !== selectedRecord.value!.id)
     skip.value = historyRecords.value.length
     toast.success('ลบข้อมูลสำเร็จ')
@@ -312,7 +313,7 @@ const deleteRecord = async () => {
 <template>
   <div class="max-w-6xl mx-auto pb-10">
     <div class="mb-6">
-      <h2 class="text-2xl font-bold text-gray-800">บันทึกบิลค่าไฟฟ้า (กฟภ./กฟน.)</h2>
+      <h2 class="text-2xl font-bold text-gray-800">บันทึกบิลค่าไฟฟ้า</h2>
       <p class="text-gray-500 mt-1">บันทึกข้อมูลและยอดชำระจากบิลค่าไฟฟ้าประจำเดือน</p>
     </div>
 
@@ -345,7 +346,7 @@ const deleteRecord = async () => {
                   </div>
                   <div class="flex flex-col gap-2">
                     <label class="font-semibold text-sm text-gray-700">เลขที่หนังสือ</label>
-                    <InputText v-model="formData.docNumber" placeholder="เช่น กฟภ.456/2567" class="w-full" />
+                    <InputText v-model="formData.docNumber" placeholder="เช่น 456/2567" class="w-full" />
                   </div>
                   <div class="flex flex-col gap-2">
                     <label class="font-semibold text-sm text-gray-700">เลือกอาคาร/มิเตอร์ <span
@@ -353,19 +354,19 @@ const deleteRecord = async () => {
                       optionLabel="name" optionValue="id" placeholder="-- กรุณาเลือกอาคาร --" class="w-full" />
                   </div>
                   <div class="flex flex-col gap-2">
-                    <label class="font-semibold text-sm text-gray-700">รอบบิล (เดือน/ปี) <span
+                    <label class="font-semibold text-sm text-gray-700">วันที่ <span
                         class="text-red-500">*</span></label>
-                    <DatePicker v-model="formData.billingCycle" view="month" dateFormat="MM yy"
-                      placeholder="-- เลือกเดือน/ปี --" class="w-full" />
+                    <DatePicker v-model="formData.billingCycle" dateFormat="dd/mm/yy" showIcon
+                      placeholder="-- เลือกวันที่ --" class="w-full" />
                   </div>
                   <div class="flex flex-col gap-2">
-                    <label class="font-semibold text-sm text-gray-700">หน่วยไฟฟ้า กฟภ. (kWh)</label>
+                    <label class="font-semibold text-sm text-gray-700">หน่วยไฟฟ้า (Unit) <span class="text-red-500">*</span></label>
                     <InputNumber v-model="formData.peaUnitUsed" :minFractionDigits="0" :maxFractionDigits="2"
                       placeholder="0.00" class="w-full" />
                   </div>
 
                   <div class="flex flex-col gap-2">
-                    <label class="font-semibold text-sm text-gray-700">ค่า Ft (บาท/หน่วย)</label>
+                    <label class="font-semibold text-sm text-gray-700">ค่า Ft (บาท/หน่วย) <span class="text-red-500">*</span></label>
                     <InputNumber v-model="formData.ftRate" :minFractionDigits="0" :maxFractionDigits="4"
                       placeholder="0.0000" class="w-full" />
                   </div>
@@ -420,7 +421,7 @@ const deleteRecord = async () => {
                     <span class="font-semibold">{{ getBuildingName(sp.data.buildingId) }}</span>
                   </template>
                 </Column>
-                <Column header="รอบบิล">
+                <Column header="วันที่">
                   <template #body="sp">{{ formatThaiMonth(sp.data.billingCycle) }}</template>
                 </Column>
                 <Column header="รายละเอียด">
@@ -461,7 +462,7 @@ const deleteRecord = async () => {
                   <p class="font-semibold text-gray-800">{{ getBuildingName(selectedRecord.buildingId) }}</p>
                 </div>
                 <div class="bg-gray-50 rounded-lg p-3">
-                  <p class="text-gray-500 text-xs mb-1">รอบบิล</p>
+                  <p class="text-gray-500 text-xs mb-1">วันที่</p>
                   <p class="font-semibold text-gray-800">{{ formatThaiMonth(selectedRecord.billingCycle) }}</p>
                 </div>
                 <div v-if="selectedRecord.docReceiveNumber" class="bg-gray-50 rounded-lg p-3">
@@ -508,8 +509,8 @@ const deleteRecord = async () => {
                     class="w-full" />
                 </div>
                 <div class="flex flex-col gap-2">
-                  <label class="text-sm font-semibold text-gray-700">รอบบิล</label>
-                  <DatePicker v-model="editForm.billingCycle" view="month" dateFormat="MM yy" class="w-full" showIcon />
+                  <label class="text-sm font-semibold text-gray-700">วันที่</label>
+                  <DatePicker v-model="editForm.billingCycle" dateFormat="dd/mm/yy" class="w-full" showIcon />
                 </div>
                 <div class="flex flex-col gap-2">
                   <label class="text-sm font-semibold text-gray-700">เลขที่รับหน่วยงาน</label>
@@ -520,7 +521,7 @@ const deleteRecord = async () => {
                   <InputText v-model="editForm.docNumber" class="w-full" />
                 </div>
                 <div class="flex flex-col gap-2">
-                  <label class="text-sm font-semibold text-gray-700">หน่วยไฟฟ้า (kWh)</label>
+                  <label class="text-sm font-semibold text-gray-700">หน่วยไฟฟ้า (Unit)</label>
                   <InputNumber v-model="editForm.peaUnitUsed" :minFractionDigits="0" :maxFractionDigits="2"
                     class="w-full" />
                 </div>

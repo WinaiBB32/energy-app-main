@@ -9,21 +9,14 @@ namespace EnergyApp.API.Controllers
     [Authorize]
     [ApiController]
     [Route("api/v1/[controller]")]
-    public class ElectricityRecordController : ControllerBase
+    public class SolarProductionController : ControllerBase
     {
         private readonly AppDbContext _context;
-        public ElectricityRecordController(AppDbContext context) { _context = context; }
+        public SolarProductionController(AppDbContext context) { _context = context; }
 
-        public class ElectricityRecordDto
+        public class SolarProductionDto
         {
-            public string Type { get; set; } = "PEA_BILL";
-            public string DocReceiveNumber { get; set; } = string.Empty;
-            public string DocNumber { get; set; } = string.Empty;
             public Guid? BuildingId { get; set; }
-            public DateTime? BillingCycle { get; set; }
-            public decimal PeaUnitUsed { get; set; }
-            public decimal PeaAmount { get; set; }
-            public decimal FtRate { get; set; }
             public DateTime? RecordDate { get; set; }
             public decimal SolarUnitProduced { get; set; }
             public decimal ProductionWh { get; set; }
@@ -42,35 +35,21 @@ namespace EnergyApp.API.Controllers
         [HttpGet]
         public async Task<IActionResult> Get(
             [FromQuery] Guid? buildingId,
-            [FromQuery] string? type,
             [FromQuery] string? fromDate,
             [FromQuery] string? toDate,
             [FromQuery] int skip = 0,
             [FromQuery] int take = 50)
         {
-            var query = _context.ElectricityRecords.AsQueryable();
+            var query = _context.SolarProductions.AsQueryable();
 
             if (buildingId.HasValue)
                 query = query.Where(r => r.BuildingId == buildingId);
 
-            if (!string.IsNullOrEmpty(type))
-                query = query.Where(r => r.Type == type);
-
             if (!string.IsNullOrEmpty(fromDate) && DateTime.TryParse(fromDate, out var fd))
-            {
-                if (!string.IsNullOrEmpty(type) && type == "SOLAR_PRODUCTION")
-                    query = query.Where(r => r.RecordDate >= fd);
-                else
-                    query = query.Where(r => r.BillingCycle >= fd);
-            }
+                query = query.Where(r => r.RecordDate >= fd);
 
             if (!string.IsNullOrEmpty(toDate) && DateTime.TryParse(toDate, out var td))
-            {
-                if (!string.IsNullOrEmpty(type) && type == "SOLAR_PRODUCTION")
-                    query = query.Where(r => r.RecordDate <= td);
-                else
-                    query = query.Where(r => r.BillingCycle <= td);
-            }
+                query = query.Where(r => r.RecordDate <= td);
 
             var total = await query.CountAsync();
             var items = await query
@@ -85,24 +64,17 @@ namespace EnergyApp.API.Controllers
         [HttpGet("{id}")]
         public async Task<IActionResult> GetById(Guid id)
         {
-            var item = await _context.ElectricityRecords.FindAsync(id);
+            var item = await _context.SolarProductions.FindAsync(id);
             if (item == null) return NotFound();
             return Ok(item);
         }
 
         [HttpPost]
-        public async Task<IActionResult> Create([FromBody] ElectricityRecordDto req)
+        public async Task<IActionResult> Create([FromBody] SolarProductionDto req)
         {
-            var record = new ElectricityRecord
+            var record = new SolarProduction
             {
-                Type = req.Type,
-                DocReceiveNumber = req.DocReceiveNumber,
-                DocNumber = req.DocNumber,
                 BuildingId = req.BuildingId,
-                BillingCycle = req.BillingCycle,
-                PeaUnitUsed = req.PeaUnitUsed,
-                PeaAmount = req.PeaAmount,
-                FtRate = req.FtRate,
                 RecordDate = req.RecordDate,
                 SolarUnitProduced = req.SolarUnitProduced,
                 ProductionWh = req.ProductionWh,
@@ -117,25 +89,18 @@ namespace EnergyApp.API.Controllers
                 RecordedBy = req.RecordedBy,
                 DepartmentId = req.DepartmentId,
             };
-            _context.ElectricityRecords.Add(record);
+            _context.SolarProductions.Add(record);
             await _context.SaveChangesAsync();
-            return Ok(new { message = "บันทึกข้อมูลไฟฟ้าสำเร็จ", id = record.Id });
+            return Ok(new { message = "บันทึกข้อมูล Solar สำเร็จ", id = record.Id });
         }
 
         [HttpPut("{id}")]
-        public async Task<IActionResult> Update(Guid id, [FromBody] ElectricityRecordDto req)
+        public async Task<IActionResult> Update(Guid id, [FromBody] SolarProductionDto req)
         {
-            var record = await _context.ElectricityRecords.FindAsync(id);
+            var record = await _context.SolarProductions.FindAsync(id);
             if (record == null) return NotFound();
 
-            // ไม่อัปเดต Type เพื่อป้องกันการเปลี่ยนประเภทโดยไม่ตั้งใจ
-            record.DocReceiveNumber = req.DocReceiveNumber;
-            record.DocNumber = req.DocNumber;
             record.BuildingId = req.BuildingId;
-            record.BillingCycle = req.BillingCycle;
-            record.PeaUnitUsed = req.PeaUnitUsed;
-            record.PeaAmount = req.PeaAmount;
-            record.FtRate = req.FtRate;
             record.RecordDate = req.RecordDate;
             record.SolarUnitProduced = req.SolarUnitProduced;
             record.ProductionWh = req.ProductionWh;
@@ -151,15 +116,15 @@ namespace EnergyApp.API.Controllers
             record.DepartmentId = req.DepartmentId;
 
             await _context.SaveChangesAsync();
-            return Ok(new { message = "แก้ไขข้อมูลไฟฟ้าสำเร็จ" });
+            return Ok(new { message = "แก้ไขข้อมูล Solar สำเร็จ" });
         }
 
         [HttpDelete("{id}")]
         public async Task<IActionResult> Delete(Guid id)
         {
-            var record = await _context.ElectricityRecords.FindAsync(id);
+            var record = await _context.SolarProductions.FindAsync(id);
             if (record == null) return NotFound();
-            _context.ElectricityRecords.Remove(record);
+            _context.SolarProductions.Remove(record);
             await _context.SaveChangesAsync();
             return Ok(new { message = "ลบสำเร็จ" });
         }

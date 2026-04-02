@@ -109,6 +109,9 @@ const solarUsageChartData = ref()
 const solarBreakdownChartData = ref()
 const overviewChartData = ref()
 const overviewChartOptions = ref()
+const unitTrendChartData = ref()
+const unitTrendChartOptions = ref()
+const percentDoughnutOptions = ref()
 
 const toast = useAppToast()
 const isLoading = ref<boolean>(true)
@@ -117,23 +120,29 @@ const fetchData = async (): Promise<void> => {
   isLoading.value = true
   try {
     const startDate = selectedDateRange.value?.[0] || null
-    const endDate = selectedDateRange.value?.[1] ? new Date(selectedDateRange.value[1]) : null
-    if (endDate) endDate.setHours(23, 59, 59, 999)
+    const endDate = selectedDateRange.value?.[1] || null
+
+    const toLocalDateStr = (d: Date, eod = false): string => {
+      const y = d.getFullYear()
+      const m = String(d.getMonth() + 1).padStart(2, '0')
+      const day = String(d.getDate()).padStart(2, '0')
+      return `${y}-${m}-${day}T${eod ? '23:59:59' : '00:00:00'}`
+    }
 
     const params: Record<string, unknown> = { take: 10000 }
-    if (startDate) params.fromDate = startDate.toISOString()
-    if (endDate) params.toDate = endDate.toISOString()
+    if (startDate) params.fromDate = toLocalDateStr(startDate)
+    if (endDate) params.toDate = toLocalDateStr(endDate, true)
 
     const [buildingsRes, peaRes, solarRes] = await Promise.all([
       api.get('/Building'),
-      api.get('/ElectricityRecord', { params: { ...params, type: 'PEA_BILL' } }),
-      api.get('/ElectricityRecord', { params: { ...params, type: 'SOLAR_PRODUCTION' } }),
+      api.get('/ElectricityBill', { params }),
+      api.get('/SolarProduction', { params }),
     ])
 
     buildings.value = buildingsRes.data.items || []
-    const peaRecords = peaRes.data.items || []
-    const solarRecords = solarRes.data.items || []
-    
+    const peaRecords = (peaRes.data.items || []).map((r: FetchedRecord) => ({ ...r, type: 'PEA_BILL' as const }))
+    const solarRecords = (solarRes.data.items || []).map((r: FetchedRecord) => ({ ...r, type: 'SOLAR_PRODUCTION' as const }))
+
     rawRecords.value = [...peaRecords, ...solarRecords]
 
     processDashboardData()
@@ -292,34 +301,20 @@ const setupCharts = (
     ],
   }
 
+  // Row 3 Left — หน่วยที่ซื้อ กฟน. รายเดือน (Unit)
   overviewChartData.value = {
     labels,
     datasets: [
       {
         type: 'bar',
-        label: 'ไฟฟ้าที่ซื้อ (kWh)',
+        label: 'หน่วยที่ซื้อ กฟน. (Unit)',
         backgroundColor: '#3b82f6',
         borderRadius: 4,
         data: sortedKeys.map((key) => monthlyData[key]?.peaUnit ?? 0),
       },
-      {
-        type: 'bar',
-        label: 'Solar ที่ผลิตได้ (kWh)',
-        backgroundColor: '#16a34a',
-        borderRadius: 4,
-        data: sortedKeys.map((key) => monthlyData[key]?.solar ?? 0),
-      },
     ],
   }
-  overviewChartOptions.value = {
-    maintainAspectRatio: false,
-    aspectRatio: 0.8,
-    plugins: { legend: { position: 'top' } },
-    scales: {
-      x: { ticks: { color: '#6b7280' }, grid: { display: false } },
-      y: { ticks: { color: '#6b7280' }, grid: { color: '#f3f4f6' } },
-    },
-  }
+  overviewChartOptions.value = getChartOptions('หน่วย (Unit)')
 
   solarBreakdownChartData.value = {
     labels: ['ใช้ในอาคาร (To Home)', 'ส่งขายคืนสายส่ง (To Grid)', 'ชาร์จแบตฯ (To Battery)'],
@@ -330,6 +325,39 @@ const setupCharts = (
         borderWidth: 0,
       },
     ],
+  }
+
+  // Row 3 Right — Solar ที่ผลิตรายเดือน (kWh)
+  unitTrendChartData.value = {
+    labels,
+    datasets: [
+      {
+        type: 'bar',
+        label: 'Solar ที่ผลิต (kWh)',
+        backgroundColor: '#22c55e',
+        borderRadius: 4,
+        data: sortedKeys.map((key) => monthlyData[key]?.solar ?? 0),
+      },
+    ],
+  }
+  unitTrendChartOptions.value = getChartOptions('หน่วย (kWh)')
+
+  // Row 4 — % doughnut options
+  percentDoughnutOptions.value = {
+    plugins: {
+      legend: { position: 'bottom' },
+      tooltip: {
+        callbacks: {
+          label: (ctx: { label: string; parsed: number; dataset: { data: number[] } }) => {
+            const total = ctx.dataset.data.reduce((a, b) => a + b, 0)
+            const pct = total > 0 ? ((ctx.parsed / total) * 100).toFixed(1) : '0.0'
+            return ` ${ctx.label}: ${pct}%`
+          },
+        },
+      },
+    },
+    cutout: '60%',
+    maintainAspectRatio: false,
   }
 
   const sortedBuildings = Object.entries(buildingExpenses).sort((a, b) => b[1] - a[1])
@@ -420,18 +448,18 @@ const formatCurrency = (val: number): string =>
       <TabPanels class="px-0 py-4">
         <!-- Tab: ภาพรวมทั้งหมด (Overview) -->
         <TabPanel value="0">
-          <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+
+          <!-- Row 1: KPI Cards (5 ใบ) -->
+          <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 mb-6">
             <Card class="shadow-sm border-t-4 border-blue-500 bg-blue-50/20">
               <template #content>
                 <div class="flex justify-between items-start">
                   <div>
-                    <p class="text-xs text-gray-500 font-semibold mb-1 uppercase">ค่าไฟรวม (PEA)</p>
-                    <h3 class="text-2xl font-bold text-gray-800">
-                      {{ formatCurrency(totalExpense) }}
-                    </h3>
+                    <p class="text-xs text-gray-500 font-semibold mb-1 uppercase">ค่าไฟรวม (กฟน.)</p>
+                    <h3 class="text-xl font-bold text-gray-800">{{ formatCurrency(totalExpense) }}</h3>
                   </div>
-                  <div class="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center text-blue-600">
-                    <i class="pi pi-money-bill"></i>
+                  <div class="w-9 h-9 bg-blue-100 rounded-full flex items-center justify-center text-blue-600">
+                    <i class="pi pi-money-bill text-sm"></i>
                   </div>
                 </div>
               </template>
@@ -441,16 +469,14 @@ const formatCurrency = (val: number): string =>
               <template #content>
                 <div class="flex justify-between items-start">
                   <div>
-                    <p class="text-xs text-gray-500 font-semibold mb-1 uppercase">
-                      ซื้อไฟฟ้า (PEA)
-                    </p>
-                    <h3 class="text-2xl font-bold text-gray-800">
+                    <p class="text-xs text-gray-500 font-semibold mb-1 uppercase">ซื้อไฟฟ้า (กฟน.)</p>
+                    <h3 class="text-xl font-bold text-gray-800">
                       {{ totalPeaUnit.toLocaleString(undefined, { maximumFractionDigits: 0 }) }}
-                      <span class="text-sm font-normal text-gray-500">kWh</span>
+                      <span class="text-sm font-normal text-gray-500">Unit</span>
                     </h3>
                   </div>
-                  <div class="w-10 h-10 bg-indigo-100 rounded-full flex items-center justify-center text-indigo-600">
-                    <i class="pi pi-bolt"></i>
+                  <div class="w-9 h-9 bg-indigo-100 rounded-full flex items-center justify-center text-indigo-600">
+                    <i class="pi pi-bolt text-sm"></i>
                   </div>
                 </div>
               </template>
@@ -461,13 +487,31 @@ const formatCurrency = (val: number): string =>
                 <div class="flex justify-between items-start">
                   <div>
                     <p class="text-xs text-gray-500 font-semibold mb-1 uppercase">ผลิตจาก Solar</p>
-                    <h3 class="text-2xl font-bold text-gray-800">
+                    <h3 class="text-xl font-bold text-gray-800">
                       {{ totalSolarUnit.toLocaleString(undefined, { maximumFractionDigits: 0 }) }}
                       <span class="text-sm font-normal text-gray-500">kWh</span>
                     </h3>
                   </div>
-                  <div class="w-10 h-10 bg-emerald-100 rounded-full flex items-center justify-center text-emerald-600">
-                    <i class="pi pi-sun"></i>
+                  <div class="w-9 h-9 bg-emerald-100 rounded-full flex items-center justify-center text-emerald-600">
+                    <i class="pi pi-sun text-sm"></i>
+                  </div>
+                </div>
+              </template>
+            </Card>
+
+            <Card class="shadow-sm border-t-4 border-violet-500 bg-violet-50/20">
+              <template #content>
+                <div class="flex justify-between items-start">
+                  <div>
+                    <p class="text-xs text-gray-500 font-semibold mb-1 uppercase">Consumption</p>
+                    <h3 class="text-xl font-bold text-gray-800">
+                      {{ (sumConsumptionKwh * 1000).toLocaleString(undefined, { maximumFractionDigits: 0 }) }}
+                      <span class="text-sm font-normal text-gray-500">Wh</span>
+                    </h3>
+                    <p class="text-[10px] text-violet-600/80 mt-1">ปริมาณความต้องการไฟฟ้า</p>
+                  </div>
+                  <div class="w-9 h-9 bg-violet-100 rounded-full flex items-center justify-center text-violet-600">
+                    <i class="pi pi-home text-sm"></i>
                   </div>
                 </div>
               </template>
@@ -477,68 +521,119 @@ const formatCurrency = (val: number): string =>
               <template #content>
                 <div class="flex justify-between items-start">
                   <div>
-                    <p class="text-xs text-gray-500 font-semibold mb-1 uppercase">
-                      ประหยัดเงินสุทธิ
-                    </p>
-                    <h3 class="text-2xl font-bold text-green-700">
-                      {{ formatCurrency(solarSavings) }}
-                    </h3>
-                    <p class="text-[10px] text-green-600/80 mt-1 leading-tight mb-0 whitespace-nowrap">
-                      * ผลิต Solar × ค่าไฟเฉลี่ย ({{ avgCostPerUnit.toFixed(2) }} ฿/kWh)
-                    </p>
+                    <p class="text-xs text-gray-500 font-semibold mb-1 uppercase">ประหยัดเงินสุทธิ</p>
+                    <h3 class="text-xl font-bold text-green-700">{{ formatCurrency(solarSavings) }}</h3>
+                    <p class="text-[10px] text-green-600/80 mt-1">Solar × {{ avgCostPerUnit.toFixed(2) }} ฿/kWh</p>
                   </div>
-                  <div class="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center text-green-600">
-                    <i class="pi pi-check-circle"></i>
+                  <div class="w-9 h-9 bg-green-100 rounded-full flex items-center justify-center text-green-600">
+                    <i class="pi pi-check-circle text-sm"></i>
                   </div>
                 </div>
               </template>
             </Card>
           </div>
 
-          <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
-            <Card class="shadow-sm border-none lg:col-span-2">
+          <!-- Row 2: แนวโน้มค่าไฟฟ้ารายเดือน (full width) -->
+          <Card class="shadow-sm border-none mb-6">
+            <template #title>
+              <div class="text-lg font-bold text-gray-700">แนวโน้มค่าไฟฟ้ารายเดือน (บาท)</div>
+            </template>
+            <template #content>
+              <div v-if="isLoading" class="h-64 flex items-center justify-center">
+                <i class="pi pi-spin pi-spinner text-4xl text-blue-500"></i>
+              </div>
+              <div v-else-if="!expenseChartData?.labels?.length"
+                class="h-64 flex flex-col items-center justify-center text-gray-400">
+                <i class="pi pi-box text-3xl mb-2"></i><p>ไม่มีข้อมูล</p>
+              </div>
+              <div v-else class="h-64 relative">
+                <Chart type="bar" :data="expenseChartData" :options="expenseChartOptions" class="h-full w-full" />
+              </div>
+            </template>
+          </Card>
+
+          <!-- Row 3: หน่วยที่ซื้อ (Unit) | Solar ที่ผลิต (kWh) -->
+          <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+            <Card class="shadow-sm border-none">
               <template #title>
-                <div class="text-lg font-bold text-gray-700">
-                  แนวโน้มการใช้พลังงานเทียบกับการผลิต
+                <div class="text-base font-bold text-gray-700">
+                  <span class="inline-block w-3 h-3 rounded-sm bg-blue-500 mr-2"></span>
+                  หน่วยที่ซื้อ กฟน. รายเดือน (Unit)
                 </div>
               </template>
               <template #content>
-                <div v-if="isLoading" class="h-64 flex items-center justify-center">
-                  <i class="pi pi-spin pi-spinner text-4xl text-blue-500"></i>
+                <div v-if="isLoading" class="h-52 flex items-center justify-center">
+                  <i class="pi pi-spin pi-spinner text-3xl text-blue-400"></i>
                 </div>
-                <div v-else-if="overviewChartData?.labels?.length === 0"
-                  class="h-64 flex flex-col items-center justify-center text-gray-400">
-                  <i class="pi pi-box text-3xl mb-2"></i>
-                  <p>ไม่มีข้อมูล</p>
+                <div v-else-if="!overviewChartData?.labels?.length"
+                  class="h-52 flex flex-col items-center justify-center text-gray-400">
+                  <i class="pi pi-box text-2xl mb-2"></i><p>ไม่มีข้อมูล</p>
                 </div>
-                <div v-else class="h-64 relative">
+                <div v-else class="h-52 relative">
                   <Chart type="bar" :data="overviewChartData" :options="overviewChartOptions" class="h-full w-full" />
                 </div>
               </template>
             </Card>
 
-            <Card class="shadow-sm border-none lg:col-span-1">
+            <Card class="shadow-sm border-none">
               <template #title>
-                <div class="text-lg font-bold text-gray-700">
-                  สัดส่วนหน่วยไฟฟ้า (kWh)
+                <div class="text-base font-bold text-gray-700">
+                  <span class="inline-block w-3 h-3 rounded-sm bg-emerald-500 mr-2"></span>
+                  Solar ที่ผลิตรายเดือน (kWh)
                 </div>
               </template>
               <template #content>
-                <div v-if="isLoading" class="h-64 flex items-center justify-center">
-                  <i class="pi pi-spin pi-spinner text-4xl text-gray-400"></i>
+                <div v-if="isLoading" class="h-52 flex items-center justify-center">
+                  <i class="pi pi-spin pi-spinner text-3xl text-emerald-400"></i>
                 </div>
-                <div v-else-if="totalPeaUnit === 0 && totalSolarUnit === 0"
-                  class="h-64 flex flex-col items-center justify-center text-gray-400">
-                  <i class="pi pi-chart-pie text-3xl mb-2"></i>
-                  <p>ไม่มีข้อมูล</p>
+                <div v-else-if="!unitTrendChartData?.labels?.length"
+                  class="h-52 flex flex-col items-center justify-center text-gray-400">
+                  <i class="pi pi-box text-2xl mb-2"></i><p>ไม่มีข้อมูล</p>
                 </div>
-                <div v-else class="h-64 relative flex items-center justify-center pb-4">
-                  <Chart type="doughnut" :data="mixChartData" :options="mixChartOptions"
-                    class="w-full h-56 max-w-60" />
+                <div v-else class="h-52 relative">
+                  <Chart type="bar" :data="unitTrendChartData" :options="unitTrendChartOptions" class="h-full w-full" />
                 </div>
               </template>
             </Card>
           </div>
+
+          <!-- Row 4: แหล่งพลังงาน % | การจัดสรร Solar % -->
+          <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+            <Card class="shadow-sm border-none">
+              <template #title>
+                <div class="text-base font-bold text-gray-700">แหล่งที่มาพลังงาน (Demand Mix %)</div>
+                <p class="text-xs text-gray-400 font-normal mt-0.5">From Grid / From Solar / From Battery</p>
+              </template>
+              <template #content>
+                <div v-if="sumConsumptionKwh === 0"
+                  class="h-56 flex flex-col items-center justify-center text-gray-400">
+                  <i class="pi pi-chart-pie text-3xl mb-2"></i><p>ไม่มีข้อมูล</p>
+                </div>
+                <div v-else class="h-56 relative flex items-center justify-center pb-4">
+                  <Chart type="doughnut" :data="solarUsageChartData" :options="percentDoughnutOptions"
+                    class="w-full h-52 max-w-56" />
+                </div>
+              </template>
+            </Card>
+
+            <Card class="shadow-sm border-none">
+              <template #title>
+                <div class="text-base font-bold text-gray-700">การจัดสรรพลังงาน Solar (Supply Mix %)</div>
+                <p class="text-xs text-gray-400 font-normal mt-0.5">To Home / To Grid / To Battery</p>
+              </template>
+              <template #content>
+                <div v-if="totalSolarUnit === 0"
+                  class="h-56 flex flex-col items-center justify-center text-gray-400">
+                  <i class="pi pi-chart-pie text-3xl mb-2"></i><p>ไม่มีข้อมูล</p>
+                </div>
+                <div v-else class="h-56 relative flex items-center justify-center pb-4">
+                  <Chart type="doughnut" :data="solarBreakdownChartData" :options="percentDoughnutOptions"
+                    class="w-full h-52 max-w-56" />
+                </div>
+              </template>
+            </Card>
+          </div>
+
         </TabPanel>
 
         <!-- Tab: ค่าไฟฟ้า (PEA) -->
@@ -575,7 +670,7 @@ const formatCurrency = (val: number): string =>
                     </p>
                     <h3 class="text-2xl font-bold text-gray-800">
                       {{ totalPeaUnit.toLocaleString(undefined, { maximumFractionDigits: 0 }) }}
-                      <span class="text-sm font-normal text-gray-500">kWh</span>
+                      <span class="text-sm font-normal text-gray-500">Unit</span>
                     </h3>
                     <p class="text-xs text-orange-600 mt-2 font-medium">
                       <i class="pi pi-bolt mr-1"></i>นำเข้าจากสายส่ง
