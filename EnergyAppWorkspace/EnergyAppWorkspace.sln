@@ -1,0 +1,29 @@
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.5.2.0
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "EnergyApp.API", "EnergyApp.API", "{9EC60B89-25F2-A4CD-01C9-E0B837ABF019}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "EnergyApp.API", "EnergyApp.API\EnergyApp.API\EnergyApp.API.csproj", "{D007DED3-EA3C-72AA-6D60-DE4654A65806}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{D007DED3-EA3C-72AA-6D60-DE4654A65806}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{D007DED3-EA3C-72AA-6D60-DE4654A65806}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{D007DED3-EA3C-72AA-6D60-DE4654A65806}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{D007DED3-EA3C-72AA-6D60-DE4654A65806}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{D007DED3-EA3C-72AA-6D60-DE4654A65806} = {9EC60B89-25F2-A4CD-01C9-E0B837ABF019}
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {7F7C6999-F1B7-4F8C-B350-D46C05EEE125}
+	EndGlobalSection
+EndGlobal

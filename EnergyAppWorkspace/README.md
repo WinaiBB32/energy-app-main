@@ -1,105 +1,200 @@
 # Energy App Management System
 
-ระบบบริหารจัดการทรัพยากร (ไฟฟ้า, น้ำ, น้ำมัน, โทรศัพท์) ภายในองค์กร แบบ Full-stack โดยใช้ .NET API เป็น Backend และ Vue 3 เป็น Frontend
+ระบบบริหารจัดการทรัพยากร (ไฟฟ้า, น้ำ, น้ำมัน, โทรศัพท์) ภายในองค์กร แบบ Full-stack โดยใช้ .NET 8 API เป็น Backend และ Vue 3 เป็น Frontend
 
 ---
 
-## 🛠 สิ่งที่ต้องติดตั้งก่อนเริ่ม (Prerequisites)
+## โครงสร้างโปรเจกต์
 
-เพื่อให้สามารถรันโปรเจกต์ได้ทุกส่วน คุณจำเป็นต้องติดตั้งโปรแกรมดังต่อไปนี้:
-
-1.  **Docker Desktop:** สำหรับรัน Database (PostgreSQL) และ Redis
-2.  **.NET 8 SDK:** สำหรับพัฒนาและรัน Backend API
-3.  **Node.js (v20+):** สำหรับพัฒนาและรัน Frontend (Vue 3)
-4.  **IDE ที่แนะนำ:**
-    - **VS Code** (พร้อม Extension: C#, Volar, Tailwind CSS)
-    - หรือ **Visual Studio 2022**
+```
+EnergyAppWorkspace/
+├── EnergyApp.API/          # Backend (.NET 8, Entity Framework Core, PostgreSQL)
+├── my-web-app/             # Frontend (Vue 3, Pinia, PrimeVue, Tailwind CSS)
+└── docker-compose.yml      # รัน Infrastructure ทั้งหมดด้วย Docker
+```
 
 ---
 
-## 🚀 ขั้นตอนการติดตั้งเมื่อย้ายเครื่องใหม่
+## Port ที่ใช้งาน
 
-### 1. การเตรียม Database (Docker)
-
-โปรเจกต์นี้ใช้ PostgreSQL และ Redis ผ่าน Docker Compose เพื่อความสะดวก:
-
-1.  เปิด Terminal ที่ Root Directory ของโปรเจกต์
-2.  รันคำสั่งเพื่อเริ่มระบบฐานข้อมูล:
-    ```bash
-    docker-compose up -d
-    ```
-    _ระบบจะสร้าง Container สำหรับ PostgreSQL (Port 5432) และ Redis (Port 6379) ให้โดยอัตโนมัติ_
-
-### 2. การตั้งค่า Backend (.NET API)
-
-1.  เข้าไปที่โฟลเดอร์ Backend:
-    ```bash
-    cd EnergyApp.API
-    ```
-2.  Restore dependencies:
-    ```bash
-    dotnet restore
-    ```
-3.  **สร้างฐานข้อมูลและตาราง (Database Migrations):**
-    เพื่อให้ฐานข้อมูลมีโครงสร้างตามโค้ดล่าสุด ให้รันคำสั่ง:
-    ```bash
-    dotnet ef database update --project EnergyApp.API
-    ```
-    _(หากยังไม่มี dotnet-ef ให้ติดตั้งด้วยคำสั่ง: `dotnet tool install --global dotnet-ef`)_
-4.  **รัน Backend:**
-    ```bash
-    dotnet run --project EnergyApp.API
-    ```
-    _API จะรันอยู่ที่ `http://localhost:5007` (ตรวจสอบ Port ได้ใน `launchSettings.json`)_
-
-### 3. การตั้งค่า Frontend (Vue 3)
-
-1.  เปิด Terminal ใหม่แล้วเข้าไปที่โฟลเดอร์ Frontend:
-    ```bash
-    cd my-web-app
-    ```
-2.  ติดตั้ง Dependencies:
-    ```bash
-    npm install
-    ```
-3.  **ตั้งค่า Environment Variables:**
-    - คัดลอกไฟล์ `.env.example` เป็น `.env`
-    - ตรวจสอบค่า `VITE_API_URL` ให้ตรงกับ URL ของ Backend API:
-      ```env
-      VITE_API_URL=http://localhost:5007/api/v1
-      ```
-4.  **รัน Frontend:**
-    ```bash
-    npm run dev
-    ```
-    _Frontend จะรันอยู่ที่ `http://localhost:5173`_
+| Service | Port |
+|---------|------|
+| Frontend | 5173 |
+| Backend API | 5008 |
+| PostgreSQL | 5432 |
+| Redis | 6379 |
 
 ---
 
-## 📝 ข้อมูลที่ควรทราบ
+## วิธีย้ายไฟล์ไปเครื่อง Server และติดตั้ง (Deploy ด้วย Docker)
 
-- **สิทธิ์ผู้ใช้ (Roles):**
-  - ผู้สมัครคนแรกของระบบจะได้รับสิทธิ์เป็น **SuperAdmin** โดยอัตโนมัติ
-  - ผู้สมัครคนต่อๆ ไปจะเป็นสิทธิ์ **User** ซึ่งต้องรอการอนุมัติจาก Admin ก่อน
-- **การเข้าสู่ระบบ:**
-  - ใช้ Email และ Password ที่สมัครไว้
-  - หากลืมรหัสผ่านหรือต้องการแก้ไขฐานข้อมูลโดยตรง สามารถใช้เครื่องมือเช่น pgAdmin หรือ DBeaver เชื่อมต่อไปที่ `localhost:5432`
+> เครื่อง Server ใช้ **Windows Server**
+
+### สิ่งที่ต้องติดตั้งบนเครื่อง Server
+
+1. **Docker Desktop for Windows**
+   - ดาวน์โหลดที่ https://www.docker.com/products/docker-desktop/
+   - ติดตั้งแล้ว Restart เครื่อง
+   - เปิด Docker Desktop ให้รันอยู่ก่อนใช้งาน
+
+2. **Git for Windows** (ถ้าใช้วิธี clone)
+   - ดาวน์โหลดที่ https://git-scm.com/download/win
 
 ---
 
-## 📂 โครงสร้างโปรเจกต์
+### ขั้นที่ 1 — ย้ายไฟล์ไปเครื่อง Server
 
-- `/EnergyApp.API` - ซอร์สโค้ดฝั่ง Backend (.NET 8, Entity Framework Core)
-- `/my-web-app` - ซอร์สโค้ดฝั่ง Frontend (Vue 3, Pinia, PrimeVue, Tailwind CSS)
-- `docker-compose.yml` - ไฟล์คอนฟิกสำหรับ Infrastructure (DB, Cache)
-- `.gitignore` - ตั้งค่าการยกเว้นไฟล์ที่ไม่ควรขึ้น Git (bin, obj, node_modules, .env)
+**วิธีที่ 1: ผ่าน Git (แนะนำ)**
 
+เปิด PowerShell หรือ Command Prompt บน Server แล้วรัน:
 
-Port ที่ว่างอยู่ (สำหรับ Docker ของเรา):
+```powershell
+git clone <repository-url>
+cd energy-app-main\EnergyAppWorkspace
+```
 
-Port	ใช้สำหรับ	สถานะ
-5173	Frontend	ว่าง ✓
-5008	Backend API	ว่าง ✓
-5432	PostgreSQL	ว่าง ✓
-6379	Redis	ว่าง ✓
-Docker compose ที่ทำไว้ใช้ port เหล่านี้ได้เลยครับ ไม่ชนกับอะไร
+**วิธีที่ 2: ผ่าน WinSCP / FileZilla**
+
+- Host: IP ของ Server (`192.168.99.125`)
+- Protocol: SFTP หรือ FTP
+- Copy โฟลเดอร์ `EnergyAppWorkspace` ทั้งโฟลเดอร์ไปวางบน Server เช่น `C:\energy-app\`
+
+**วิธีที่ 3: Copy ผ่าน Network Share**
+
+- Map Network Drive หรือ copy ผ่าน `\\192.168.99.125\` แล้ววางไฟล์ได้เลย
+
+---
+
+### ขั้นที่ 2 — ตั้งค่า Environment Variables (ครั้งแรก)
+
+เปิด PowerShell ใน Server แล้วไปที่โฟลเดอร์โปรเจกต์:
+
+```powershell
+cd C:\energy-app\EnergyAppWorkspace
+```
+
+สร้างไฟล์ `.env` โดย copy จาก example หรือสร้างด้วย Notepad แล้วใส่เนื้อหา:
+
+```powershell
+copy .env.example .env
+notepad .env
+```
+
+แก้ไขค่าใน `.env`:
+
+```env
+POSTGRES_USER=admin
+POSTGRES_PASSWORD=เปลี่ยนรหัสผ่านที่นี่
+POSTGRES_DB=EnergyAppDb
+JWT_SECRET=เปลี่ยน-Secret-ที่นี่-ให้ยาวอย่างน้อย-32-ตัวอักษร
+```
+
+---
+
+### ขั้นที่ 3 — Build และรัน
+
+เปิด PowerShell **ในฐานะ Administrator** แล้วรัน:
+
+```powershell
+cd C:\energy-app\EnergyAppWorkspace
+docker compose up -d --build
+```
+
+รอประมาณ 2-5 นาที (ครั้งแรก) Docker จะ:
+1. Build Backend (.NET 8)
+2. Build Frontend (Vue 3 → Nginx)
+3. รัน PostgreSQL และ Redis
+4. รัน API และ Frontend
+
+---
+
+### ขั้นที่ 4 — รัน Database Migration (ครั้งแรกเท่านั้น)
+
+```powershell
+docker compose exec api dotnet ef database update
+```
+
+---
+
+### ขั้นที่ 5 — ตรวจสอบว่ารันสำเร็จ
+
+```powershell
+docker compose ps
+```
+
+ควรเห็น 4 services สถานะ `running`:
+
+```
+NAME                STATUS
+energy_postgres     running (healthy)
+energy_redis        running (healthy)
+energy_api          running
+energy_frontend     running
+```
+
+เปิด Browser แล้วเข้า:
+- **Frontend:** `http://192.168.99.125:5173`
+- **API (Swagger):** `http://192.168.99.125:5008/swagger`
+
+---
+
+## คำสั่งที่ใช้บ่อย (PowerShell)
+
+```powershell
+# ดู log ทั้งหมด
+docker compose logs -f
+
+# ดู log เฉพาะ service
+docker compose logs -f api
+docker compose logs -f frontend
+
+# หยุด
+docker compose down
+
+# หยุดและลบข้อมูล DB (ระวัง!)
+docker compose down -v
+
+# Build ใหม่หลังแก้โค้ด
+docker compose up -d --build api
+docker compose up -d --build frontend
+```
+
+---
+
+## ข้อมูลสำคัญ
+
+- **User คนแรก** ที่สมัครจะได้สิทธิ์ **SuperAdmin** โดยอัตโนมัติ
+- ถ้ายังไม่มีหน่วยงานในระบบ สามารถสมัครได้โดยไม่ต้องเลือกหน่วยงาน แล้วค่อยเพิ่มหน่วยงานทีหลัง
+- ไฟล์ข้อมูล PostgreSQL เก็บใน Docker Volume `pgdata` (ไม่หายเมื่อ restart)
+- หากต้องการดูฐานข้อมูลโดยตรง ใช้ pgAdmin หรือ DBeaver เชื่อมต่อที่ `server-ip:5432`
+
+---
+
+## การพัฒนาบนเครื่อง Local (Dev Mode)
+
+### สิ่งที่ต้องติดตั้ง
+
+- .NET 8 SDK
+- Node.js v20+
+- Docker Desktop
+
+### ขั้นตอน
+
+```bash
+# 1. รัน Database
+docker compose up -d postgres redis
+
+# 2. รัน Backend
+cd EnergyApp.API/EnergyApp.API
+dotnet ef database update
+dotnet run
+
+# 3. รัน Frontend (Terminal ใหม่)
+cd my-web-app
+cp .env.example .env
+npm install
+npm run dev
+```
+
+Frontend: `http://localhost:5173`
+API (Swagger): `http://localhost:5008/swagger`

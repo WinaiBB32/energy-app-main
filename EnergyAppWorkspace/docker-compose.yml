@@ -42,6 +42,7 @@ services:
     environment:
       ConnectionStrings__DefaultConnection: "Host=postgres;Database=${POSTGRES_DB:-EnergyAppDb};Username=${POSTGRES_USER:-admin};Password=${POSTGRES_PASSWORD:-securepassword123};Port=5432"
       JwtSettings__Secret: ${JWT_SECRET:-MySuperSecretKeyForEnergyApp1234567890!!}
+      AllowedOrigins: ${ALLOWED_ORIGINS:-http://localhost:5173}
       ASPNETCORE_ENVIRONMENT: Production
       TZ: Asia/Bangkok
     depends_on:
