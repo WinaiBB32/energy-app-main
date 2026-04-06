@@ -3,7 +3,7 @@
 
 // ─── Auth / User ──────────────────────────────────────────────────────────────
 
-export type UserRole = 'user' | 'admin' | 'superadmin'
+export type UserRole = 'user' | 'admin' | 'superadmin' | 'officer'
 export type UserStatus = 'pending' | 'active' | 'suspended'
 
 export interface User {

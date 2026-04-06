@@ -13,9 +13,9 @@ import {
   MAINTENANCE_TECHNICIAN_PERMISSION,
 } from '@/config/maintenancePermissions'
 import Button from 'primevue/button'
-
-const router = useRouter()
+// (ลบเมนู Timeline ช่างภายนอก ออก)
 const route = useRoute()
+const router = useRouter()
 const authStore = useAuthStore()
 const { logout } = useAuth()
 const { isSystemAdmin, isSuperAdmin } = usePermissions()
@@ -224,9 +224,7 @@ const sidebarMenus = computed(() => {
       menus.push({ name: 'รับเรื่องจ้างช่างนอก', icon: 'pi pi-briefcase', path: '/maintenance/external-procurement' })
     }
 
-    if (canOpenMaintenanceExternalTimeline.value) {
-      menus.push({ name: 'Timeline ช่างภายนอก', icon: 'pi pi-calendar-clock', path: '/maintenance/external-timeline' })
-    }
+    // Timeline ช่างภายนอก menu removed as requested
 
     if (canOpenMaintenanceSpareParts.value) {
       menus.push({ name: 'คลังอะไหล่งานอาคาร', icon: 'pi pi-box', path: '/maintenance/spare-parts' })

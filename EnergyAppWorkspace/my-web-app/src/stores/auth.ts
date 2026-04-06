@@ -21,7 +21,10 @@ export const useAuthStore = defineStore('auth', {
       if (!state.user) return null
       const roleText = state.user.role.toLowerCase()
       const role: UserRole =
-        roleText === 'superadmin' ? 'superadmin' : roleText === 'admin' ? 'admin' : 'user'
+        roleText === 'superadmin' ? 'superadmin'
+        : roleText === 'admin' ? 'admin'
+        : roleText === 'officer' ? 'officer'
+        : 'user'
       const normalizedStatus = (state.user.status ?? 'active').toLowerCase()
       const status =
         normalizedStatus === 'pending' || normalizedStatus === 'suspended'

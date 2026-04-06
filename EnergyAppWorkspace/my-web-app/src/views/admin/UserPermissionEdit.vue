@@ -12,6 +12,11 @@ import Select from 'primevue/select'
 import InputText from 'primevue/inputtext'
 import Message from 'primevue/message'
 import ToggleSwitch from 'primevue/toggleswitch'
+import Tabs from 'primevue/tabs'
+import TabList from 'primevue/tablist'
+import Tab from 'primevue/tab'
+import TabPanels from 'primevue/tabpanels'
+import TabPanel from 'primevue/tabpanel'
 import {
     MAINTENANCE_ADMIN_BUILDING_PERMISSION,
     MAINTENANCE_ADMIN_BUILDING_CENTRAL_PERMISSION,
@@ -46,10 +51,6 @@ interface SystemModule {
     cardBorder: string
 }
 
-interface PermissionGuide {
-    userCapabilities: string[]
-    adminCapabilities: string[]
-}
 
 const route = useRoute()
 const router = useRouter()
@@ -84,50 +85,6 @@ const systemModules: SystemModule[] = [
     { id: 'system8', name: 'สถิติห้องประชุมส่วนกลาง', shortLabel: 'ห้องประชุม', description: 'สถิติการใช้ห้องประชุม', icon: 'pi-users', cardBorder: 'border-l-indigo-400' },
 ]
 
-const permissionGuideBySystem: Record<string, PermissionGuide> = {
-    system1: {
-        userCapabilities: ['ดู Dashboard ค่าไฟและ Solar'],
-        adminCapabilities: ['บันทึกบิลค่าไฟ', 'บันทึกพลังงาน Solar'],
-    },
-    system2: {
-        userCapabilities: ['ดู Dashboard ค่าน้ำประปา'],
-        adminCapabilities: ['บันทึกค่าน้ำประปา'],
-    },
-    system3: {
-        userCapabilities: ['ดู Dashboard น้ำมันเชื้อเพลิง'],
-        adminCapabilities: ['บันทึกเติมน้ำมัน', 'ประวัติและพิมพ์เอกสารน้ำมัน'],
-    },
-    system4: {
-        userCapabilities: ['ดู Dashboard ค่าโทรศัพท์'],
-        adminCapabilities: ['บันทึกค่าโทรศัพท์'],
-    },
-    system5: {
-        userCapabilities: ['ดู Dashboard งานสารบรรณ'],
-        adminCapabilities: ['บันทึกงานสารบรรณ'],
-    },
-    system6: {
-        userCapabilities: ['ดู Dashboard IP-Phone', 'เข้าดู Directory และหน้า Support'],
-        adminCapabilities: ['กำหนดสิทธิ์ผู้ใช้เฉพาะ SuperAdmin สำหรับ Upload/Mapping'],
-    },
-    system7: {
-        userCapabilities: ['ดู Dashboard งานไปรษณีย์'],
-        adminCapabilities: ['บันทึกไปรษณีย์เข้า/ออก'],
-    },
-    system8: {
-        userCapabilities: ['ดู Dashboard ห้องประชุม'],
-        adminCapabilities: ['บันทึกสถิติห้องประชุมรายเดือน'],
-    },
-    system9: {
-        userCapabilities: ['ดู Dashboard ซ่อมอาคาร', 'สร้างและติดตามใบแจ้งซ่อม'],
-        adminCapabilities: ['สิทธิ์เฉพาะบทบาท Technician/Supervisor/AdminBuilding ตามหน้า'],
-    },
-    system10: {
-        userCapabilities: ['ไม่มีหน้าสำหรับ User/Admin ทั่วไป'],
-        adminCapabilities: ['อนุญาตเฉพาะ SuperAdmin เท่านั้น'],
-    },
-}
-
-const canEditPerSystemMatrix = computed(() => !!editingUser.value)
 
 const ensureSystemAccess = (systemId: string) => {
     if (!editingUser.value) return
@@ -169,6 +126,9 @@ const syncGlobalRoleFromPermissions = () => {
         editingUser.value.role = 'SuperAdmin'
         return
     }
+
+    // ไม่ downgrade role ที่ SuperAdmin ตั้งเองเป็น Admin
+    if (editingUser.value.role === 'Admin') return
 
     const nonMaintenanceAdminSystems = editingUser.value.adminSystems.filter(
         (systemId) => !MAINTENANCE_PERMISSION_KEYS.includes(systemId as (typeof MAINTENANCE_PERMISSION_KEYS)[number]),
@@ -226,12 +186,6 @@ const onMaintenanceAccessToggle = (value: boolean): void => {
         syncGlobalRoleFromPermissions()
     }
 }
-
-const getPermissionGuide = (systemId: string): PermissionGuide =>
-    permissionGuideBySystem[systemId] ?? {
-        userCapabilities: ['ดูข้อมูลในระบบ'],
-        adminCapabilities: ['จัดการข้อมูลในระบบ'],
-    }
 
 function userHasSystem(sysId: string): boolean {
     return editingUser.value?.accessibleSystems.includes(sysId) ?? false
@@ -361,162 +315,199 @@ const saveUser = async () => {
 </script>
 
 <template>
-    <div class="max-w-7xl mx-auto pb-10 space-y-6">
-        <div class="flex items-start justify-between gap-3">
+    <div class="max-w-7xl mx-auto pb-10 space-y-5">
+
+        <!-- Header -->
+        <div class="flex items-center justify-between gap-3">
             <div>
-                <h2 class="text-3xl font-bold text-gray-800">หน้าแก้ไขสิทธิ์ผู้ใช้งาน</h2>
-                <p class="text-gray-500 mt-1">กำหนดสถานะ บทบาท และสิทธิ์รายระบบแบบเต็มหน้า</p>
+                <h2 class="text-2xl font-bold text-gray-800">จัดการสิทธิ์ผู้ใช้งาน</h2>
+                <p v-if="editingUser" class="text-sm text-gray-500 mt-0.5">
+                    {{ editingUser.displayName || editingUser.email }}
+                </p>
             </div>
-            <Button label="กลับไปหน้า จัดการสิทธิ์ผู้ใช้งาน" icon="pi pi-arrow-left" outlined @click="goBack" />
+            <Button label="กลับ" icon="pi pi-arrow-left" outlined size="small" @click="goBack" />
         </div>
 
-        <div v-if="isLoading" class="bg-white rounded-xl border border-gray-100 p-6 text-sm text-gray-500">
+        <!-- Loading -->
+        <div v-if="isLoading" class="bg-white rounded-xl border border-gray-100 p-8 text-center text-sm text-gray-400">
+            <i class="pi pi-spin pi-spinner text-xl mb-2 block"></i>
             กำลังโหลดข้อมูล...
         </div>
 
+        <!-- Notifications -->
         <Message v-if="successMessage" severity="success" :closable="false">{{ successMessage }}</Message>
         <Message v-if="errorMessage" severity="error" :closable="false">{{ errorMessage }}</Message>
 
-        <section v-if="editingUser" class="bg-white rounded-2xl border border-gray-200 shadow-sm p-5 lg:p-6 space-y-5">
-            <div class="grid grid-cols-2 gap-4">
-                <div class="space-y-1.5">
-                    <label class="text-xs font-semibold text-gray-500 uppercase tracking-wide">อีเมล</label>
-                    <InputText :value="editingUser.email" disabled class="w-full bg-gray-50 text-gray-500" />
-                </div>
-                <div class="space-y-1.5">
-                    <label class="text-xs font-semibold text-gray-500 uppercase tracking-wide">ชื่อแสดงผล</label>
-                    <InputText v-model="editingUser.displayName" class="w-full" />
-                </div>
-            </div>
+        <!-- Main content -->
+        <div v-if="editingUser" class="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+            <Tabs value="info">
+                <TabList class="border-b border-gray-200 px-4">
+                    <Tab value="info">
+                        <span class="flex items-center gap-2 py-1">
+                            <i class="pi pi-user text-sm"></i>
+                            ข้อมูลผู้ใช้งาน
+                        </span>
+                    </Tab>
+                    <Tab value="permissions">
+                        <span class="flex items-center gap-2 py-1">
+                            <i class="pi pi-shield text-sm"></i>
+                            จัดการสิทธิ์
+                        </span>
+                    </Tab>
+                </TabList>
 
-            <div class="grid grid-cols-2 gap-4 pt-4 border-t border-gray-100">
-                <div class="space-y-1.5">
-                    <label class="text-xs font-semibold text-gray-500 uppercase tracking-wide">หน่วยงาน</label>
-                    <Select v-model="editingUser.departmentId" :options="departments" optionLabel="name"
-                        optionValue="id" placeholder="เลือกหน่วยงาน" class="w-full" />
-                </div>
-                <div class="space-y-1.5">
-                    <label class="text-xs font-semibold text-blue-500 uppercase tracking-wide flex items-center gap-1">
-                        <i class="pi pi-shield text-[10px]"></i> สถานะบัญชี
-                    </label>
-                    <div class="flex flex-col gap-1.5">
-                        <button v-for="s in statuses" :key="s.id"
-                            @click="editingUser.status = s.id as AppUser['status']"
-                            class="flex items-center gap-2.5 w-full px-3 py-2 rounded-lg border-2 text-sm font-medium transition-all text-left"
-                            :class="{
-                                'border-amber-400 bg-amber-50 text-amber-700': editingUser.status === s.id && s.id === 'pending',
-                                'border-green-400 bg-green-50 text-green-700': editingUser.status === s.id && s.id === 'active',
-                                'border-red-400 bg-red-50 text-red-700': editingUser.status === s.id && s.id === 'suspended',
-                                'border-gray-200 bg-white text-gray-400 hover:border-gray-300': editingUser.status !== s.id,
-                            }">
-                            <i class="pi text-base"
-                                :class="{ 'pi-clock': s.id === 'pending', 'pi-check-circle': s.id === 'active', 'pi-ban': s.id === 'suspended' }"></i>
-                            {{ s.name }}
-                            <i v-if="editingUser.status === s.id" class="pi pi-check ml-auto text-xs"></i>
-                        </button>
-                    </div>
-                </div>
-            </div>
-
-            <div class="space-y-4 pt-4 border-t border-gray-100">
-                <div class="rounded-xl border border-gray-200 bg-gray-50 p-3">
-                    <p class="text-xs font-semibold text-gray-600 uppercase tracking-wide">ระดับสิทธิ์ (Role) แบบรวม</p>
-                    <p class="text-sm font-semibold text-gray-800 mt-1">{{ editingUser.role }}</p>
-                    <p class="text-xs text-gray-500 mt-1">{{ roleDescription }}</p>
-                    <p v-if="hasAnyMaintenancePermission" class="text-xs text-orange-700 mt-2">
-                        สิทธิ์งานซ่อมที่เปิด: {{ maintenancePermissionSummary.join(' , ') }}
-                    </p>
-                </div>
-
-                <div class="space-y-2">
-                    <div class="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-2">
-                        <div>
-                            <label
-                                class="text-xs font-semibold text-gray-500 uppercase tracking-wide">จัดการสิทธิ์ตามระบบ</label>
-                            <p class="text-[11px] text-gray-400 mt-0.5">
-                                เปิด <span class="font-medium text-emerald-700">User</span> = เข้า Portal/ระบบนั้นได้ ·
-                                เปิด <span class="font-medium text-amber-700">เจ้าหน้าที่ (Officer)</span> =
-                                บันทึกงานระบบนั้น
-                            </p>
-                        </div>
-                    </div>
-
-                    <div v-if="!canEditPerSystemMatrix"
-                        class="rounded-xl border border-dashed border-gray-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
-                        <i class="pi pi-lock text-slate-400 mr-2"></i> เลือกบทบาท <strong>User</strong>
-                        เพื่อกำหนดสิทธิ์รายระบบ
-                    </div>
-
-                    <div v-else
-                        class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 max-h-[min(52vh,480px)] overflow-y-auto pr-1">
-                        <div v-for="sys in systemModules" :key="sys.id"
-                            class="rounded-xl border border-gray-200 bg-white shadow-sm p-4 flex flex-col gap-3 border-l-4 transition-shadow hover:shadow-md"
-                            :class="[sys.cardBorder]">
-                            <div class="flex items-start gap-3">
-                                <div
-                                    class="w-10 h-10 rounded-lg bg-gray-50 flex items-center justify-center shrink-0 border border-gray-100">
-                                    <i :class="['pi text-lg text-gray-600', sys.icon]"></i>
+                <TabPanels>
+                    <!-- Tab 1: User Info -->
+                    <TabPanel value="info">
+                        <div class="p-5 lg:p-6 space-y-5">
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <div class="space-y-1.5">
+                                    <label class="text-xs font-semibold text-gray-500 uppercase tracking-wide">อีเมล</label>
+                                    <InputText :value="editingUser.email" disabled class="w-full bg-gray-50 text-gray-500" />
                                 </div>
-                                <div class="min-w-0 flex-1">
-                                    <p class="font-bold text-gray-800 text-sm leading-tight">{{ sys.shortLabel }}</p>
-                                    <p class="text-[11px] text-gray-500 mt-1 leading-snug">{{ sys.description }}</p>
+                                <div class="space-y-1.5">
+                                    <label class="text-xs font-semibold text-gray-500 uppercase tracking-wide">ชื่อแสดงผล</label>
+                                    <InputText v-model="editingUser.displayName" class="w-full" />
                                 </div>
                             </div>
-                            <div class="space-y-2.5 pt-2 border-t border-gray-100">
-                                <div v-if="sys.id !== 'system9'" class="flex items-center justify-between gap-2">
-                                    <span class="text-xs font-medium text-gray-600">เข้าใช้งาน (User)</span>
-                                    <ToggleSwitch :modelValue="userHasSystem(sys.id)"
-                                        @update:modelValue="(v) => onUserSystemToggle(sys.id, v)" />
-                                </div>
-                                <div v-if="sys.id !== 'system9'" class="flex items-center justify-between gap-2">
-                                    <span class="text-xs font-medium text-gray-600">
-                                        {{ sys.id === 'system10' ? 'ผู้ดูแล (Admin)' : 'เจ้าหน้าที่ (Officer)' }}
-                                    </span>
-                                    <ToggleSwitch :modelValue="adminHasSystem(sys.id)"
-                                        @update:modelValue="(v) => onAdminSystemToggle(sys.id, v)" />
-                                </div>
-                                <div
-                                    class="rounded-lg bg-gray-50 border border-gray-100 p-2.5 text-[11px] text-gray-600 leading-relaxed">
-                                    <p class="font-semibold text-gray-700">สิทธิ์ที่ระบบนี้รองรับ</p>
-                                    <p class="mt-1">User: {{ getPermissionGuide(sys.id).userCapabilities.join(' , ') }}
-                                    </p>
-                                    <p class="mt-1">Admin: {{ getPermissionGuide(sys.id).adminCapabilities.join(' , ')
-                                    }}</p>
-                                    <p v-if="sys.id === 'system10'" class="mt-1 text-red-600 font-semibold">
-                                        หมายเหตุ: เปิด ผู้ดูแล(Admin) ของ Admin Tool = ตั้งเป็น SuperAdmin
-                                    </p>
-                                </div>
 
-                                <div v-if="sys.id === 'system9'"
-                                    class="rounded-lg border border-orange-200 bg-orange-50/60 p-2.5">
-                                    <p class="text-[11px] font-semibold text-orange-800">สิทธิ์เฉพาะระบบซ่อมงานอาคาร</p>
-                                    <div class="flex items-center justify-between mt-1.5 mb-1.5">
-                                        <span class="text-[11px] text-orange-700">เปิดใช้งานระบบซ่อม</span>
-                                        <ToggleSwitch :modelValue="userHasSystem('system9')"
-                                            @update:modelValue="onMaintenanceAccessToggle" />
+                            <div class="space-y-1.5">
+                                <label class="text-xs font-semibold text-gray-500 uppercase tracking-wide">หน่วยงาน</label>
+                                <Select v-model="editingUser.departmentId" :options="departments" optionLabel="name"
+                                    optionValue="id" placeholder="เลือกหน่วยงาน" class="w-full" />
+                            </div>
+
+                            <div class="space-y-2">
+                                <label class="text-xs font-semibold text-gray-500 uppercase tracking-wide flex items-center gap-1.5">
+                                    <i class="pi pi-circle-fill text-[8px]"></i> สถานะบัญชี
+                                </label>
+                                <div class="flex flex-wrap gap-2">
+                                    <button v-for="s in statuses" :key="s.id"
+                                        @click="editingUser.status = s.id as AppUser['status']"
+                                        class="flex items-center gap-2 px-4 py-2 rounded-lg border-2 text-sm font-medium transition-all"
+                                        :class="{
+                                            'border-amber-400 bg-amber-50 text-amber-700': editingUser.status === s.id && s.id === 'pending',
+                                            'border-green-400 bg-green-50 text-green-700': editingUser.status === s.id && s.id === 'active',
+                                            'border-red-400 bg-red-50 text-red-700': editingUser.status === s.id && s.id === 'suspended',
+                                            'border-gray-200 bg-white text-gray-400 hover:border-gray-300': editingUser.status !== s.id,
+                                        }">
+                                        <i class="pi"
+                                            :class="{ 'pi-clock': s.id === 'pending', 'pi-check-circle': s.id === 'active', 'pi-ban': s.id === 'suspended' }"></i>
+                                        {{ s.name }}
+                                        <i v-if="editingUser.status === s.id" class="pi pi-check text-xs"></i>
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- Role summary -->
+                            <div class="rounded-xl border border-gray-200 bg-gray-50 p-4 space-y-1">
+                                <p class="text-[11px] font-semibold text-gray-500 uppercase tracking-wide">Role ที่ระบบคำนวณ</p>
+                                <p class="text-base font-bold text-gray-800">{{ editingUser.role }}</p>
+                                <p class="text-xs text-gray-500">{{ roleDescription }}</p>
+                                <p v-if="hasAnyMaintenancePermission" class="text-xs text-orange-600 pt-1">
+                                    <i class="pi pi-wrench mr-1"></i>
+                                    สิทธิ์ซ่อมที่เปิด: {{ maintenancePermissionSummary.join(' · ') }}
+                                </p>
+                            </div>
+
+                            <div class="flex justify-end pt-2 border-t border-gray-100">
+                                <Button label="บันทึกข้อมูล" icon="pi pi-save" :loading="isSaving" @click="saveUser" />
+                            </div>
+                        </div>
+                    </TabPanel>
+
+                    <!-- Tab 2: Permissions -->
+                    <TabPanel value="permissions">
+                        <div class="p-5 lg:p-6 space-y-4">
+                            <!-- Legend -->
+                            <div class="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-500 bg-gray-50 border border-gray-200 rounded-lg px-4 py-2.5">
+                                <span class="font-semibold text-gray-600">คำอธิบายสิทธิ์:</span>
+                                <span>
+                                    <span class="inline-block w-2.5 h-2.5 rounded-full bg-emerald-400 mr-1 align-middle"></span>
+                                    <strong class="text-emerald-700">User</strong> — เข้าดูข้อมูลระบบนั้นได้
+                                </span>
+                                <span>
+                                    <span class="inline-block w-2.5 h-2.5 rounded-full bg-amber-400 mr-1 align-middle"></span>
+                                    <strong class="text-amber-700">Officer</strong> — บันทึก/จัดการข้อมูลระบบนั้น
+                                </span>
+                                <span class="text-gray-400">· เปิด Officer จะเปิด User อัตโนมัติ</span>
+                            </div>
+
+                            <!-- System permission cards -->
+                            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                                <div v-for="sys in systemModules" :key="sys.id"
+                                    class="rounded-xl border border-gray-200 bg-white shadow-sm flex flex-col border-l-4 transition-shadow hover:shadow-md overflow-hidden"
+                                    :class="[sys.cardBorder]">
+
+                                    <!-- Card header -->
+                                    <div class="flex items-center gap-3 px-4 py-3 border-b border-gray-100">
+                                        <div class="w-8 h-8 rounded-lg bg-gray-50 flex items-center justify-center shrink-0 border border-gray-100">
+                                            <i :class="['pi text-base text-gray-500', sys.icon]"></i>
+                                        </div>
+                                        <div class="min-w-0">
+                                            <p class="font-bold text-gray-800 text-sm leading-tight truncate">{{ sys.shortLabel }}</p>
+                                            <p class="text-[11px] text-gray-400 leading-snug line-clamp-1">{{ sys.description }}</p>
+                                        </div>
                                     </div>
-                                    <p class="text-[11px] text-orange-700 mt-0.5">
-                                        เปิดได้หลายสิทธิ์พร้อมกันตามงานที่รับผิดชอบ</p>
-                                    <div class="space-y-1.5 mt-2">
-                                        <div v-for="mr in maintenanceRoles" :key="mr.id"
-                                            class="flex items-center justify-between gap-2">
-                                            <span class="text-xs font-medium text-orange-900">{{ mr.name }}</span>
-                                            <ToggleSwitch :modelValue="isMaintenanceRoleActive(mr.id)"
-                                                @update:modelValue="(v) => onMaintenanceRoleToggle(mr.id, v)" />
+
+                                    <!-- Toggles for regular systems -->
+                                    <div v-if="sys.id !== 'system9'" class="px-4 py-3 space-y-2.5">
+                                        <!-- system10: ไม่มี User toggle เพราะการเข้าใช้ต้องเป็น SuperAdmin เท่านั้น -->
+                                        <div v-if="sys.id !== 'system10'" class="flex items-center justify-between gap-2">
+                                            <div class="flex items-center gap-1.5">
+                                                <span class="inline-block w-2 h-2 rounded-full bg-emerald-400"></span>
+                                                <span class="text-xs font-medium text-gray-600">เข้าใช้งาน (User)</span>
+                                            </div>
+                                            <ToggleSwitch :modelValue="userHasSystem(sys.id)"
+                                                @update:modelValue="(v) => onUserSystemToggle(sys.id, v)" />
+                                        </div>
+                                        <div class="flex items-center justify-between gap-2">
+                                            <div class="flex items-center gap-1.5">
+                                                <span class="inline-block w-2 h-2 rounded-full bg-amber-400"></span>
+                                                <span class="text-xs font-medium text-gray-600">
+                                                    {{ sys.id === 'system10' ? 'ผู้ดูแล (SuperAdmin)' : 'เจ้าหน้าที่ (Officer)' }}
+                                                </span>
+                                            </div>
+                                            <ToggleSwitch :modelValue="adminHasSystem(sys.id)"
+                                                @update:modelValue="(v) => onAdminSystemToggle(sys.id, v)" />
+                                        </div>
+                                        <p v-if="sys.id === 'system10'" class="text-[11px] text-red-500 bg-red-50 rounded px-2 py-1">
+                                            <i class="pi pi-exclamation-triangle mr-1"></i>
+                                            เปิด = ยกระดับเป็น SuperAdmin ทันที
+                                        </p>
+                                    </div>
+
+                                    <!-- Special toggles for system9 (Maintenance) -->
+                                    <div v-else class="px-4 py-3 space-y-2.5">
+                                        <div class="flex items-center justify-between gap-2">
+                                            <div class="flex items-center gap-1.5">
+                                                <span class="inline-block w-2 h-2 rounded-full bg-emerald-400"></span>
+                                                <span class="text-xs font-medium text-gray-600">เข้าใช้งานระบบซ่อม</span>
+                                            </div>
+                                            <ToggleSwitch :modelValue="userHasSystem('system9')"
+                                                @update:modelValue="onMaintenanceAccessToggle" />
+                                        </div>
+                                        <div class="border-t border-orange-100 pt-2 space-y-2">
+                                            <p class="text-[11px] font-semibold text-orange-700">บทบาทงานซ่อม (เปิดได้หลายอย่าง)</p>
+                                            <div v-for="mr in maintenanceRoles" :key="mr.id"
+                                                class="flex items-center justify-between gap-2">
+                                                <span class="text-xs text-gray-700">{{ mr.name }}</span>
+                                                <ToggleSwitch :modelValue="isMaintenanceRoleActive(mr.id)"
+                                                    @update:modelValue="(v) => onMaintenanceRoleToggle(mr.id, v)" />
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
                             </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
 
-            <div class="flex items-center justify-between gap-2 pt-2 border-t border-gray-100">
-                <Button label="กลับไปหน้า จัดการสิทธิ์ผู้ใช้งาน" icon="pi pi-arrow-left" text severity="secondary"
-                    @click="goBack" />
-                <Button label="บันทึกข้อมูล" icon="pi pi-save" :loading="isSaving" @click="saveUser" />
-            </div>
-        </section>
+                            <div class="flex items-center justify-between pt-2 border-t border-gray-100">
+                                <Button label="กลับ" icon="pi pi-arrow-left" text severity="secondary" @click="goBack" />
+                                <Button label="บันทึกสิทธิ์" icon="pi pi-save" :loading="isSaving" @click="saveUser" />
+                            </div>
+                        </div>
+                    </TabPanel>
+                </TabPanels>
+            </Tabs>
+        </div>
     </div>
 </template>

@@ -4,21 +4,16 @@ import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { logAudit } from '@/utils/auditLogger'
 import { useAppToast } from '@/composables/useAppToast'
-import api from '@/services/api' // <--- ใช้ API ของเรา
-import axios from 'axios'
-
+import api from '@/services/api'
 
 import DataTable from 'primevue/datatable'
 import Column from 'primevue/column'
 import Button from 'primevue/button'
 import Tag from 'primevue/tag'
 import Dialog from 'primevue/dialog'
-import Select from 'primevue/select'
-import InputText from 'primevue/inputtext'
 import IconField from 'primevue/iconfield'
 import InputIcon from 'primevue/inputicon'
-import Message from 'primevue/message'
-import ToggleSwitch from 'primevue/toggleswitch'
+import InputText from 'primevue/inputtext'
 
 interface AppUser {
   id: string
@@ -38,18 +33,6 @@ const router = useRouter()
 
 interface Department { id: string; name: string }
 const departments = ref<Department[]>([])
-
-const roles = [
-  { id: 'User', name: 'ผู้ใช้งานทั่วไป (User)' },
-  { id: 'Admin', name: 'ผู้ดูแลองค์กร (Admin)' },
-  { id: 'SuperAdmin', name: 'ผู้ดูแลระบบสูงสุด (SuperAdmin)' },
-]
-
-const statuses = [
-  { id: 'pending', name: 'รออนุมัติ' },
-  { id: 'active', name: 'ใช้งานปกติ' },
-  { id: 'suspended', name: 'ระงับการใช้งาน' },
-]
 
 interface SystemModule {
   id: string
@@ -89,47 +72,7 @@ const searchQuery = ref('')
 const statusFilter = ref<string>('all')
 
 const detailDialogVisible = ref(false)
-const editPanelVisible = ref(false)
-const isSaving = ref(false)
-const successMessage = ref('')
-const errorMessage = ref('')
-
 const selectedUser = ref<AppUser | null>(null)
-const editingUser = ref<AppUser | null>(null)
-
-// ตรวจสอบสิทธิ์ว่าปรับแต่งระบบได้ไหม
-const canEditPerSystemMatrix = computed(() => editingUser.value?.role === 'User')
-
-// Logic Toggle Matrix เหมือนเดิม
-function userHasSystem(sysId: string): boolean {
-  return editingUser.value?.accessibleSystems.includes(sysId) ?? false
-}
-function adminHasSystem(sysId: string): boolean {
-  return editingUser.value?.adminSystems.includes(sysId) ?? false
-}
-
-function onUserSystemToggle(sysId: string, value: boolean): void {
-  if (!editingUser.value || editingUser.value.role !== 'User') return
-  const acc = editingUser.value.accessibleSystems
-  const adm = editingUser.value.adminSystems
-  if (value) {
-    if (!acc.includes(sysId)) acc.push(sysId)
-  } else {
-    const i = acc.indexOf(sysId); if (i >= 0) acc.splice(i, 1)
-    const j = adm.indexOf(sysId); if (j >= 0) adm.splice(j, 1)
-  }
-}
-function onAdminSystemToggle(sysId: string, value: boolean): void {
-  if (!editingUser.value || editingUser.value.role !== 'User') return
-  const acc = editingUser.value.accessibleSystems
-  const adm = editingUser.value.adminSystems
-  if (value) {
-    if (!adm.includes(sysId)) adm.push(sysId)
-    if (!acc.includes(sysId)) acc.push(sysId)
-  } else {
-    const j = adm.indexOf(sysId); if (j >= 0) adm.splice(j, 1)
-  }
-}
 
 function selectedUserHasAccess(sysId: string): boolean { return selectedUser.value?.accessibleSystems?.includes(sysId) ?? false }
 function selectedUserIsAdmin(sysId: string): boolean { return selectedUser.value?.adminSystems?.includes(sysId) ?? false }
@@ -183,102 +126,6 @@ const openDetail = (user: AppUser) => { selectedUser.value = user; detailDialogV
 const openEdit = (user: AppUser) => {
   detailDialogVisible.value = false
   router.push(`/admin/users/${user.id}/permissions`)
-}
-
-const closeEditPanel = () => {
-  editPanelVisible.value = false
-  editingUser.value = null
-  successMessage.value = ''
-  errorMessage.value = ''
-}
-
-interface PermissionGuide {
-  userCapabilities: string[]
-  adminCapabilities: string[]
-}
-
-const permissionGuideBySystem: Record<string, PermissionGuide> = {
-  system1: {
-    userCapabilities: ['ดู Dashboard ค่าไฟและ Solar'],
-    adminCapabilities: ['บันทึกบิลค่าไฟ', 'บันทึกพลังงาน Solar'],
-  },
-  system2: {
-    userCapabilities: ['ดู Dashboard ค่าน้ำประปา'],
-    adminCapabilities: ['บันทึกค่าน้ำประปา'],
-  },
-  system3: {
-    userCapabilities: ['ดู Dashboard น้ำมันเชื้อเพลิง'],
-    adminCapabilities: ['บันทึกเติมน้ำมัน', 'ประวัติและพิมพ์เอกสารน้ำมัน'],
-  },
-  system4: {
-    userCapabilities: ['ดู Dashboard ค่าโทรศัพท์'],
-    adminCapabilities: ['บันทึกค่าโทรศัพท์'],
-  },
-  system5: {
-    userCapabilities: ['ดู Dashboard งานสารบรรณ'],
-    adminCapabilities: ['บันทึกงานสารบรรณ'],
-  },
-  system6: {
-    userCapabilities: ['ดู Dashboard IP-Phone', 'เข้าดู Directory และหน้า Support'],
-    adminCapabilities: ['กำหนดสิทธิ์ผู้ใช้เฉพาะ SuperAdmin สำหรับ Upload/Mapping'],
-  },
-  system7: {
-    userCapabilities: ['ดู Dashboard งานไปรษณีย์'],
-    adminCapabilities: ['บันทึกไปรษณีย์เข้า/ออก'],
-  },
-  system8: {
-    userCapabilities: ['ดู Dashboard ห้องประชุม'],
-    adminCapabilities: ['บันทึกสถิติห้องประชุมรายเดือน'],
-  },
-  system9: {
-    userCapabilities: ['ดู Dashboard ซ่อมอาคาร', 'สร้างและติดตามใบแจ้งซ่อม'],
-    adminCapabilities: ['สิทธิ์เฉพาะบทบาท Technician/Supervisor/AdminBuilding ตามหน้า'],
-  },
-  system10: {
-    userCapabilities: ['ไม่มีหน้าสำหรับ User/Admin ทั่วไป'],
-    adminCapabilities: ['อนุญาตเฉพาะ SuperAdmin เท่านั้น'],
-  },
-}
-
-const getPermissionGuide = (systemId: string): PermissionGuide =>
-  permissionGuideBySystem[systemId] ?? {
-    userCapabilities: ['ดูข้อมูลในระบบ'],
-    adminCapabilities: ['จัดการข้อมูลในระบบ'],
-  }
-
-// 🟢 อัปเดตข้อมูลไปที่ .NET
-const saveUser = async () => {
-  if (!editingUser.value) return
-  try {
-    isSaving.value = true
-    errorMessage.value = ''
-
-    // ยิง API PUT
-    await api.put(`/User/${editingUser.value.id}`, {
-      displayName: editingUser.value.displayName,
-      departmentId: editingUser.value.departmentId,
-      role: editingUser.value.role,
-      status: editingUser.value.status,
-      adminSystems: editingUser.value.adminSystems,
-      accessibleSystems: editingUser.value.accessibleSystems
-    })
-
-    const actor = { uid: authStore.user?.id ?? '', displayName: authStore.user?.firstName ?? authStore.user?.email ?? '', email: authStore.user?.email ?? '', role: authStore.user?.role ?? 'User' }
-    logAudit(actor, 'UPDATE', 'UserManagement', `จัดการผู้ใช้: ${editingUser.value.email}`)
-
-    successMessage.value = 'บันทึกสำเร็จ'
-    await fetchData() // โหลดใหม่ให้ตารางอัปเดต
-
-    if (selectedUser.value?.id === editingUser.value.id) {
-      selectedUser.value = users.value.find(u => u.id === editingUser.value!.id) || null
-    }
-
-  } catch (error: unknown) {
-    if (axios.isAxiosError(error)) errorMessage.value = error.response?.data?.message || 'เกิดข้อผิดพลาดในการบันทึก'
-    else errorMessage.value = 'เกิดข้อผิดพลาด'
-  } finally {
-    isSaving.value = false
-  }
 }
 
 // 🟢 ลบผู้ใช้งานผ่าน .NET
@@ -478,7 +325,7 @@ const filterTabs = [
                 <span v-else class="text-[10px] text-red-400 italic">ไม่มี</span>
               </div>
               <div class="flex gap-1 flex-wrap items-center">
-                <span class="text-[9px] font-bold text-gray-400 uppercase tracking-wide w-full">Admin</span>
+                <span class="text-[9px] font-bold text-gray-400 uppercase tracking-wide w-full">Officer</span>
                 <template v-if="data.adminSystems?.length">
                   <span v-for="sys in data.adminSystems.slice(0, 3)" :key="'a-' + sys"
                     class="bg-amber-50 text-amber-800 text-[10px] px-1.5 py-0.5 rounded border border-amber-100 font-medium">
@@ -556,7 +403,7 @@ const filterTabs = [
               <div class="flex flex-col items-end gap-0.5 shrink-0">
                 <Tag v-if="selectedUserHasAccess(sys.id)" value="User" severity="success"
                   class="text-[10px] px-1.5! py-0!" />
-                <Tag v-if="selectedUserIsAdmin(sys.id)" value="Admin" severity="warn"
+                <Tag v-if="selectedUserIsAdmin(sys.id)" value="Officer" severity="warn"
                   class="text-[10px] px-1.5! py-0!" />
                 <span v-if="!selectedUserHasAccess(sys.id) && !selectedUserIsAdmin(sys.id)"
                   class="text-[10px] text-gray-400">—</span>
@@ -575,140 +422,6 @@ const filterTabs = [
       </template>
     </Dialog>
 
-    <section v-if="editPanelVisible && editingUser"
-      class="bg-white rounded-2xl border border-gray-200 shadow-sm p-5 lg:p-6 space-y-5">
-      <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-        <div>
-          <h3 class="text-xl font-bold text-gray-800 flex items-center gap-2">
-            <i class="pi pi-user-edit text-blue-500"></i>หน้าแก้ไขสิทธิ์ผู้ใช้งาน
-          </h3>
-          <p class="text-sm text-gray-500 mt-1">กำหนดสถานะ บทบาท และสิทธิ์รายระบบแบบเต็มหน้า</p>
-        </div>
-        <Button label="ปิดหน้าแก้ไข" icon="pi pi-times" text severity="secondary" @click="closeEditPanel" />
-      </div>
-
-      <Message v-if="successMessage" severity="success" :closable="false" class="mb-3">{{ successMessage }}</Message>
-      <Message v-if="errorMessage" severity="error" :closable="false" class="mb-3">{{ errorMessage }}</Message>
-
-      <div class="space-y-5 py-1">
-        <div class="grid grid-cols-2 gap-4">
-          <div class="space-y-1.5">
-            <label class="text-xs font-semibold text-gray-500 uppercase tracking-wide">อีเมล</label>
-            <InputText :value="editingUser.email" disabled class="w-full bg-gray-50 text-gray-500" />
-          </div>
-          <div class="space-y-1.5">
-            <label class="text-xs font-semibold text-gray-500 uppercase tracking-wide">ชื่อแสดงผล</label>
-            <InputText v-model="editingUser.displayName" class="w-full" />
-          </div>
-        </div>
-
-        <div class="grid grid-cols-2 gap-4 pt-4 border-t border-gray-100">
-          <div class="space-y-1.5">
-            <label class="text-xs font-semibold text-gray-500 uppercase tracking-wide">หน่วยงาน</label>
-            <Select v-model="editingUser.departmentId" :options="departments" optionLabel="name" optionValue="id"
-              placeholder="เลือกหน่วยงาน" class="w-full" />
-          </div>
-          <div class="space-y-1.5">
-            <label class="text-xs font-semibold text-blue-500 uppercase tracking-wide flex items-center gap-1">
-              <i class="pi pi-shield text-[10px]"></i> สถานะบัญชี
-            </label>
-            <div class="flex flex-col gap-1.5">
-              <button v-for="s in statuses" :key="s.id" @click="editingUser.status = s.id as AppUser['status']"
-                class="flex items-center gap-2.5 w-full px-3 py-2 rounded-lg border-2 text-sm font-medium transition-all text-left"
-                :class="{
-                  'border-amber-400 bg-amber-50 text-amber-700': editingUser.status === s.id && s.id === 'pending',
-                  'border-green-400 bg-green-50 text-green-700': editingUser.status === s.id && s.id === 'active',
-                  'border-red-400 bg-red-50 text-red-700': editingUser.status === s.id && s.id === 'suspended',
-                  'border-gray-200 bg-white text-gray-400 hover:border-gray-300': editingUser.status !== s.id,
-                }">
-                <i class="pi text-base"
-                  :class="{ 'pi-clock': s.id === 'pending', 'pi-check-circle': s.id === 'active', 'pi-ban': s.id === 'suspended' }"></i>
-                {{ s.name }}
-                <i v-if="editingUser.status === s.id" class="pi pi-check ml-auto text-xs"></i>
-              </button>
-            </div>
-          </div>
-        </div>
-
-        <div class="space-y-4 pt-4 border-t border-gray-100">
-          <div class="space-y-1.5">
-            <label class="text-xs font-semibold text-gray-500 uppercase tracking-wide">ระดับสิทธิ์ (Role)</label>
-            <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
-              <button v-for="r in roles" :key="r.id" type="button" @click="editingUser.role = r.id as AppUser['role']"
-                class="flex flex-col items-center gap-1 py-2.5 px-2 rounded-xl border-2 text-sm font-medium transition-all"
-                :class="{
-                  'border-blue-400 bg-blue-50 text-blue-800': editingUser.role === r.id && r.id === 'User',
-                  'border-violet-400 bg-violet-50 text-violet-800': editingUser.role === r.id && r.id === 'Admin',
-                  'border-red-400 bg-red-50 text-red-800': editingUser.role === r.id && r.id === 'SuperAdmin',
-                  'border-gray-200 bg-white text-gray-500 hover:border-gray-300': editingUser.role !== r.id,
-                }">
-                <i class="pi text-lg"
-                  :class="{ 'pi-user': r.id === 'User', 'pi-building': r.id === 'Admin', 'pi-crown': r.id === 'SuperAdmin' }"></i>
-                <span class="text-[11px] leading-tight text-center">{{ r.name }}</span>
-              </button>
-            </div>
-          </div>
-
-          <div class="space-y-2">
-            <div class="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-2">
-              <div>
-                <label class="text-xs font-semibold text-gray-500 uppercase tracking-wide">จัดการสิทธิ์ตามระบบ</label>
-                <p class="text-[11px] text-gray-400 mt-0.5">
-                  เปิด <span class="font-medium text-emerald-700">User</span> = เข้า Portal/ระบบนั้นได้ · เปิด <span
-                    class="font-medium text-amber-700">Admin</span> = บันทึกข้อมูล
-                </p>
-              </div>
-            </div>
-
-            <div v-if="!canEditPerSystemMatrix"
-              class="rounded-xl border border-dashed border-gray-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
-              <i class="pi pi-lock text-slate-400 mr-2"></i> เลือกบทบาท <strong>User</strong> เพื่อกำหนดสิทธิ์รายระบบ
-            </div>
-
-            <div v-else
-              class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 max-h-[min(52vh,480px)] overflow-y-auto pr-1">
-              <div v-for="sys in systemModules" :key="sys.id"
-                class="rounded-xl border border-gray-200 bg-white shadow-sm p-4 flex flex-col gap-3 border-l-4 transition-shadow hover:shadow-md"
-                :class="[sys.cardBorder, focusedSystemId === sys.id ? 'ring-2 ring-indigo-300 bg-indigo-50/30' : '']">
-                <div class="flex items-start gap-3">
-                  <div
-                    class="w-10 h-10 rounded-lg bg-gray-50 flex items-center justify-center shrink-0 border border-gray-100">
-                    <i :class="['pi text-lg text-gray-600', sys.icon]"></i>
-                  </div>
-                  <div class="min-w-0 flex-1">
-                    <p class="font-bold text-gray-800 text-sm leading-tight">{{ sys.shortLabel }}</p>
-                    <p class="text-[11px] text-gray-500 mt-1 leading-snug">{{ sys.description }}</p>
-                  </div>
-                </div>
-                <div class="space-y-2.5 pt-2 border-t border-gray-100">
-                  <div class="flex items-center justify-between gap-2">
-                    <span class="text-xs font-medium text-gray-600">เข้าใช้งาน (User)</span>
-                    <ToggleSwitch :modelValue="userHasSystem(sys.id)"
-                      @update:modelValue="(v) => onUserSystemToggle(sys.id, v)" />
-                  </div>
-                  <div class="flex items-center justify-between gap-2">
-                    <span class="text-xs font-medium text-gray-600">ผู้ดูแล (Admin)</span>
-                    <ToggleSwitch :modelValue="adminHasSystem(sys.id)"
-                      @update:modelValue="(v) => onAdminSystemToggle(sys.id, v)" />
-                  </div>
-                  <div
-                    class="rounded-lg bg-gray-50 border border-gray-100 p-2.5 text-[11px] text-gray-600 leading-relaxed">
-                    <p class="font-semibold text-gray-700">สิทธิ์ที่ระบบนี้รองรับ</p>
-                    <p class="mt-1">User: {{ getPermissionGuide(sys.id).userCapabilities.join(' , ') }}</p>
-                    <p class="mt-1">Admin: {{ getPermissionGuide(sys.id).adminCapabilities.join(' , ') }}</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div class="flex items-center justify-end gap-2 pt-2 border-t border-gray-100">
-        <Button label="ยกเลิก" icon="pi pi-times" text severity="secondary" @click="closeEditPanel" />
-        <Button label="บันทึกข้อมูล" icon="pi pi-save" :loading="isSaving" @click="saveUser" />
-      </div>
-    </section>
   </div>
 </template>
 

@@ -7,8 +7,6 @@ import api from '@/services/api'
 
 
 import { usePermissions } from '@/composables/usePermissions'
-import { MAINTENANCE_ADMIN_BUILDING_CENTRAL_PERMISSION } from '@/config/maintenancePermissions'
-
 import Button from 'primevue/button'
 import Tooltip from 'primevue/tooltip'
 
@@ -22,10 +20,13 @@ const hasMaintenanceAccess = computed(
   () =>
     isSuperAdmin.value ||
     (authStore.user?.role ?? '').trim().toLowerCase() === 'adminbuilding' ||
-    (authStore.userProfile?.adminSystems ?? []).includes(MAINTENANCE_ADMIN_BUILDING_CENTRAL_PERMISSION),
+    (authStore.userProfile?.accessibleSystems ?? []).includes('system9') ||
+    (authStore.userProfile?.adminSystems ?? []).some((p) => p.startsWith('maintenance:')),
 )
 const hasAdminToolAccess = computed(
-  () => hasAccess('system10'),
+  () =>
+    isSuperAdmin.value ||
+    (authStore.userProfile?.adminSystems ?? []).includes('system10'),
 )
 
 // ─── Sidebar state ────────────────────────────────────────────────────────────
