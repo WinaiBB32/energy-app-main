@@ -1,6 +1,7 @@
 using EnergyApp.API.Data;
 using EnergyApp.API.DTOs;
 using EnergyApp.API.Models;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
@@ -72,8 +73,50 @@ namespace EnergyApp.API.Controllers
             return Ok(new
             {
                 token = token,
-                user = new { user.Id, user.Email, user.FirstName, user.LastName, user.Role }
+                user = new
+                {
+                    user.Id,
+                    user.Email,
+                    user.FirstName,
+                    user.LastName,
+                    user.Role,
+                    user.Status,
+                    user.DepartmentId,
+                    user.AccessibleSystems,
+                    user.AdminSystems
+                }
             });
+        }
+
+        [Authorize]
+        [HttpGet("me")]
+        public async Task<IActionResult> Me()
+        {
+            var userIdClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (!Guid.TryParse(userIdClaim, out var userId))
+                return Unauthorized(new { message = "ไม่สามารถยืนยันตัวตนผู้ใช้งานได้" });
+
+            var user = await _context.Users
+                .AsNoTracking()
+                .Where(u => u.Id == userId)
+                .Select(u => new
+                {
+                    u.Id,
+                    u.Email,
+                    u.FirstName,
+                    u.LastName,
+                    u.Role,
+                    u.Status,
+                    u.DepartmentId,
+                    u.AccessibleSystems,
+                    u.AdminSystems
+                })
+                .FirstOrDefaultAsync();
+
+            if (user == null)
+                return Unauthorized(new { message = "ไม่พบข้อมูลผู้ใช้งานในระบบ" });
+
+            return Ok(new { user });
         }
 
         // ⚠️ API ลับสำหรับ Developer (ใช้เสร็จแล้วค่อยมาลบทิ้งทีหลังได้ครับ)
@@ -103,9 +146,13 @@ namespace EnergyApp.API.Controllers
             var claims = new[]
             {
                 new Claim(JwtRegisteredClaimNames.Sub, user.Id.ToString()),
+                new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
                 new Claim(JwtRegisteredClaimNames.Email, user.Email),
+                new Claim(ClaimTypes.Email, user.Email),
                 new Claim(ClaimTypes.Role, user.Role),
-                new Claim("FirstName", user.FirstName)
+                new Claim("FirstName", user.FirstName),
+                new Claim(ClaimTypes.Name, $"{user.FirstName} {user.LastName}".Trim()),
+                new Claim("DepartmentId", user.DepartmentId?.ToString() ?? string.Empty)
             };
 
             var token = new JwtSecurityToken(

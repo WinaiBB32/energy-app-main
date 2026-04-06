@@ -38,7 +38,9 @@ namespace EnergyApp.API.Controllers
                     displayName = u.FirstName + " " + u.LastName, // รวมชื่อ-สกุลให้ตรงกับ Vue
                     departmentId = u.DepartmentId,
                     role = u.Role,
-                    status = u.Status
+                    status = u.Status,
+                    accessibleSystems = u.AccessibleSystems,
+                    adminSystems = u.AdminSystems
                 })
                 .OrderBy(u => u.status == "pending" ? 0 : 1) // ให้บัญชีรออนุมัติขึ้นก่อน
                 .ThenBy(u => u.email)
@@ -65,6 +67,8 @@ namespace EnergyApp.API.Controllers
             user.DepartmentId = request.DepartmentId;
             user.Role = request.Role;
             user.Status = request.Status;
+            user.AccessibleSystems = request.AccessibleSystems ?? new List<string>();
+            user.AdminSystems = request.AdminSystems ?? new List<string>();
 
             await _context.SaveChangesAsync();
             return Ok(new { message = "อัปเดตข้อมูลสำเร็จ" });

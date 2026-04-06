@@ -7,6 +7,7 @@ import api from '@/services/api'
 
 
 import { usePermissions } from '@/composables/usePermissions'
+import { MAINTENANCE_ADMIN_BUILDING_CENTRAL_PERMISSION } from '@/config/maintenancePermissions'
 
 import Button from 'primevue/button'
 import Tooltip from 'primevue/tooltip'
@@ -17,6 +18,15 @@ const router = useRouter()
 const authStore = useAuthStore()
 const { logout } = useAuth()
 const { isSuperAdmin } = usePermissions()
+const hasMaintenanceAccess = computed(
+  () =>
+    isSuperAdmin.value ||
+    (authStore.user?.role ?? '').trim().toLowerCase() === 'adminbuilding' ||
+    (authStore.userProfile?.adminSystems ?? []).includes(MAINTENANCE_ADMIN_BUILDING_CENTRAL_PERMISSION),
+)
+const hasAdminToolAccess = computed(
+  () => hasAccess('system10'),
+)
 
 // ─── Sidebar state ────────────────────────────────────────────────────────────
 const sidebarOpen = ref(true)
@@ -117,6 +127,15 @@ const systems = computed(() => [
     show: hasAccess('system6'),
   },
   {
+    id: 'system9',
+    path: '/maintenance/dashboard',
+    label: 'ระบบแจ้งซ่อมงานอาคาร',
+    desc: 'แจ้งซ่อม ติดตามงาน ซ่อมภายใน/ภายนอก และประวัติสินทรัพย์',
+    icon: 'pi-wrench',
+    color: 'orange',
+    show: hasMaintenanceAccess.value,
+  },
+  {
     id: 'system7',
     path: '/postal/dashboard',
     label: 'ระบบไปรษณีย์',
@@ -135,13 +154,13 @@ const systems = computed(() => [
     show: hasAccess('system8'),
   },
   {
-    id: 'support',
-    path: '/support',
-    label: 'แจ้งปัญหา / ขอบริการ',
-    desc: 'แจ้งปัญหาโทรศัพท์ ขอรับบริการ และติดตามสถานะคำร้อง',
-    icon: 'pi-ticket',
-    color: 'orange',
-    show: true,
+    id: 'system10',
+    path: '/admin/system-management',
+    label: 'Admin Tool',
+    desc: 'ศูนย์รวมเครื่องมือผู้ดูแลระบบและการจัดการสิทธิ์ของทั้ง 9 ระบบ',
+    icon: 'pi-shield',
+    color: 'violet',
+    show: hasAdminToolAccess.value,
   },
 ])
 
@@ -155,18 +174,6 @@ const colorMap: Record<string, { icon: string; bg: string; hover: string }> = {
   orange: { icon: 'text-orange-500', bg: 'bg-orange-50 group-hover:bg-orange-500', hover: 'group-hover:text-orange-600' },
 }
 
-const adminTools = [
-  { path: '/admin/users', icon: 'pi-users', label: 'จัดการสิทธิ์ผู้ใช้งาน', desc: 'อนุมัติ, ตั้งค่าหน่วยงาน, กำหนดสิทธิ์', superAdminOnly: false },
-  { path: '/admin/buildings', icon: 'pi-building', label: 'จัดการอาคาร / มิเตอร์', desc: 'เพิ่ม แก้ไข อาคารสำหรับระบบค่าไฟฟ้า', superAdminOnly: false },
-  { path: '/admin/departments', icon: 'pi-sitemap', label: 'จัดการหน่วยงาน', desc: 'เพิ่ม แก้ไข รายชื่อหน่วยงานในองค์กร', superAdminOnly: false },
-  { path: '/admin/fuel-types', icon: 'pi-gauge', label: 'จัดการประเภทน้ำมัน', desc: 'เพิ่ม แก้ไข ประเภทน้ำมันในระบบ', superAdminOnly: false },
-  { path: '/admin/audit', icon: 'pi-shield', label: 'Audit Log', desc: 'ตรวจสอบกิจกรรม IP และการกระทำทั้งหมด', superAdminOnly: true },
-  { path: '/admin/meeting-rooms', icon: 'pi-objects-column', label: 'จัดการห้องประชุม', desc: 'เพิ่ม/แก้ไข รายชื่อห้องประชุมส่วนกลาง', superAdminOnly: true },
-]
-
-const visibleAdminTools = computed(() =>
-  isSuperAdmin.value ? adminTools : [],
-)
 </script>
 
 <template>
@@ -340,27 +347,6 @@ const visibleAdminTools = computed(() =>
           </div>
         </section>
 
-        <!-- Admin tools -->
-        <section v-if="isSuperAdmin" class="border-t border-gray-100 pt-10">
-          <div class="flex items-center gap-3 mb-6">
-            <span class="w-1 h-5 bg-slate-400 rounded-full"></span>
-            <h3 class="text-base font-bold text-gray-700 uppercase tracking-wide">เครื่องมือผู้ดูแลระบบ</h3>
-          </div>
-
-          <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
-            <div v-for="tool in visibleAdminTools" :key="tool.path" @click="navigateTo(tool.path)"
-              class="group bg-white rounded-xl border border-gray-100 p-4 cursor-pointer hover:shadow-sm hover:border-slate-200 hover:bg-slate-50 transition-all duration-200 flex items-center gap-3">
-              <div
-                class="w-9 h-9 rounded-lg bg-slate-100 flex items-center justify-center text-slate-500 group-hover:bg-slate-800 group-hover:text-white transition-colors shrink-0">
-                <i :class="`pi ${tool.icon} text-sm`"></i>
-              </div>
-              <div class="min-w-0">
-                <p class="text-sm font-bold text-gray-800 truncate">{{ tool.label }}</p>
-                <p class="text-xs text-gray-400 truncate">{{ tool.desc }}</p>
-              </div>
-            </div>
-          </div>
-        </section>
       </div>
     </main>
   </div>

@@ -320,7 +320,7 @@ const saveEdit = async () => {
   if (!selectedRecord.value) return
   isSaving.value = true
 
-  const doSave = async (data: Partial<SolarEditForm> & { recordDate?: string | null }) => {
+  const doSave = async (data: Omit<Partial<SolarEditForm>, 'recordDate'> & { recordDate?: string | null }) => {
     await api.put(`/SolarProduction/${selectedRecord.value!.id}`, {
       buildingId: data.buildingId ?? editForm.value.buildingId,
       recordDate: data.recordDate,

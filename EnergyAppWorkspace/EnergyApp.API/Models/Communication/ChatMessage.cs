@@ -9,6 +9,9 @@ namespace EnergyApp.API.Models
         public string SenderEmail { get; set; } = string.Empty;
         public string SenderId { get; set; } = string.Empty;
         public string SenderRole { get; set; } = string.Empty;
+        public bool IsRead { get; set; }
+        public DateTime? ReadAt { get; set; }
+        public string ReadById { get; set; } = string.Empty;
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     }
 }

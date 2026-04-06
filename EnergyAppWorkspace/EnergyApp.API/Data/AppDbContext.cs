@@ -28,5 +28,9 @@ namespace EnergyApp.API.Data
         public DbSet<MeetingRecord> MeetingRecords { get; set; }
         public DbSet<IPPhoneMonthStat> IPPhoneMonthStats { get; set; }
         public DbSet<IPPhoneCallLog> IPPhoneCallLogs { get; set; }
+        public DbSet<SparePart> SpareParts { get; set; }
+        public DbSet<SparePartTransaction> SparePartTransactions { get; set; }
+        public DbSet<SparePartIssueRequest> SparePartIssueRequests { get; set; }
+        public DbSet<SparePartIssueRequestItem> SparePartIssueRequestItems { get; set; }
     }
 }

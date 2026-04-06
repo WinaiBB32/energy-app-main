@@ -12,6 +12,10 @@ export interface User {
   firstName: string
   lastName: string
   role: string
+  status?: string
+  departmentId?: string
+  accessibleSystems?: string[]
+  adminSystems?: string[]
   uid?: string
   displayName?: string
 }
@@ -265,15 +269,41 @@ export interface IPPhoneDirectory {
 
 export interface ServiceRequest {
   id: string
+  workOrderNo?: string
   title: string
   description: string
   category: string
   priority: string
   status: string
+  buildingName?: string
+  locationDetail?: string
+  assetNumber?: string
+  isCentralAsset?: boolean
   extension: string
   requesterName: string
   requesterEmail: string
   requesterUid?: string
+  requesterDepartmentCode?: string
+  requesterDepartmentName?: string
+  technicianUid?: string
+  technicianName?: string
+  supervisorUid?: string
+  supervisorName?: string
+  adminOfficerUid?: string
+  adminOfficerName?: string
+  technicianDiagnosis?: string
+  technicianAction?: string
+  escalationReason?: string
+  supervisorCanRepairInHouse?: boolean | null
+  supervisorReason?: string
+  supervisorRepairPlan?: string
+  supervisorExternalAdvice?: string
+  externalVendorName?: string
+  externalScheduledAt?: string | null
+  externalCompletedAt?: string | null
+  externalResult?: string
+  closedByName?: string
+  closedAt?: string | null
   assignedTo?: string
   note?: string
   createdAt: string | null

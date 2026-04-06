@@ -16,9 +16,16 @@ namespace EnergyApp.API.Controllers
         {
             public Guid? DepartmentId { get; set; }
             public DateTime RecordMonth { get; set; }
+            public int IncomingNormalMail { get; set; }
+            public int IncomingRegisteredMail { get; set; }
+            public int IncomingEmsMail { get; set; }
+            public int IncomingTotalMail { get; set; }
             public int NormalMail { get; set; }
+            public decimal NormalMailUnitPrice { get; set; }
             public int RegisteredMail { get; set; }
+            public decimal RegisteredMailUnitPrice { get; set; }
             public int EmsMail { get; set; }
+            public decimal EmsMailUnitPrice { get; set; }
             public int TotalMail { get; set; }
             public string RecordedBy { get; set; } = string.Empty;
         }
@@ -26,6 +33,7 @@ namespace EnergyApp.API.Controllers
         [HttpGet]
         public async Task<IActionResult> Get(
             [FromQuery] Guid? departmentId,
+            [FromQuery] string? recordType,
             [FromQuery] int skip = 0,
             [FromQuery] int take = 50)
         {
@@ -33,6 +41,16 @@ namespace EnergyApp.API.Controllers
 
             if (departmentId.HasValue)
                 query = query.Where(r => r.DepartmentId == departmentId);
+
+            var normalizedType = (recordType ?? string.Empty).Trim().ToLowerInvariant();
+            if (normalizedType == "incoming")
+            {
+                query = query.Where(r => r.IncomingTotalMail > 0 && r.TotalMail == 0);
+            }
+            else if (normalizedType == "outgoing")
+            {
+                query = query.Where(r => r.TotalMail > 0 && r.IncomingTotalMail == 0);
+            }
 
             var total = await query.CountAsync();
             var items = await query
@@ -59,9 +77,16 @@ namespace EnergyApp.API.Controllers
             {
                 DepartmentId = req.DepartmentId,
                 RecordMonth = req.RecordMonth,
+                IncomingNormalMail = req.IncomingNormalMail,
+                IncomingRegisteredMail = req.IncomingRegisteredMail,
+                IncomingEmsMail = req.IncomingEmsMail,
+                IncomingTotalMail = req.IncomingTotalMail,
                 NormalMail = req.NormalMail,
+                NormalMailUnitPrice = req.NormalMailUnitPrice,
                 RegisteredMail = req.RegisteredMail,
+                RegisteredMailUnitPrice = req.RegisteredMailUnitPrice,
                 EmsMail = req.EmsMail,
+                EmsMailUnitPrice = req.EmsMailUnitPrice,
                 TotalMail = req.TotalMail,
                 RecordedBy = req.RecordedBy
             };
@@ -78,9 +103,16 @@ namespace EnergyApp.API.Controllers
 
             record.DepartmentId = req.DepartmentId;
             record.RecordMonth = req.RecordMonth;
+            record.IncomingNormalMail = req.IncomingNormalMail;
+            record.IncomingRegisteredMail = req.IncomingRegisteredMail;
+            record.IncomingEmsMail = req.IncomingEmsMail;
+            record.IncomingTotalMail = req.IncomingTotalMail;
             record.NormalMail = req.NormalMail;
+            record.NormalMailUnitPrice = req.NormalMailUnitPrice;
             record.RegisteredMail = req.RegisteredMail;
+            record.RegisteredMailUnitPrice = req.RegisteredMailUnitPrice;
             record.EmsMail = req.EmsMail;
+            record.EmsMailUnitPrice = req.EmsMailUnitPrice;
             record.TotalMail = req.TotalMail;
             record.RecordedBy = req.RecordedBy;
 

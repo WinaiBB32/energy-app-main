@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { logAudit } from '@/utils/auditLogger'
 import { useAppToast } from '@/composables/useAppToast'
@@ -32,6 +33,8 @@ interface AppUser {
 
 const authStore = useAuthStore()
 const toast = useAppToast()
+const route = useRoute()
+const router = useRouter()
 
 interface Department { id: string; name: string }
 const departments = ref<Department[]>([])
@@ -65,9 +68,20 @@ const systemModules: SystemModule[] = [
   { id: 'system4', name: 'ระบบโทรศัพท์', shortLabel: 'ค่าโทรศัพท์', description: 'บันทึกค่าใช้จ่ายโทรศัพท์', icon: 'pi-phone', cardBorder: 'border-l-emerald-400' },
   { id: 'system5', name: 'ระบบสารบรรณ', shortLabel: 'สารบรรณ', description: 'สถิติงานรับ–ส่งเอกสาร', icon: 'pi-folder-open', cardBorder: 'border-l-violet-400' },
   { id: 'system6', name: 'ระบบ IP-Phone', shortLabel: 'IP-Phone', description: 'สมุดโทรศัพท์และสถิติการโทร', icon: 'pi-desktop', cardBorder: 'border-l-teal-400' },
+  { id: 'system9', name: 'ระบบแจ้งซ่อมงานอาคาร', shortLabel: 'ซ่อมงานอาคาร', description: 'ใบงานซ่อม คลังอะไหล่ และช่างภายนอก', icon: 'pi-wrench', cardBorder: 'border-l-orange-400' },
+  { id: 'system10', name: 'Admin Tool', shortLabel: 'Admin Tool', description: 'เครื่องมือผู้ดูแลระบบและการกำหนดสิทธิ์', icon: 'pi-shield', cardBorder: 'border-l-slate-400' },
   { id: 'system7', name: 'ระบบไปรษณีย์', shortLabel: 'ไปรษณีย์', description: 'สถิติจัดส่ง ธรรมดา/ลงทะเบียน/EMS', icon: 'pi-envelope', cardBorder: 'border-l-blue-400' },
   { id: 'system8', name: 'สถิติห้องประชุมส่วนกลาง', shortLabel: 'ห้องประชุม', description: 'สถิติการใช้ห้องประชุม', icon: 'pi-users', cardBorder: 'border-l-indigo-400' },
 ]
+
+const focusedSystemId = computed(() => {
+  const q = route.query.focusSystem
+  return typeof q === 'string' ? q : ''
+})
+
+const focusedSystem = computed(() =>
+  systemModules.find((m) => m.id === focusedSystemId.value) ?? null,
+)
 
 const users = ref<AppUser[]>([])
 const isLoading = ref(true)
@@ -75,7 +89,7 @@ const searchQuery = ref('')
 const statusFilter = ref<string>('all')
 
 const detailDialogVisible = ref(false)
-const editDialogVisible = ref(false)
+const editPanelVisible = ref(false)
 const isSaving = ref(false)
 const successMessage = ref('')
 const errorMessage = ref('')
@@ -149,6 +163,15 @@ const stats = computed(() => ({
 const filteredUsers = computed(() => {
   let list = users.value
   if (statusFilter.value !== 'all') list = list.filter((u) => u.status === statusFilter.value)
+
+  if (focusedSystemId.value) {
+    list = list.filter(
+      (u) =>
+        (u.accessibleSystems ?? []).includes(focusedSystemId.value) ||
+        (u.adminSystems ?? []).includes(focusedSystemId.value),
+    )
+  }
+
   const q = searchQuery.value.trim().toLowerCase()
   if (!q) return list
   return list.filter(
@@ -158,10 +181,70 @@ const filteredUsers = computed(() => {
 
 const openDetail = (user: AppUser) => { selectedUser.value = user; detailDialogVisible.value = true }
 const openEdit = (user: AppUser) => {
-  successMessage.value = ''; errorMessage.value = ''
-  editingUser.value = { ...user, adminSystems: [...(user.adminSystems || [])], accessibleSystems: [...(user.accessibleSystems || [])] }
-  editDialogVisible.value = true
+  detailDialogVisible.value = false
+  router.push(`/admin/users/${user.id}/permissions`)
 }
+
+const closeEditPanel = () => {
+  editPanelVisible.value = false
+  editingUser.value = null
+  successMessage.value = ''
+  errorMessage.value = ''
+}
+
+interface PermissionGuide {
+  userCapabilities: string[]
+  adminCapabilities: string[]
+}
+
+const permissionGuideBySystem: Record<string, PermissionGuide> = {
+  system1: {
+    userCapabilities: ['ดู Dashboard ค่าไฟและ Solar'],
+    adminCapabilities: ['บันทึกบิลค่าไฟ', 'บันทึกพลังงาน Solar'],
+  },
+  system2: {
+    userCapabilities: ['ดู Dashboard ค่าน้ำประปา'],
+    adminCapabilities: ['บันทึกค่าน้ำประปา'],
+  },
+  system3: {
+    userCapabilities: ['ดู Dashboard น้ำมันเชื้อเพลิง'],
+    adminCapabilities: ['บันทึกเติมน้ำมัน', 'ประวัติและพิมพ์เอกสารน้ำมัน'],
+  },
+  system4: {
+    userCapabilities: ['ดู Dashboard ค่าโทรศัพท์'],
+    adminCapabilities: ['บันทึกค่าโทรศัพท์'],
+  },
+  system5: {
+    userCapabilities: ['ดู Dashboard งานสารบรรณ'],
+    adminCapabilities: ['บันทึกงานสารบรรณ'],
+  },
+  system6: {
+    userCapabilities: ['ดู Dashboard IP-Phone', 'เข้าดู Directory และหน้า Support'],
+    adminCapabilities: ['กำหนดสิทธิ์ผู้ใช้เฉพาะ SuperAdmin สำหรับ Upload/Mapping'],
+  },
+  system7: {
+    userCapabilities: ['ดู Dashboard งานไปรษณีย์'],
+    adminCapabilities: ['บันทึกไปรษณีย์เข้า/ออก'],
+  },
+  system8: {
+    userCapabilities: ['ดู Dashboard ห้องประชุม'],
+    adminCapabilities: ['บันทึกสถิติห้องประชุมรายเดือน'],
+  },
+  system9: {
+    userCapabilities: ['ดู Dashboard ซ่อมอาคาร', 'สร้างและติดตามใบแจ้งซ่อม'],
+    adminCapabilities: ['สิทธิ์เฉพาะบทบาท Technician/Supervisor/AdminBuilding ตามหน้า'],
+  },
+  system10: {
+    userCapabilities: ['ไม่มีหน้าสำหรับ User/Admin ทั่วไป'],
+    adminCapabilities: ['อนุญาตเฉพาะ SuperAdmin เท่านั้น'],
+  },
+}
+
+const getPermissionGuide = (systemId: string): PermissionGuide =>
+  permissionGuideBySystem[systemId] ?? {
+    userCapabilities: ['ดูข้อมูลในระบบ'],
+    adminCapabilities: ['จัดการข้อมูลในระบบ'],
+  }
 
 // 🟢 อัปเดตข้อมูลไปที่ .NET
 const saveUser = async () => {
@@ -190,7 +273,6 @@ const saveUser = async () => {
       selectedUser.value = users.value.find(u => u.id === editingUser.value!.id) || null
     }
 
-    setTimeout(() => { editDialogVisible.value = false }, 1000)
   } catch (error: unknown) {
     if (axios.isAxiosError(error)) errorMessage.value = error.response?.data?.message || 'เกิดข้อผิดพลาดในการบันทึก'
     else errorMessage.value = 'เกิดข้อผิดพลาด'
@@ -221,6 +303,10 @@ const getDeptName = (id: string | null) => {
   return departments.value.find((x) => x.id === id)?.name || 'ไม่ระบุ'
 }
 const getRoleSeverity = (role: string) => {
+  if (role === 'AdminBuilding') return 'contrast'
+  if (role === 'Supervisor') return 'warn'
+  if (role === 'Technician') return 'success'
+  if (role === 'Officer') return 'info'
   if (role === 'SuperAdmin') return 'danger'
   if (role === 'Admin') return 'warn'
   return 'info'
@@ -230,11 +316,19 @@ const getStatusName = (status: string) => status === 'active' ? 'ใช้งา
 const getRoleLabel = (role: string) => {
   if (role === 'SuperAdmin') return 'SuperAdmin'
   if (role === 'Admin') return 'Admin องค์กร'
+  if (role === 'Officer') return 'เจ้าหน้าที่'
+  if (role === 'AdminBuilding') return 'ธุรการช่างนอก'
+  if (role === 'Supervisor') return 'หัวหน้าช่าง'
+  if (role === 'Technician') return 'ช่างซ่อม'
   return 'User ทั่วไป'
 }
 const getAvatarColor = (role: string) => {
   if (role === 'SuperAdmin') return 'bg-red-100 text-red-600'
   if (role === 'Admin') return 'bg-violet-100 text-violet-700'
+  if (role === 'Officer') return 'bg-sky-100 text-sky-700'
+  if (role === 'AdminBuilding') return 'bg-orange-100 text-orange-700'
+  if (role === 'Supervisor') return 'bg-amber-100 text-amber-700'
+  if (role === 'Technician') return 'bg-cyan-100 text-cyan-700'
   return 'bg-blue-100 text-blue-600'
 }
 
@@ -252,6 +346,11 @@ const filterTabs = [
     <div>
       <h2 class="text-3xl font-bold text-gray-800">จัดการสิทธิ์ผู้ใช้งาน</h2>
       <p class="text-gray-500 mt-1">อนุมัติการเข้าใช้งาน กำหนดหน่วยงาน และจัดการสิทธิ์ระบบ</p>
+      <div v-if="focusedSystem"
+        class="mt-3 inline-flex items-center gap-2 rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-1.5 text-sm text-indigo-700">
+        <i class="pi pi-filter text-xs"></i>
+        โฟกัสระบบ: <span class="font-semibold">{{ focusedSystem.name }}</span>
+      </div>
     </div>
 
     <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -447,7 +546,7 @@ const filterTabs = [
           <div class="max-h-56 overflow-y-auto pr-1 grid grid-cols-1 sm:grid-cols-2 gap-2">
             <div v-for="sys in systemModules" :key="sys.id"
               class="rounded-lg border border-gray-100 bg-white p-2.5 shadow-sm flex items-center justify-between gap-2 border-l-4"
-              :class="sys.cardBorder">
+              :class="[sys.cardBorder, focusedSystemId === sys.id ? 'ring-2 ring-indigo-300 bg-indigo-50/40' : '']">
               <div class="flex items-center gap-2 min-w-0">
                 <div class="w-8 h-8 rounded-md bg-gray-50 flex items-center justify-center shrink-0">
                   <i :class="['pi text-sm text-gray-600', sys.icon]"></i>
@@ -476,18 +575,22 @@ const filterTabs = [
       </template>
     </Dialog>
 
-    <Dialog v-model:visible="editDialogVisible" modal :style="{ width: 'min(56rem, 96vw)' }"
-      :breakpoints="{ '575px': '98vw' }">
-      <template #header>
-        <div class="flex items-center gap-2">
-          <i class="pi pi-user-edit text-blue-500"></i><span class="font-bold text-gray-800">แก้ไขสิทธิ์ผู้ใช้งาน</span>
+    <section v-if="editPanelVisible && editingUser"
+      class="bg-white rounded-2xl border border-gray-200 shadow-sm p-5 lg:p-6 space-y-5">
+      <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div>
+          <h3 class="text-xl font-bold text-gray-800 flex items-center gap-2">
+            <i class="pi pi-user-edit text-blue-500"></i>หน้าแก้ไขสิทธิ์ผู้ใช้งาน
+          </h3>
+          <p class="text-sm text-gray-500 mt-1">กำหนดสถานะ บทบาท และสิทธิ์รายระบบแบบเต็มหน้า</p>
         </div>
-      </template>
+        <Button label="ปิดหน้าแก้ไข" icon="pi pi-times" text severity="secondary" @click="closeEditPanel" />
+      </div>
 
       <Message v-if="successMessage" severity="success" :closable="false" class="mb-3">{{ successMessage }}</Message>
       <Message v-if="errorMessage" severity="error" :closable="false" class="mb-3">{{ errorMessage }}</Message>
 
-      <div v-if="editingUser" class="space-y-5 py-1">
+      <div class="space-y-5 py-1">
         <div class="grid grid-cols-2 gap-4">
           <div class="space-y-1.5">
             <label class="text-xs font-semibold text-gray-500 uppercase tracking-wide">อีเมล</label>
@@ -566,7 +669,7 @@ const filterTabs = [
               class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 max-h-[min(52vh,480px)] overflow-y-auto pr-1">
               <div v-for="sys in systemModules" :key="sys.id"
                 class="rounded-xl border border-gray-200 bg-white shadow-sm p-4 flex flex-col gap-3 border-l-4 transition-shadow hover:shadow-md"
-                :class="sys.cardBorder">
+                :class="[sys.cardBorder, focusedSystemId === sys.id ? 'ring-2 ring-indigo-300 bg-indigo-50/30' : '']">
                 <div class="flex items-start gap-3">
                   <div
                     class="w-10 h-10 rounded-lg bg-gray-50 flex items-center justify-center shrink-0 border border-gray-100">
@@ -588,6 +691,12 @@ const filterTabs = [
                     <ToggleSwitch :modelValue="adminHasSystem(sys.id)"
                       @update:modelValue="(v) => onAdminSystemToggle(sys.id, v)" />
                   </div>
+                  <div
+                    class="rounded-lg bg-gray-50 border border-gray-100 p-2.5 text-[11px] text-gray-600 leading-relaxed">
+                    <p class="font-semibold text-gray-700">สิทธิ์ที่ระบบนี้รองรับ</p>
+                    <p class="mt-1">User: {{ getPermissionGuide(sys.id).userCapabilities.join(' , ') }}</p>
+                    <p class="mt-1">Admin: {{ getPermissionGuide(sys.id).adminCapabilities.join(' , ') }}</p>
+                  </div>
                 </div>
               </div>
             </div>
@@ -595,11 +704,11 @@ const filterTabs = [
         </div>
       </div>
 
-      <template #footer>
-        <Button label="ยกเลิก" icon="pi pi-times" text severity="secondary" @click="editDialogVisible = false" />
+      <div class="flex items-center justify-end gap-2 pt-2 border-t border-gray-100">
+        <Button label="ยกเลิก" icon="pi pi-times" text severity="secondary" @click="closeEditPanel" />
         <Button label="บันทึกข้อมูล" icon="pi pi-save" :loading="isSaving" @click="saveUser" />
-      </template>
-    </Dialog>
+      </div>
+    </section>
   </div>
 </template>
 

@@ -155,7 +155,7 @@ namespace EnergyApp.API.Migrations
                     b.ToTable("Departments");
                 });
 
-            modelBuilder.Entity("EnergyApp.API.Models.ElectricityRecord", b =>
+            modelBuilder.Entity("EnergyApp.API.Models.ElectricityBill", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
@@ -169,6 +169,10 @@ namespace EnergyApp.API.Migrations
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("DepartmentId")
+                        .IsRequired()
+                        .HasColumnType("text");
 
                     b.Property<string>("DocNumber")
                         .IsRequired()
@@ -191,6 +195,70 @@ namespace EnergyApp.API.Migrations
                     b.Property<decimal>("PeaUnitUsed")
                         .HasColumnType("numeric");
 
+                    b.Property<string>("RecordedBy")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("ElectricityBills");
+                });
+
+            modelBuilder.Entity("EnergyApp.API.Models.ElectricityRecord", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("BillingCycle")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<Guid?>("BuildingId")
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal>("ConsumptionWh")
+                        .HasColumnType("numeric");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("DepartmentId")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("DocNumber")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("DocReceiveNumber")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<decimal>("FromBatteryWh")
+                        .HasColumnType("numeric");
+
+                    b.Property<decimal>("FromGridWh")
+                        .HasColumnType("numeric");
+
+                    b.Property<decimal>("FromSolarWh")
+                        .HasColumnType("numeric");
+
+                    b.Property<decimal>("FtRate")
+                        .HasColumnType("numeric");
+
+                    b.Property<string>("Note")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<decimal>("PeaAmount")
+                        .HasColumnType("numeric");
+
+                    b.Property<decimal>("PeaUnitUsed")
+                        .HasColumnType("numeric");
+
+                    b.Property<decimal>("ProductionWh")
+                        .HasColumnType("numeric");
+
                     b.Property<DateTime?>("RecordDate")
                         .HasColumnType("timestamp without time zone");
 
@@ -198,14 +266,7 @@ namespace EnergyApp.API.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
-                    b.Property<string>("DepartmentId")
-                        .IsRequired()
-                        .HasColumnType("text");
-
                     b.Property<decimal>("SolarUnitProduced")
-                        .HasColumnType("numeric");
-
-                    b.Property<decimal>("ProductionWh")
                         .HasColumnType("numeric");
 
                     b.Property<decimal>("ToBatteryWh")
@@ -215,18 +276,6 @@ namespace EnergyApp.API.Migrations
                         .HasColumnType("numeric");
 
                     b.Property<decimal>("ToHomeWh")
-                        .HasColumnType("numeric");
-
-                    b.Property<decimal>("ConsumptionWh")
-                        .HasColumnType("numeric");
-
-                    b.Property<decimal>("FromBatteryWh")
-                        .HasColumnType("numeric");
-
-                    b.Property<decimal>("FromGridWh")
-                        .HasColumnType("numeric");
-
-                    b.Property<decimal>("FromSolarWh")
                         .HasColumnType("numeric");
 
                     b.Property<string>("Type")
@@ -584,8 +633,26 @@ namespace EnergyApp.API.Migrations
                     b.Property<int>("EmsMail")
                         .HasColumnType("integer");
 
+                    b.Property<int>("IncomingEmsMail")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("IncomingNormalMail")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("IncomingRegisteredMail")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("IncomingTotalMail")
+                        .HasColumnType("integer");
+
+                    b.Property<decimal>("EmsMailUnitPrice")
+                        .HasColumnType("numeric");
+
                     b.Property<int>("NormalMail")
                         .HasColumnType("integer");
+
+                    b.Property<decimal>("NormalMailUnitPrice")
+                        .HasColumnType("numeric");
 
                     b.Property<DateTime>("RecordMonth")
                         .HasColumnType("timestamp without time zone");
@@ -596,6 +663,9 @@ namespace EnergyApp.API.Migrations
 
                     b.Property<int>("RegisteredMail")
                         .HasColumnType("integer");
+
+                    b.Property<decimal>("RegisteredMailUnitPrice")
+                        .HasColumnType("numeric");
 
                     b.Property<int>("TotalMail")
                         .HasColumnType("integer");
@@ -674,11 +744,38 @@ namespace EnergyApp.API.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
+                    b.Property<string>("AdminOfficerName")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("AdminOfficerUid")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("AssetNumber")
+                        .IsRequired()
+                        .HasColumnType("text");
+
                     b.Property<string>("AssignedTo")
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<string>("BuildingName")
+                        .IsRequired()
+                        .HasColumnType("text");
+
                     b.Property<string>("Category")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime?>("ClosedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("ClosedByName")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("ClosedByUid")
                         .IsRequired()
                         .HasColumnType("text");
 
@@ -689,7 +786,32 @@ namespace EnergyApp.API.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<string>("EscalationReason")
+                        .IsRequired()
+                        .HasColumnType("text");
+
                     b.Property<string>("Extension")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime?>("ExternalCompletedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("ExternalResult")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime?>("ExternalScheduledAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("ExternalVendorName")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<bool>("IsCentralAsset")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("LocationDetail")
                         .IsRequired()
                         .HasColumnType("text");
 
@@ -698,6 +820,14 @@ namespace EnergyApp.API.Migrations
                         .HasColumnType("text");
 
                     b.Property<string>("Priority")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("RequesterDepartmentCode")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("RequesterDepartmentName")
                         .IsRequired()
                         .HasColumnType("text");
 
@@ -717,7 +847,147 @@ namespace EnergyApp.API.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<bool?>("SupervisorCanRepairInHouse")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("SupervisorExternalAdvice")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("SupervisorName")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("SupervisorReason")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("SupervisorRepairPlan")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("SupervisorUid")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("TechnicianAction")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("TechnicianDiagnosis")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("TechnicianName")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("TechnicianUid")
+                        .IsRequired()
+                        .HasColumnType("text");
+
                     b.Property<string>("Title")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("WorkOrderNo")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("ServiceRequests");
+                });
+
+            modelBuilder.Entity("EnergyApp.API.Models.SolarProduction", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("BuildingId")
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal>("ConsumptionWh")
+                        .HasColumnType("numeric");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("DepartmentId")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<decimal>("FromBatteryWh")
+                        .HasColumnType("numeric");
+
+                    b.Property<decimal>("FromGridWh")
+                        .HasColumnType("numeric");
+
+                    b.Property<decimal>("FromSolarWh")
+                        .HasColumnType("numeric");
+
+                    b.Property<string>("Note")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<decimal>("ProductionWh")
+                        .HasColumnType("numeric");
+
+                    b.Property<DateTime?>("RecordDate")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("RecordedBy")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<decimal>("SolarUnitProduced")
+                        .HasColumnType("numeric");
+
+                    b.Property<decimal>("ToBatteryWh")
+                        .HasColumnType("numeric");
+
+                    b.Property<decimal>("ToGridWh")
+                        .HasColumnType("numeric");
+
+                    b.Property<decimal>("ToHomeWh")
+                        .HasColumnType("numeric");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("SolarProductions");
+                });
+
+            modelBuilder.Entity("EnergyApp.API.Models.SparePart", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("PartCode")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("PartName")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<decimal>("QuantityOnHand")
+                        .HasColumnType("numeric");
+
+                    b.Property<decimal>("ReorderPoint")
+                        .HasColumnType("numeric");
+
+                    b.Property<string>("Unit")
                         .IsRequired()
                         .HasColumnType("text");
 
@@ -726,7 +996,132 @@ namespace EnergyApp.API.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("ServiceRequests");
+                    b.ToTable("SpareParts");
+                });
+
+            modelBuilder.Entity("EnergyApp.API.Models.SparePartIssueRequest", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("ApprovedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("ApprovedByName")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("ApprovedByUid")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("Note")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("RejectReason")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("RequestNo")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("RequestedByName")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("RequestedByUid")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<Guid?>("ServiceRequestId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("SparePartIssueRequests");
+                });
+
+            modelBuilder.Entity("EnergyApp.API.Models.SparePartIssueRequestItem", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal>("QtyApproved")
+                        .HasColumnType("numeric");
+
+                    b.Property<decimal>("QtyRequested")
+                        .HasColumnType("numeric");
+
+                    b.Property<Guid>("SparePartId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("SparePartIssueRequestId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SparePartId");
+
+                    b.HasIndex("SparePartIssueRequestId");
+
+                    b.ToTable("SparePartIssueRequestItems");
+                });
+
+            modelBuilder.Entity("EnergyApp.API.Models.SparePartTransaction", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ApprovedByUid")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("Note")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<decimal>("Quantity")
+                        .HasColumnType("numeric");
+
+                    b.Property<string>("ReferenceId")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("ReferenceType")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("RequestedByUid")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("SparePartId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("TxType")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SparePartId");
+
+                    b.ToTable("SparePartTransactions");
                 });
 
             modelBuilder.Entity("EnergyApp.API.Models.TelephoneRecord", b =>
@@ -895,6 +1290,36 @@ namespace EnergyApp.API.Migrations
                     b.ToTable("WaterRecords");
                 });
 
+            modelBuilder.Entity("EnergyApp.API.Models.SparePartIssueRequestItem", b =>
+                {
+                    b.HasOne("EnergyApp.API.Models.SparePart", "SparePart")
+                        .WithMany()
+                        .HasForeignKey("SparePartId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("EnergyApp.API.Models.SparePartIssueRequest", "SparePartIssueRequest")
+                        .WithMany("Items")
+                        .HasForeignKey("SparePartIssueRequestId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("SparePart");
+
+                    b.Navigation("SparePartIssueRequest");
+                });
+
+            modelBuilder.Entity("EnergyApp.API.Models.SparePartTransaction", b =>
+                {
+                    b.HasOne("EnergyApp.API.Models.SparePart", "SparePart")
+                        .WithMany()
+                        .HasForeignKey("SparePartId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("SparePart");
+                });
+
             modelBuilder.Entity("EnergyApp.API.Models.User", b =>
                 {
                     b.HasOne("EnergyApp.API.Models.Department", "Department")
@@ -907,6 +1332,11 @@ namespace EnergyApp.API.Migrations
             modelBuilder.Entity("EnergyApp.API.Models.Department", b =>
                 {
                     b.Navigation("Users");
+                });
+
+            modelBuilder.Entity("EnergyApp.API.Models.SparePartIssueRequest", b =>
+                {
+                    b.Navigation("Items");
                 });
 #pragma warning restore 612, 618
         }

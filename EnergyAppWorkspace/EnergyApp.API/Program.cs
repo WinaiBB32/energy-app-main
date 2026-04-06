@@ -1,4 +1,6 @@
 using EnergyApp.API.Data;
+using EnergyApp.API.Hubs;
+using EnergyApp.API.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
@@ -13,6 +15,7 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
 
+builder.Services.AddSignalR();
 // --- JWT Authentication ---
 var jwtSecret = builder.Configuration["JwtSettings:Secret"]!;
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
@@ -25,6 +28,21 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             ValidateIssuer = false,
             ValidateAudience = false,
             ClockSkew = TimeSpan.Zero
+        };
+        options.Events = new JwtBearerEvents
+        {
+            OnMessageReceived = context =>
+            {
+                var accessToken = context.Request.Query["access_token"];
+                var path = context.HttpContext.Request.Path;
+                if (!string.IsNullOrEmpty(accessToken) &&
+                    (path.StartsWithSegments("/hubs/maintenance") ||
+                     path.StartsWithSegments("/api/v1/hubs/maintenance")))
+                {
+                    context.Token = accessToken;
+                }
+                return Task.CompletedTask;
+            }
         };
     });
 
@@ -44,6 +62,7 @@ builder.Services.AddCors(options =>
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
+builder.Services.AddSingleton<ISystemErrorLogStore, InMemorySystemErrorLogStore>();
 
 var app = builder.Build();
 
@@ -56,7 +75,59 @@ if (app.Environment.IsDevelopment())
 // app.UseHttpsRedirection();
 
 app.UseCors("AllowVueApp");
+
+app.Use(async (context, next) =>
+{
+    var errorStore = context.RequestServices.GetRequiredService<ISystemErrorLogStore>();
+    var alreadyLogged = false;
+
+    try
+    {
+        await next();
+    }
+    catch (Exception ex)
+    {
+        alreadyLogged = true;
+        errorStore.Add(new SystemErrorEntry
+        {
+            OccurredAtUtc = DateTime.UtcNow,
+            Method = context.Request.Method,
+            Path = context.Request.Path,
+            StatusCode = 500,
+            Message = ex.Message,
+            ExceptionType = ex.GetType().Name,
+            TraceId = context.TraceIdentifier
+        });
+
+        context.Response.StatusCode = 500;
+        context.Response.ContentType = "application/json";
+        await context.Response.WriteAsJsonAsync(new
+        {
+            message = "Internal server error",
+            traceId = context.TraceIdentifier
+        });
+    }
+    finally
+    {
+        if (!alreadyLogged && context.Response.StatusCode >= 500)
+        {
+            errorStore.Add(new SystemErrorEntry
+            {
+                OccurredAtUtc = DateTime.UtcNow,
+                Method = context.Request.Method,
+                Path = context.Request.Path,
+                StatusCode = context.Response.StatusCode,
+                Message = $"HTTP {context.Response.StatusCode}",
+                ExceptionType = null,
+                TraceId = context.TraceIdentifier
+            });
+        }
+    }
+});
+
 app.UseAuthentication();
 app.UseAuthorization();
+app.MapHub<MaintenanceHub>("/hubs/maintenance");
+app.MapHub<MaintenanceHub>("/api/v1/hubs/maintenance");
 app.MapControllers();
 app.Run("http://0.0.0.0:5008");

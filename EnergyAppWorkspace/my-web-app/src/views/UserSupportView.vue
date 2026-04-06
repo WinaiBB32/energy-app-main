@@ -165,9 +165,9 @@ onMounted(async () => {
 
 // ─── Computed ─────────────────────────────────────────────────────────────────
 const statCounts = computed(() => ({
-  pending:     requests.value.filter((r) => r.status === 'pending').length,
+  pending: requests.value.filter((r) => r.status === 'pending').length,
   in_progress: requests.value.filter((r) => r.status === 'in_progress').length,
-  done:        requests.value.filter((r) => r.status === 'done').length,
+  done: requests.value.filter((r) => r.status === 'done').length,
 }))
 
 const linkedCount = computed(() => unreadDirIds.value.size)
@@ -186,16 +186,16 @@ function categoryLabel(val: string): string {
 }
 
 function priorityTag(val: string): { severity: 'info' | 'warn' | 'danger'; label: string } {
-  if (val === 'urgent')   return { severity: 'warn',   label: 'เร่งด่วน' }
+  if (val === 'urgent') return { severity: 'warn', label: 'เร่งด่วน' }
   if (val === 'critical') return { severity: 'danger', label: 'วิกฤต' }
-  return                         { severity: 'info',   label: 'ปกติ' }
+  return { severity: 'info', label: 'ปกติ' }
 }
 
 function statusTag(val: string): { severity: 'secondary' | 'info' | 'success' | 'danger'; label: string } {
-  if (val === 'pending')     return { severity: 'secondary', label: 'รอดำเนินการ' }
-  if (val === 'in_progress') return { severity: 'info',      label: 'กำลังดำเนินการ' }
-  if (val === 'done')        return { severity: 'success',   label: 'เสร็จสิ้น' }
-  return                            { severity: 'danger',    label: 'ยกเลิก' }
+  if (val === 'pending') return { severity: 'secondary', label: 'รอดำเนินการ' }
+  if (val === 'in_progress') return { severity: 'info', label: 'กำลังดำเนินการ' }
+  if (val === 'done') return { severity: 'success', label: 'เสร็จสิ้น' }
+  return { severity: 'danger', label: 'ยกเลิก' }
 }
 
 // ─── Actions ──────────────────────────────────────────────────────────────────
@@ -206,16 +206,16 @@ function openForm() {
 }
 
 async function submitRequest() {
-  if (!form.value.title.trim())       { formError.value = 'กรุณาระบุหัวข้อ'; return }
+  if (!form.value.title.trim()) { formError.value = 'กรุณาระบุหัวข้อ'; return }
   if (!form.value.description.trim()) { formError.value = 'กรุณาระบุรายละเอียด'; return }
   saving.value = true
   try {
     const res = await api.post<ServiceRequest>('/IPPhoneServiceRequest', {
       ...form.value,
       status: 'pending',
-      requesterName:  authStore.user?.displayName ?? authStore.user?.email ?? '',
+      requesterName: authStore.user?.displayName ?? authStore.user?.email ?? '',
       requesterEmail: authStore.user?.email ?? '',
-      requesterUid:   authStore.user?.uid ?? authStore.user?.id ?? '',
+      requesterUid: authStore.user?.uid ?? authStore.user?.id ?? '',
     })
     formVisible.value = false
     if (res.data) {
@@ -231,7 +231,11 @@ async function submitRequest() {
 }
 
 function openChat(r: ServiceRequest) {
-  router.push(`/ipphone/service/${r.id}`)
+  router.push(`/maintenance/service/${r.id}`)
+}
+
+function goToIpPhoneManagement() {
+  router.push('/ipphone/dashboard')
 }
 </script>
 
@@ -244,18 +248,16 @@ function openChat(r: ServiceRequest) {
     </Transition>
 
     <!-- Sidebar -->
-    <aside
-      class="bg-slate-900 flex flex-col z-50 transition-all duration-300 overflow-hidden shrink-0"
-      :class="[
-        isMobile ? 'fixed inset-y-0 left-0 shadow-2xl' : 'sticky top-0 h-screen',
-        isMobile ? (sidebarOpen ? 'w-64 translate-x-0' : 'w-64 -translate-x-full') : (sidebarOpen ? 'w-64' : 'w-16'),
-      ]"
-    >
+    <aside class="bg-slate-900 flex flex-col z-50 transition-all duration-300 overflow-hidden shrink-0" :class="[
+      isMobile ? 'fixed inset-y-0 left-0 shadow-2xl' : 'sticky top-0 h-screen',
+      isMobile ? (sidebarOpen ? 'w-64 translate-x-0' : 'w-64 -translate-x-full') : (sidebarOpen ? 'w-64' : 'w-16'),
+    ]">
       <!-- Brand -->
       <div class="border-b border-slate-700/50 shrink-0"
         :class="sidebarOpen || isMobile ? 'p-5' : 'py-4 flex justify-center'">
         <div :class="sidebarOpen || isMobile ? 'flex items-center gap-3' : ''">
-          <div class="w-9 h-9 bg-orange-600 rounded-xl flex items-center justify-center shadow-lg shadow-orange-500/20 shrink-0"
+          <div
+            class="w-9 h-9 bg-orange-600 rounded-xl flex items-center justify-center shadow-lg shadow-orange-500/20 shrink-0"
             v-tooltip="!(sidebarOpen || isMobile) ? 'แจ้งปัญหา / ขอบริการ' : ''">
             <i class="pi pi-ticket text-white text-sm"></i>
           </div>
@@ -293,48 +295,38 @@ function openChat(r: ServiceRequest) {
         <ul class="space-y-0.5">
           <!-- คำร้องของฉัน -->
           <li>
-            <button
-              @click="currentTab = 'mine'; if(isMobile) sidebarOpen = false"
-              class="w-full flex items-center rounded-lg text-left text-sm transition-all duration-150"
-              :class="[
+            <button @click="currentTab = 'mine'; if (isMobile) sidebarOpen = false"
+              class="w-full flex items-center rounded-lg text-left text-sm transition-all duration-150" :class="[
                 sidebarOpen || isMobile ? 'gap-2.5 px-3 py-2.5' : 'justify-center py-2.5',
                 currentTab === 'mine'
                   ? 'bg-orange-600 text-white font-semibold'
                   : 'text-slate-400 hover:text-white hover:bg-slate-800',
-              ]"
-              v-tooltip="!(sidebarOpen || isMobile) ? { value: 'คำร้องของฉัน', position: 'right' } : ''"
-            >
+              ]" v-tooltip="!(sidebarOpen || isMobile) ? { value: 'คำร้องของฉัน', position: 'right' } : ''">
               <i class="pi pi-ticket text-sm shrink-0"></i>
               <span v-if="sidebarOpen || isMobile">คำร้องของฉัน</span>
             </button>
           </li>
           <!-- แชทที่รอตอบ -->
           <li>
-            <button
-              @click="currentTab = 'assigned'; if(isMobile) sidebarOpen = false"
-              class="w-full flex items-center rounded-lg text-left text-sm transition-all duration-150"
-              :class="[
+            <button @click="currentTab = 'assigned'; if (isMobile) sidebarOpen = false"
+              class="w-full flex items-center rounded-lg text-left text-sm transition-all duration-150" :class="[
                 sidebarOpen || isMobile ? 'gap-2.5 px-3 py-2.5' : 'justify-center py-2.5',
                 currentTab === 'assigned'
                   ? 'bg-orange-600 text-white font-semibold'
                   : 'text-slate-400 hover:text-white hover:bg-slate-800',
-              ]"
-              v-tooltip="!(sidebarOpen || isMobile) ? { value: 'แชทกับผู้รับผิดชอบ', position: 'right' } : ''"
-            >
+              ]" v-tooltip="!(sidebarOpen || isMobile) ? { value: 'แชทกับผู้รับผิดชอบ', position: 'right' } : ''">
               <i class="pi pi-comments text-sm shrink-0"></i>
               <span v-if="sidebarOpen || isMobile" class="flex-1">แชทกับผู้รับผิดชอบ</span>
-              <span
-                v-if="linkedCount > 0 && (sidebarOpen || isMobile)"
-                class="ml-auto bg-teal-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full leading-none"
-              >{{ linkedCount }}</span>
+              <span v-if="linkedCount > 0 && (sidebarOpen || isMobile)"
+                class="ml-auto bg-teal-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full leading-none">{{
+                linkedCount }}</span>
             </button>
           </li>
         </ul>
       </nav>
 
       <!-- Toggle (desktop) -->
-      <div v-if="!isMobile" class="shrink-0 px-3 py-2 flex"
-        :class="sidebarOpen ? 'justify-end' : 'justify-center'">
+      <div v-if="!isMobile" class="shrink-0 px-3 py-2 flex" :class="sidebarOpen ? 'justify-end' : 'justify-center'">
         <button @click="sidebarOpen = !sidebarOpen"
           class="p-1.5 rounded-lg text-slate-500 hover:text-white hover:bg-slate-800 transition-colors">
           <i :class="sidebarOpen ? 'pi pi-chevron-left' : 'pi pi-chevron-right'" class="text-sm"></i>
@@ -344,11 +336,8 @@ function openChat(r: ServiceRequest) {
       <!-- Back to portal -->
       <div class="shrink-0 border-t border-slate-700/50"
         :class="sidebarOpen || isMobile ? 'p-4' : 'py-3 flex justify-center'">
-        <button
-          v-if="sidebarOpen || isMobile"
-          @click="router.push('/')"
-          class="flex items-center gap-2 text-slate-400 hover:text-white transition-colors text-sm w-full px-2 py-2"
-        >
+        <button v-if="sidebarOpen || isMobile" @click="router.push('/')"
+          class="flex items-center gap-2 text-slate-400 hover:text-white transition-colors text-sm w-full px-2 py-2">
           <i class="pi pi-arrow-left text-xs"></i>
           <span>กลับหน้าหลัก</span>
         </button>
@@ -364,18 +353,27 @@ function openChat(r: ServiceRequest) {
     <main class="flex-1 overflow-y-auto min-w-0">
       <!-- Mobile top bar -->
       <div class="lg:hidden sticky top-0 z-30 bg-white border-b border-gray-100 h-14 flex items-center px-4 gap-3">
-        <button @click="sidebarOpen = true"
-          class="p-2 rounded-lg text-gray-500 hover:bg-gray-100 transition-colors">
+        <button @click="sidebarOpen = true" class="p-2 rounded-lg text-gray-500 hover:bg-gray-100 transition-colors">
           <i class="pi pi-bars text-sm"></i>
         </button>
-        <div class="flex items-center gap-2">
+        <div class="flex items-center gap-2 min-w-0">
           <div class="w-7 h-7 bg-orange-600 rounded-lg flex items-center justify-center">
             <i class="pi pi-ticket text-white text-xs"></i>
           </div>
-          <span class="font-bold text-gray-800 text-sm">แจ้งปัญหา / ขอบริการ</span>
+          <span class="font-bold text-gray-800 text-sm truncate">แจ้งปัญหา / ขอบริการ</span>
         </div>
+        <button @click="goToIpPhoneManagement"
+          class="ml-auto inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-gray-200 text-gray-700 text-xs font-medium hover:bg-gray-50 transition-colors">
+          <i class="pi pi-arrow-left text-[10px]"></i>
+          <span>IP-Phone</span>
+        </button>
       </div>
       <div class="max-w-4xl mx-auto p-8 space-y-6">
+
+        <div class="hidden lg:flex items-center justify-end">
+          <Button label="กลับระบบจัดการ IP-Phone" icon="pi pi-arrow-left" severity="secondary" outlined
+            @click="goToIpPhoneManagement" />
+        </div>
 
         <!-- Success -->
         <Message v-if="successMsg" severity="success" :closable="false">{{ successMsg }}</Message>
@@ -436,14 +434,18 @@ function openChat(r: ServiceRequest) {
               class="bg-white rounded-2xl border border-gray-100 p-5 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 cursor-pointer group"
               @click="openChat(req)">
               <div class="flex items-start gap-4">
-                <div class="w-10 h-10 bg-orange-50 rounded-xl flex items-center justify-center shrink-0 group-hover:bg-orange-500 transition-colors">
+                <div
+                  class="w-10 h-10 bg-orange-50 rounded-xl flex items-center justify-center shrink-0 group-hover:bg-orange-500 transition-colors">
                   <i class="pi pi-ticket text-orange-500 group-hover:text-white transition-colors"></i>
                 </div>
                 <div class="flex-1 min-w-0">
                   <div class="flex items-center gap-2 flex-wrap">
-                    <h3 class="font-bold text-gray-800 group-hover:text-orange-600 transition-colors">{{ req.title }}</h3>
-                    <Tag :severity="priorityTag(req.priority).severity" :value="priorityTag(req.priority).label" class="text-xs" />
-                    <Tag :severity="statusTag(req.status).severity" :value="statusTag(req.status).label" class="text-xs" />
+                    <h3 class="font-bold text-gray-800 group-hover:text-orange-600 transition-colors">{{ req.title }}
+                    </h3>
+                    <Tag :severity="priorityTag(req.priority).severity" :value="priorityTag(req.priority).label"
+                      class="text-xs" />
+                    <Tag :severity="statusTag(req.status).severity" :value="statusTag(req.status).label"
+                      class="text-xs" />
                   </div>
                   <p class="text-sm text-gray-500 mt-1 truncate">{{ req.description }}</p>
                   <div class="flex items-center gap-3 mt-2 text-xs text-gray-400">
@@ -456,7 +458,8 @@ function openChat(r: ServiceRequest) {
                     <strong>ผู้ดูแล:</strong> {{ req.note }}
                   </div>
                 </div>
-                <div class="flex items-center gap-1.5 shrink-0 text-gray-300 group-hover:text-orange-500 transition-colors">
+                <div
+                  class="flex items-center gap-1.5 shrink-0 text-gray-300 group-hover:text-orange-500 transition-colors">
                   <span class="text-xs font-medium text-gray-400 group-hover:text-orange-500">ดูการสนทนา</span>
                   <i class="pi pi-chevron-right text-sm"></i>
                 </div>
@@ -482,16 +485,14 @@ function openChat(r: ServiceRequest) {
               <p class="font-medium">ยังไม่ได้ผูกเบอร์โทรศัพท์</p>
               <p class="text-sm mt-1">ผู้ดูแลระบบต้องผูกบัญชีของคุณกับเบอร์โทรศัพท์ก่อน</p>
             </div>
-            <div
-              v-for="dir in linkedDirectories"
-              :key="dir.id"
+            <div v-for="dir in linkedDirectories" :key="dir.id"
               class="bg-white rounded-2xl border p-5 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 cursor-pointer group"
               :class="unreadDirIds.has(dir.id) ? 'border-teal-300 bg-teal-50/30' : 'border-gray-100'"
-              @click="markSeen(dir.id); router.push(`/ipphone/directory/${dir.id}`)"
-            >
+              @click="markSeen(dir.id); router.push(`/ipphone/directory/${dir.id}`)">
               <div class="flex items-center gap-4">
                 <!-- เบอร์โทร -->
-                <div class="w-14 h-14 bg-teal-50 rounded-xl flex items-center justify-center shrink-0 group-hover:bg-teal-600 transition-colors">
+                <div
+                  class="w-14 h-14 bg-teal-50 rounded-xl flex items-center justify-center shrink-0 group-hover:bg-teal-600 transition-colors">
                   <span class="font-mono font-black text-teal-600 text-base group-hover:text-white transition-colors">
                     {{ dir.ipPhoneNumber }}
                   </span>
@@ -514,7 +515,8 @@ function openChat(r: ServiceRequest) {
                   </div>
                 </div>
                 <!-- arrow -->
-                <div class="flex items-center gap-1.5 shrink-0 text-gray-300 group-hover:text-teal-500 transition-colors">
+                <div
+                  class="flex items-center gap-1.5 shrink-0 text-gray-300 group-hover:text-teal-500 transition-colors">
                   <span class="text-xs font-medium text-gray-400 group-hover:text-teal-500">เปิดแชท</span>
                   <i class="pi pi-chevron-right text-sm"></i>
                 </div>
@@ -539,22 +541,12 @@ function openChat(r: ServiceRequest) {
 
           <div class="flex flex-col gap-1.5">
             <label class="text-sm font-medium text-gray-700">ประเภท</label>
-            <Select
-              v-model="form.category"
-              :options="categoryOptions"
-              option-label="label"
-              option-value="value"
-            />
+            <Select v-model="form.category" :options="categoryOptions" option-label="label" option-value="value" />
           </div>
 
           <div class="flex flex-col gap-1.5">
             <label class="text-sm font-medium text-gray-700">ความสำคัญ</label>
-            <Select
-              v-model="form.priority"
-              :options="priorityOptions"
-              option-label="label"
-              option-value="value"
-            />
+            <Select v-model="form.priority" :options="priorityOptions" option-label="label" option-value="value" />
           </div>
 
           <div class="flex flex-col gap-1.5">
@@ -564,12 +556,8 @@ function openChat(r: ServiceRequest) {
 
           <div class="col-span-2 flex flex-col gap-1.5">
             <label class="text-sm font-medium text-gray-700">รายละเอียด <span class="text-red-500">*</span></label>
-            <Textarea
-              v-model="form.description"
-              :rows="4"
-              placeholder="อธิบายปัญหาหรือสิ่งที่ต้องการให้ชัดเจน..."
-              class="w-full"
-            />
+            <Textarea v-model="form.description" :rows="4" placeholder="อธิบายปัญหาหรือสิ่งที่ต้องการให้ชัดเจน..."
+              class="w-full" />
           </div>
         </div>
 
@@ -588,6 +576,13 @@ function openChat(r: ServiceRequest) {
 </template>
 
 <style scoped>
-.fade-enter-active, .fade-leave-active { transition: opacity 0.25s; }
-.fade-enter-from, .fade-leave-to { opacity: 0; }
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.25s;
+}
+
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+}
 </style>

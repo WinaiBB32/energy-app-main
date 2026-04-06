@@ -9,6 +9,8 @@ const MODULE_TO_SYSTEM_ID: Record<string, string> = {
   telephone: 'system4',
   saraban: 'system5',
   ipphone: 'system6',
+  maintenance: 'system9',
+  admintool: 'system10',
   postal: 'system7',
   meeting: 'system8',
 }
@@ -22,7 +24,6 @@ export function usePermissions() {
 
   function isSystemAdmin(system: string): boolean {
     if (isSuperAdmin.value) return true
-    if (currentUserRole.value === 'admin') return true
     const systemId = MODULE_TO_SYSTEM_ID[system] ?? system
     const sys = adminSystems.value
     return sys.includes(systemId) || sys.includes(system)

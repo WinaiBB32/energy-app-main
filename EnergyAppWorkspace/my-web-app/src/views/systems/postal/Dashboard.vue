@@ -15,17 +15,28 @@ const toast = useAppToast()
 interface PostalRecord {
   id: string;
   recordMonth: string;
+    incomingNormalMail: number;
+    incomingRegisteredMail: number;
+    incomingEmsMail: number;
+    incomingTotalMail: number;
   normalMail: number;
+    normalMailUnitPrice: number;
   registeredMail: number;
+    registeredMailUnitPrice: number;
   emsMail: number;
+    emsMailUnitPrice: number;
   totalMail: number;
 }
 
 interface MonthlyData {
-    normal: number
-    registered: number
-    ems: number
-    total: number
+    outgoingNormal: number
+    outgoingRegistered: number
+    outgoingEms: number
+    outgoingTotal: number
+    incomingNormal: number
+    incomingRegistered: number
+    incomingEms: number
+    incomingTotal: number
 }
 
 // ─── State ──────────────────────────────────────────────────────────────────
@@ -36,6 +47,14 @@ const sumNormal = ref<number>(0)
 const sumRegistered = ref<number>(0)
 const sumEms = ref<number>(0)
 const sumTotal = ref<number>(0)
+const sumIncomingNormal = ref<number>(0)
+const sumIncomingRegistered = ref<number>(0)
+const sumIncomingEms = ref<number>(0)
+const sumIncomingTotal = ref<number>(0)
+const sumNormalCost = ref<number>(0)
+const sumRegisteredCost = ref<number>(0)
+const sumEmsCost = ref<number>(0)
+const sumTotalCost = ref<number>(0)
 
 const getDefaultDateRange = (): Date[] => {
     const now = new Date()
@@ -54,9 +73,11 @@ const dateRangeLabel = computed(() => {
     return s === e ? s : `${s} – ${e}`
 })
 
-const trendChartData = ref()
+const outgoingTrendChartData = ref()
+const incomingTrendChartData = ref()
 const trendChartOptions = ref()
-const proportionChartData = ref()
+const outgoingProportionChartData = ref()
+const incomingProportionChartData = ref()
 const proportionChartOptions = ref()
 
 // ─── Data Fetching & Processing ─────────────────────────────────────────────
@@ -75,6 +96,8 @@ const fetchData = async (): Promise<void> => {
 
 const processData = (): void => {
     let tNormal = 0, tRegistered = 0, tEms = 0
+    let tIncomingNormal = 0, tIncomingRegistered = 0, tIncomingEms = 0
+    let tNormalCost = 0, tRegisteredCost = 0, tEmsCost = 0
     const monthlyTrend: Record<string, MonthlyData> = {}
     
     const start = selectedDateRange.value?.[0]
@@ -93,27 +116,60 @@ const processData = (): void => {
         const monthKey = `${recordDate.getFullYear()}-${String(recordDate.getMonth() + 1).padStart(2, '0')}`
 
         if (!monthlyTrend[monthKey]) {
-            monthlyTrend[monthKey] = { normal: 0, registered: 0, ems: 0, total: 0 }
+            monthlyTrend[monthKey] = {
+                outgoingNormal: 0,
+                outgoingRegistered: 0,
+                outgoingEms: 0,
+                outgoingTotal: 0,
+                incomingNormal: 0,
+                incomingRegistered: 0,
+                incomingEms: 0,
+                incomingTotal: 0,
+            }
         }
 
         const n = record.normalMail || 0
         const r = record.registeredMail || 0
         const e = record.emsMail || 0
+        const inN = record.incomingNormalMail || 0
+        const inR = record.incomingRegisteredMail || 0
+        const inE = record.incomingEmsMail || 0
+        const nTotalPrice = record.normalMailUnitPrice || 0
+        const rTotalPrice = record.registeredMailUnitPrice || 0
+        const eTotalPrice = record.emsMailUnitPrice || 0
         
-        monthlyTrend[monthKey].normal += n
-        monthlyTrend[monthKey].registered += r
-        monthlyTrend[monthKey].ems += e
-        monthlyTrend[monthKey].total += (n + r + e)
+        monthlyTrend[monthKey].outgoingNormal += n
+        monthlyTrend[monthKey].outgoingRegistered += r
+        monthlyTrend[monthKey].outgoingEms += e
+        monthlyTrend[monthKey].outgoingTotal += (n + r + e)
+        monthlyTrend[monthKey].incomingNormal += inN
+        monthlyTrend[monthKey].incomingRegistered += inR
+        monthlyTrend[monthKey].incomingEms += inE
+        monthlyTrend[monthKey].incomingTotal += (inN + inR + inE)
 
         tNormal += n
         tRegistered += r
         tEms += e
+        tIncomingNormal += inN
+        tIncomingRegistered += inR
+        tIncomingEms += inE
+        tNormalCost += nTotalPrice
+        tRegisteredCost += rTotalPrice
+        tEmsCost += eTotalPrice
     })
     
     sumNormal.value = tNormal
     sumRegistered.value = tRegistered
     sumEms.value = tEms
     sumTotal.value = tNormal + tRegistered + tEms
+    sumIncomingNormal.value = tIncomingNormal
+    sumIncomingRegistered.value = tIncomingRegistered
+    sumIncomingEms.value = tIncomingEms
+    sumIncomingTotal.value = tIncomingNormal + tIncomingRegistered + tIncomingEms
+    sumNormalCost.value = tNormalCost
+    sumRegisteredCost.value = tRegisteredCost
+    sumEmsCost.value = tEmsCost
+    sumTotalCost.value = tNormalCost + tRegisteredCost + tEmsCost
 
     setupCharts(monthlyTrend)
 }
@@ -134,21 +190,31 @@ const setupCharts = (monthlyData: Record<string, MonthlyData>): void => {
     const sortedKeys = Object.keys(monthlyData).sort()
     const labels = sortedKeys.map(k => formatChartLabel(k))
 
-    trendChartData.value = {
+    outgoingTrendChartData.value = {
         labels,
         datasets: [
-            { type: 'bar', label: 'ไปรษณีย์ธรรมดา', backgroundColor: '#94a3b8', data: sortedKeys.map(k => monthlyData[k]?.normal ?? 0) },
-            { type: 'bar', label: 'ลงทะเบียน', backgroundColor: '#3b82f6', data: sortedKeys.map(k => monthlyData[k]?.registered ?? 0) },
-            { type: 'bar', label: 'EMS', backgroundColor: '#f43f5e', borderRadius: { topLeft: 4, topRight: 4 }, data: sortedKeys.map(k => monthlyData[k]?.ems ?? 0) },
+            { type: 'bar', label: 'ไปรษณีย์ธรรมดา', backgroundColor: '#94a3b8', data: sortedKeys.map(k => monthlyData[k]?.outgoingNormal ?? 0) },
+            { type: 'bar', label: 'ลงทะเบียน', backgroundColor: '#3b82f6', data: sortedKeys.map(k => monthlyData[k]?.outgoingRegistered ?? 0) },
+            { type: 'bar', label: 'EMS', backgroundColor: '#f43f5e', borderRadius: { topLeft: 4, topRight: 4 }, data: sortedKeys.map(k => monthlyData[k]?.outgoingEms ?? 0) },
         ]
     }
+
+    incomingTrendChartData.value = {
+        labels,
+        datasets: [
+            { type: 'bar', label: 'รับเข้า - ธรรมดา', backgroundColor: '#6ee7b7', data: sortedKeys.map(k => monthlyData[k]?.incomingNormal ?? 0) },
+            { type: 'bar', label: 'รับเข้า - ลงทะเบียน', backgroundColor: '#22d3ee', data: sortedKeys.map(k => monthlyData[k]?.incomingRegistered ?? 0) },
+            { type: 'bar', label: 'รับเข้า - EMS', backgroundColor: '#14b8a6', borderRadius: { topLeft: 4, topRight: 4 }, data: sortedKeys.map(k => monthlyData[k]?.incomingEms ?? 0) },
+        ]
+    }
+
     trendChartOptions.value = {
         maintainAspectRatio: false, aspectRatio: 0.6,
         interaction: { mode: 'index', intersect: false },
         scales: { x: { stacked: true, grid: { display: false } }, y: { stacked: true, title: { display: true, text: 'จำนวน (ชิ้น)' } } }
     }
 
-    proportionChartData.value = {
+    outgoingProportionChartData.value = {
         labels: ['ธรรมดา', 'ลงทะเบียน', 'EMS'],
         datasets: [{
             data: [sumNormal.value, sumRegistered.value, sumEms.value],
@@ -156,6 +222,16 @@ const setupCharts = (monthlyData: Record<string, MonthlyData>): void => {
             borderWidth: 0
         }]
     }
+
+    incomingProportionChartData.value = {
+        labels: ['รับเข้า - ธรรมดา', 'รับเข้า - ลงทะเบียน', 'รับเข้า - EMS'],
+        datasets: [{
+            data: [sumIncomingNormal.value, sumIncomingRegistered.value, sumIncomingEms.value],
+            backgroundColor: ['#6ee7b7', '#22d3ee', '#14b8a6'],
+            borderWidth: 0
+        }]
+    }
+
     proportionChartOptions.value = { plugins: { legend: { position: 'bottom' } }, cutout: '60%' }
 }
 </script>
@@ -167,7 +243,7 @@ const setupCharts = (monthlyData: Record<string, MonthlyData>): void => {
                 <h2 class="text-3xl font-bold text-gray-800">
                     <i class="pi pi-chart-bar text-blue-500 mr-2"></i>ภาพรวมงานไปรษณีย์
                 </h2>
-                <p class="text-gray-500 mt-1">วิเคราะห์ปริมาณและประเภทการจัดส่งจดหมาย/พัสดุ</p>
+                <p class="text-gray-500 mt-1">วิเคราะห์ทั้งไปรษณีย์ออก และไปรษณีย์เข้าหน่วยงานในช่วงเวลาที่เลือก</p>
             </div>
             <div class="flex items-center gap-3">
                 <div class="bg-white p-3 rounded-lg shadow-sm border border-gray-100 flex items-center gap-3">
@@ -197,6 +273,7 @@ const setupCharts = (monthlyData: Record<string, MonthlyData>): void => {
                             <p class="text-xs text-gray-500 font-semibold mb-1 uppercase">ธรรมดา</p>
                             <h3 class="text-2xl font-bold text-gray-800">{{ sumNormal.toLocaleString() }} <span
                                     class="text-sm font-normal">ชิ้น</span></h3>
+                            <p class="text-xs text-gray-500 mt-1">{{ sumNormalCost.toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }} บาท</p>
                         </div>
                         <div class="w-10 h-10 bg-slate-50 rounded-full flex items-center justify-center text-slate-500">
                             <i class="pi pi-file"></i>
@@ -212,6 +289,7 @@ const setupCharts = (monthlyData: Record<string, MonthlyData>): void => {
                             <p class="text-xs text-gray-500 font-semibold mb-1 uppercase">ลงทะเบียน</p>
                             <h3 class="text-2xl font-bold text-gray-800">{{ sumRegistered.toLocaleString() }} <span
                                     class="text-sm font-normal">ชิ้น</span></h3>
+                            <p class="text-xs text-gray-500 mt-1">{{ sumRegisteredCost.toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }} บาท</p>
                         </div>
                         <div class="w-10 h-10 bg-blue-50 rounded-full flex items-center justify-center text-blue-500"><i
                                 class="pi pi-book"></i></div>
@@ -226,6 +304,7 @@ const setupCharts = (monthlyData: Record<string, MonthlyData>): void => {
                             <p class="text-xs text-gray-500 font-semibold mb-1 uppercase">EMS (ด่วนพิเศษ)</p>
                             <h3 class="text-2xl font-bold text-gray-800">{{ sumEms.toLocaleString() }} <span
                                     class="text-sm font-normal">ชิ้น</span></h3>
+                            <p class="text-xs text-gray-500 mt-1">{{ sumEmsCost.toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }} บาท</p>
                         </div>
                         <div class="w-10 h-10 bg-rose-50 rounded-full flex items-center justify-center text-rose-500"><i
                                 class="pi pi-send"></i></div>
@@ -240,6 +319,7 @@ const setupCharts = (monthlyData: Record<string, MonthlyData>): void => {
                             <p class="text-xs text-sky-700 font-black mb-1 uppercase">รวมการจัดส่งทั้งหมด</p>
                             <h3 class="text-3xl font-black text-sky-700">{{ sumTotal.toLocaleString() }} <span
                                     class="text-sm font-bold">ชิ้น</span></h3>
+                            <p class="text-sm font-bold text-sky-700 mt-1">{{ sumTotalCost.toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }} บาท</p>
                         </div>
                         <div class="w-10 h-10 bg-sky-100 rounded-full flex items-center justify-center text-sky-600"><i
                                 class="pi pi-box"></i></div>
@@ -248,28 +328,89 @@ const setupCharts = (monthlyData: Record<string, MonthlyData>): void => {
             </Card>
         </div>
 
+        <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+            <Card class="shadow-sm border-t-4 border-emerald-400">
+                <template #content>
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <p class="text-xs text-gray-500 font-semibold mb-1 uppercase">รับเข้า - ธรรมดา</p>
+                            <h3 class="text-2xl font-bold text-gray-800">{{ sumIncomingNormal.toLocaleString() }} <span
+                                    class="text-sm font-normal">ชิ้น</span></h3>
+                        </div>
+                        <div class="w-10 h-10 bg-emerald-50 rounded-full flex items-center justify-center text-emerald-500">
+                            <i class="pi pi-inbox"></i>
+                        </div>
+                    </div>
+                </template>
+            </Card>
+
+            <Card class="shadow-sm border-t-4 border-cyan-500">
+                <template #content>
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <p class="text-xs text-gray-500 font-semibold mb-1 uppercase">รับเข้า - ลงทะเบียน</p>
+                            <h3 class="text-2xl font-bold text-gray-800">{{ sumIncomingRegistered.toLocaleString() }} <span
+                                    class="text-sm font-normal">ชิ้น</span></h3>
+                        </div>
+                        <div class="w-10 h-10 bg-cyan-50 rounded-full flex items-center justify-center text-cyan-500">
+                            <i class="pi pi-inbox"></i>
+                        </div>
+                    </div>
+                </template>
+            </Card>
+
+            <Card class="shadow-sm border-t-4 border-teal-500">
+                <template #content>
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <p class="text-xs text-gray-500 font-semibold mb-1 uppercase">รับเข้า - EMS</p>
+                            <h3 class="text-2xl font-bold text-gray-800">{{ sumIncomingEms.toLocaleString() }} <span
+                                    class="text-sm font-normal">ชิ้น</span></h3>
+                        </div>
+                        <div class="w-10 h-10 bg-teal-50 rounded-full flex items-center justify-center text-teal-500">
+                            <i class="pi pi-inbox"></i>
+                        </div>
+                    </div>
+                </template>
+            </Card>
+
+            <Card class="shadow-sm border-t-4 border-emerald-600 bg-emerald-50/30">
+                <template #content>
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <p class="text-xs text-emerald-700 font-black mb-1 uppercase">รวมไปรษณีย์เข้าทั้งหมด</p>
+                            <h3 class="text-3xl font-black text-emerald-700">{{ sumIncomingTotal.toLocaleString() }} <span
+                                    class="text-sm font-bold">ชิ้น</span></h3>
+                        </div>
+                        <div class="w-10 h-10 bg-emerald-100 rounded-full flex items-center justify-center text-emerald-600"><i
+                                class="pi pi-inbox"></i></div>
+                    </div>
+                </template>
+            </Card>
+        </div>
+
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
             <Card class="shadow-sm border-none lg:col-span-2">
                 <template #title>
-                    <div class="text-lg font-bold text-gray-700">แนวโน้มปริมาณการส่งไปรษณีย์</div>
+                    <div class="text-lg font-bold text-gray-700">แนวโน้มปริมาณไปรษณีย์ออก</div>
                 </template>
                 <template #content>
                     <div v-if="isLoading" class="h-80 flex items-center justify-center"><i
                             class="pi pi-spin pi-spinner text-4xl text-blue-500"></i></div>
-                    <div v-else-if="trendChartData?.labels?.length === 0"
+                    <div v-else-if="outgoingTrendChartData?.labels?.length === 0"
                         class="h-80 flex flex-col items-center justify-center text-gray-400"><i
                             class="pi pi-box text-3xl mb-2"></i>
                         <p>ไม่มีข้อมูล</p>
                     </div>
                     <div v-else class="h-80 relative">
-                        <Chart type="bar" :data="trendChartData" :options="trendChartOptions" class="h-full w-full" />
+                        <Chart type="bar" :data="outgoingTrendChartData" :options="trendChartOptions" class="h-full w-full" />
                     </div>
                 </template>
             </Card>
 
             <Card class="shadow-sm border-none lg:col-span-1">
                 <template #title>
-                    <div class="text-lg font-bold text-gray-700">สัดส่วนประเภทการส่ง</div>
+                    <div class="text-lg font-bold text-gray-700">สัดส่วนประเภทไปรษณีย์ออก</div>
                 </template>
                 <template #content>
                     <div v-if="isLoading" class="h-80 flex items-center justify-center"><i
@@ -280,7 +421,46 @@ const setupCharts = (monthlyData: Record<string, MonthlyData>): void => {
                         <p>ไม่มีข้อมูล</p>
                     </div>
                     <div v-else class="h-80 relative flex items-center justify-center">
-                        <Chart type="doughnut" :data="proportionChartData" :options="proportionChartOptions"
+                        <Chart type="doughnut" :data="outgoingProportionChartData" :options="proportionChartOptions"
+                            class="w-full max-w-xs" />
+                    </div>
+                </template>
+            </Card>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+            <Card class="shadow-sm border-none lg:col-span-2">
+                <template #title>
+                    <div class="text-lg font-bold text-gray-700">แนวโน้มปริมาณไปรษณีย์เข้าหน่วยงาน</div>
+                </template>
+                <template #content>
+                    <div v-if="isLoading" class="h-80 flex items-center justify-center"><i
+                            class="pi pi-spin pi-spinner text-4xl text-emerald-500"></i></div>
+                    <div v-else-if="incomingTrendChartData?.labels?.length === 0"
+                        class="h-80 flex flex-col items-center justify-center text-gray-400"><i
+                            class="pi pi-box text-3xl mb-2"></i>
+                        <p>ไม่มีข้อมูล</p>
+                    </div>
+                    <div v-else class="h-80 relative">
+                        <Chart type="bar" :data="incomingTrendChartData" :options="trendChartOptions" class="h-full w-full" />
+                    </div>
+                </template>
+            </Card>
+
+            <Card class="shadow-sm border-none lg:col-span-1">
+                <template #title>
+                    <div class="text-lg font-bold text-gray-700">สัดส่วนประเภทไปรษณีย์เข้า</div>
+                </template>
+                <template #content>
+                    <div v-if="isLoading" class="h-80 flex items-center justify-center"><i
+                            class="pi pi-spin pi-spinner text-4xl text-emerald-500"></i></div>
+                    <div v-else-if="sumIncomingTotal === 0"
+                        class="h-80 flex flex-col items-center justify-center text-gray-400"><i
+                            class="pi pi-chart-pie text-3xl mb-2"></i>
+                        <p>ไม่มีข้อมูล</p>
+                    </div>
+                    <div v-else class="h-80 relative flex items-center justify-center">
+                        <Chart type="doughnut" :data="incomingProportionChartData" :options="proportionChartOptions"
                             class="w-full max-w-xs" />
                     </div>
                 </template>

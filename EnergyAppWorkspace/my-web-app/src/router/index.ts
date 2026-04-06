@@ -1,6 +1,12 @@
 // src/router/index.ts
 import { createRouter, createWebHistory } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
+import {
+  MAINTENANCE_ADMIN_BUILDING_PERMISSION,
+  MAINTENANCE_ADMIN_BUILDING_CENTRAL_PERMISSION,
+  MAINTENANCE_SUPERVISOR_PERMISSION,
+  MAINTENANCE_TECHNICIAN_PERMISSION,
+} from '../config/maintenancePermissions'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -166,18 +172,87 @@ const router = createRouter({
           component: () => import('../views/systems/ipphone/IPPhoneDetail.vue'),
           meta: { requiresAuth: true },
         },
+        // --- ระบบแจ้งซ่อมงานอาคาร ---
         {
-          path: '/ipphone/service',
-          name: 'ipphone-service',
-          component: () => import('../views/systems/ipphone/ServiceRequest.vue'),
-          meta: { system: 'system6', requiresSuperAdmin: true },
+          path: '/maintenance/dashboard',
+          name: 'maintenance-dashboard',
+          component: () => import('../views/systems/building-maintenance/Dashboard.vue'),
+          meta: {
+            system: 'system9',
+            requiresAuth: true,
+            allowedRoles: ['superadmin', 'adminbuilding'],
+          },
         },
         {
-          path: '/ipphone/service/:id',
-          name: 'ipphone-service-chat',
-          component: () => import('../views/systems/ipphone/ServiceChat.vue'),
+          path: '/maintenance/service',
+          name: 'maintenance-service',
+          component: () => import('../views/systems/building-maintenance/ServiceRequest.vue'),
+          meta: { system: 'system9', requiresAuth: true },
+        },
+        {
+          path: '/maintenance/technician',
+          name: 'maintenance-technician',
+          component: () => import('../views/systems/building-maintenance/TechnicianWorkbench.vue'),
+          meta: {
+            system: 'system9',
+            requiresAuth: true,
+            allowedRoles: ['superadmin', 'technician'],
+          },
+        },
+        {
+          path: '/maintenance/supervisor-review',
+          name: 'maintenance-supervisor-review',
+          component: () =>
+            import('../views/systems/building-maintenance/SupervisorReviewQueue.vue'),
+          meta: {
+            system: 'system9',
+            requiresAuth: true,
+            allowedRoles: ['superadmin', 'supervisor', 'admin'],
+          },
+        },
+        {
+          path: '/maintenance/external-procurement',
+          name: 'maintenance-external-procurement',
+          component: () =>
+            import('../views/systems/building-maintenance/ExternalProcurementInbox.vue'),
+          meta: {
+            system: 'system9',
+            requiresAuth: true,
+            allowedRoles: ['superadmin', 'adminbuilding', 'admin'],
+          },
+        },
+        {
+          path: '/maintenance/spare-parts',
+          name: 'maintenance-spare-parts',
+          component: () => import('../views/systems/building-maintenance/SparePartInventory.vue'),
+          meta: {
+            system: 'system9',
+            requiresAuth: true,
+            allowedRoles: ['superadmin', 'technician', 'adminbuilding'],
+          },
+        },
+        {
+          path: '/maintenance/external-timeline',
+          name: 'maintenance-external-timeline',
+          component: () =>
+            import('../views/systems/building-maintenance/ExternalRepairTimeline.vue'),
+          meta: {
+            system: 'system9',
+            requiresAuth: true,
+            allowedRoles: ['superadmin', 'adminbuilding'],
+          },
+        },
+        {
+          path: '/maintenance/service/:id',
+          name: 'maintenance-service-chat',
+          component: () => import('../views/systems/building-maintenance/ServiceChat.vue'),
           meta: { requiresAuth: true },
         },
+        // Legacy aliases for old links
+        { path: '/ipphone/service', redirect: '/maintenance/service' },
+        { path: '/ipphone/spare-parts', redirect: '/maintenance/spare-parts' },
+        { path: '/ipphone/external-timeline', redirect: '/maintenance/external-timeline' },
+        { path: '/ipphone/service/:id', redirect: '/maintenance/service/:id' },
         {
           path: '/ipphone/mapping',
           name: 'ipphone-mapping',
@@ -193,11 +268,18 @@ const router = createRouter({
           meta: { system: 'system7' },
         },
         {
-          path: '/postal',
-          name: 'postal-record',
-          component: () => import('../views/systems/postal/Postal.vue'),
+          path: '/postal/outgoing',
+          name: 'postal-outgoing',
+          component: () => import('../views/systems/postal/PostalOutgoing.vue'),
           meta: { system: 'system7', requiresAdmin: true },
         },
+        {
+          path: '/postal/incoming',
+          name: 'postal-incoming',
+          component: () => import('../views/systems/postal/PostalIncoming.vue'),
+          meta: { system: 'system7', requiresAdmin: true },
+        },
+        { path: '/postal', redirect: '/postal/outgoing' },
 
         // --- ห้องประชุม ---
         {
@@ -216,7 +298,7 @@ const router = createRouter({
           path: '/admin/meeting-rooms',
           name: 'admin-meeting-rooms',
           component: () => import('../views/admin/MeetingRoomManagement.vue'),
-          meta: { requiresSuperAdmin: true },
+          meta: { system: 'system10', requiresSuperAdmin: true },
         },
 
         // --- จัดการหลังบ้าน (SuperAdmin) ---
@@ -224,37 +306,49 @@ const router = createRouter({
           path: '/admin/users',
           name: 'admin-users',
           component: () => import('../views/admin/UserManagement.vue'),
-          meta: { requiresSuperAdmin: true },
+          meta: { system: 'system10', requiresSuperAdmin: true },
+        },
+        {
+          path: '/admin/users/:id/permissions',
+          name: 'admin-user-permissions',
+          component: () => import('../views/admin/UserPermissionEdit.vue'),
+          meta: { system: 'system10', requiresSuperAdmin: true },
+        },
+        {
+          path: '/admin/system-management',
+          name: 'admin-system-management',
+          component: () => import('../views/admin/SystemManagementHub.vue'),
+          meta: { system: 'system10', requiresSuperAdmin: true },
         },
         {
           path: '/admin/departments',
           name: 'admin-departments',
           component: () => import('../views/admin/DepartmentManagement.vue'),
-          meta: { requiresSuperAdmin: true },
+          meta: { system: 'system10', requiresSuperAdmin: true },
         },
         {
           path: '/admin/buildings',
           name: 'admin-buildings',
           component: () => import('../views/admin/BuildingManagement.vue'),
-          meta: { requiresSuperAdmin: true },
+          meta: { system: 'system10', requiresSuperAdmin: true },
         },
         {
           path: '/admin/fuel-types',
           name: 'admin-fuel-types',
           component: () => import('../views/admin/FuelTypeManagement.vue'),
-          meta: { requiresSuperAdmin: true },
+          meta: { system: 'system10', requiresSuperAdmin: true },
         },
         {
           path: '/admin/audit',
           name: 'admin-audit',
           component: () => import('../views/admin/AuditLog.vue'),
-          meta: { requiresSuperAdmin: true },
+          meta: { system: 'system10', requiresSuperAdmin: true },
         },
         {
           path: '/admin/quota',
           name: 'admin-quota',
           component: () => import('../views/admin/SystemQuota.vue'),
-          meta: { requiresSuperAdmin: true },
+          meta: { system: 'system10', requiresSuperAdmin: true },
         },
       ],
     },
@@ -266,6 +360,14 @@ const router = createRouter({
 router.beforeEach(async (to, _from) => {
   const authStore = useAuthStore()
 
+  if (authStore.isAuthenticated) {
+    await authStore.syncCurrentUser()
+  }
+
+  const routeSystem = [...to.matched]
+    .reverse()
+    .find((record) => typeof record.meta.system === 'string')?.meta.system as string | undefined
+
   // 1. อนุญาต iframe เข้า Dashboard ได้
   if (to.query.embed === 'true' && to.path.endsWith('/dashboard')) {
     return true // คืนค่า true คืออนุญาตให้ผ่าน
@@ -274,7 +376,11 @@ router.beforeEach(async (to, _from) => {
   const requiresAuth = to.matched.some((record) => record.meta.requiresAuth)
   const requiresAdmin = to.matched.some((record) => record.meta.requiresAdmin)
   const requiresSuperAdmin = to.matched.some((record) => record.meta.requiresSuperAdmin)
-  // const routeSystem = getMatchedSystemMeta(to.matched) // ปิดไว้ก่อนถ้ายังไม่ได้ใช้
+  const allowedRoles = [...to.matched]
+    .reverse()
+    .find((record) => Array.isArray(record.meta.allowedRoles))?.meta.allowedRoles as
+    | string[]
+    | undefined
 
   // 2. ไม่ได้ล็อกอิน -> ไปหน้า Login
   if (requiresAuth && !authStore.isAuthenticated) {
@@ -288,26 +394,89 @@ router.beforeEach(async (to, _from) => {
 
   // 4. จัดการสิทธิ์ (Role-based Access)
   if (authStore.isAuthenticated && authStore.user) {
-    const userRole = authStore.user.role
+    const userRole = (authStore.user.role ?? '').trim().toLowerCase()
+    const userStatus = (authStore.user.status ?? '').trim().toLowerCase()
+    const accessibleSystems = authStore.userProfile?.accessibleSystems ?? []
+    const adminSystems = authStore.userProfile?.adminSystems ?? []
+    const isSuperAdmin = userRole === 'superadmin'
+    const isAdmin = userRole === 'admin'
+    const hasMaintenancePermission = (permission: string): boolean =>
+      adminSystems.includes(permission)
+    const hasRouteLevelMaintenancePermission = (): boolean => {
+      if (to.path === '/maintenance/dashboard') {
+        return hasMaintenancePermission(MAINTENANCE_ADMIN_BUILDING_CENTRAL_PERMISSION)
+      }
+      if (to.path === '/maintenance/technician') {
+        return hasMaintenancePermission(MAINTENANCE_TECHNICIAN_PERMISSION)
+      }
+      if (to.path === '/maintenance/supervisor-review') {
+        return hasMaintenancePermission(MAINTENANCE_SUPERVISOR_PERMISSION)
+      }
+      if (to.path === '/maintenance/external-procurement') {
+        return (
+          hasMaintenancePermission(MAINTENANCE_ADMIN_BUILDING_PERMISSION) ||
+          hasMaintenancePermission(MAINTENANCE_ADMIN_BUILDING_CENTRAL_PERMISSION)
+        )
+      }
+      if (to.path === '/maintenance/external-timeline') {
+        return hasMaintenancePermission(MAINTENANCE_ADMIN_BUILDING_CENTRAL_PERMISSION)
+      }
+      if (to.path === '/maintenance/spare-parts') {
+        return (
+          hasMaintenancePermission(MAINTENANCE_TECHNICIAN_PERMISSION) ||
+          hasMaintenancePermission(MAINTENANCE_ADMIN_BUILDING_CENTRAL_PERMISSION)
+        )
+      }
+      return false
+    }
 
     // SuperAdmin ทะลวงด่าน
-    if (userRole === 'SuperAdmin') {
+    if (isSuperAdmin) {
       if (to.path === '/pending') return '/'
       return true
     }
 
-    // User ธรรมดา รออนุมัติ
-    if (userRole === 'User' && to.path !== '/pending') {
+    // ผู้ใช้สถานะ pending ให้ไปหน้ารออนุมัติ
+    if (userStatus === 'pending' && to.path !== '/pending') {
       return '/pending'
     }
 
     // เช็คสิทธิ์หน้า SuperAdmin
-    if (requiresSuperAdmin && userRole !== 'SuperAdmin') {
+    if (requiresSuperAdmin && !isSuperAdmin) {
       return '/'
     }
 
-    // เช็คสิทธิ์หน้า Admin
-    if (requiresAdmin && userRole !== 'Admin' && userRole !== 'SuperAdmin') {
+    // เช็คสิทธิ์เข้าถึงระบบรายระบบ (แยกสิทธิ์ ไม่ใช้ร่วมกัน)
+    if (routeSystem && !isSuperAdmin) {
+      const canAccessSystem =
+        accessibleSystems.includes(routeSystem) || adminSystems.includes(routeSystem)
+      if (!canAccessSystem) {
+        const canAccessMaintenanceByPermission =
+          routeSystem === 'system9' && hasRouteLevelMaintenancePermission()
+        if (canAccessMaintenanceByPermission) {
+          return true
+        }
+        return '/'
+      }
+    }
+
+    // เช็คสิทธิ์ admin รายระบบ
+    if (requiresAdmin && !isSuperAdmin) {
+      if (!routeSystem) return '/'
+      if (!adminSystems.includes(routeSystem)) {
+        return '/'
+      }
+    }
+
+    // เช็คสิทธิ์ role เฉพาะหน้า
+    if (allowedRoles && allowedRoles.length > 0 && !allowedRoles.includes(userRole)) {
+      if (!hasRouteLevelMaintenancePermission()) {
+        return '/'
+      }
+    }
+
+    // กรณี route ต้องมีสิทธิ์ login แต่ไม่ผูกระบบ: ผ่านตามปกติ
+    if (requiresAdmin && !isAdmin && !isSuperAdmin && !routeSystem) {
       return '/'
     }
   }
