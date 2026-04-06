@@ -20,9 +20,8 @@ const authStore = useAuthStore()
 const { logout } = useAuth()
 const { isSystemAdmin, isSuperAdmin } = usePermissions()
 const roleText = computed(() => (authStore.user?.role ?? '').trim().toLowerCase())
-const maintenancePermissions = computed(() => authStore.userProfile?.adminSystems ?? [])
 const hasMaintenancePermission = (permission: string): boolean =>
-  maintenancePermissions.value.includes(permission)
+  (authStore.userProfile?.adminSystems ?? []).includes(permission)
 
 const canOpenMaintenanceTechnician = computed(
   () =>
@@ -101,8 +100,7 @@ const maintenanceNotification = ref<MaintenanceNotificationSummary>({
 
 function checkMobile() {
   isMobile.value = window.innerWidth < 1024
-  if (isMobile.value) sidebarOpen.value = false
-  else sidebarOpen.value = true
+  sidebarOpen.value = !isMobile.value
 }
 
 onMounted(() => {
@@ -328,8 +326,7 @@ const pushNotificationItem = (item: MaintenanceNotificationItem) => {
     maintenanceNotification.value.timelineUpdateCount += 1
   }
 
-  maintenanceNotification.value.total =
-    maintenanceNotification.value.unreadChatCount + maintenanceNotification.value.timelineUpdateCount
+  recomputeNotificationTotal()
 }
 
 const recomputeNotificationTotal = () => {
@@ -450,7 +447,6 @@ const toggleNotifications = () => {
           :class="sidebarOpen || isMobile ? 'px-4 py-4' : 'py-3 flex justify-center'">
           <div :class="sidebarOpen || isMobile ? 'flex items-center gap-2.5' : ''">
             <div class="w-8 h-8 bg-indigo-600/20 rounded-lg flex items-center justify-center shrink-0"
-              :class="!(sidebarOpen || isMobile) ? '' : ''"
               v-tooltip="!(sidebarOpen || isMobile) ? currentSystemName : ''">
               <i :class="`pi ${systemIcon} text-indigo-400 text-sm`"></i>
             </div>

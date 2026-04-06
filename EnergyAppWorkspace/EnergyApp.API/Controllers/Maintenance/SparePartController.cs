@@ -206,7 +206,7 @@ namespace EnergyApp.API.Controllers
                 RequestedByUid = actor.Uid,
                 RequestedByName = actor.DisplayName,
                 Note = req.Note,
-                Status = "pending"
+                Status = UserStatus.Pending
             };
 
             foreach (var item in req.Items)
@@ -240,7 +240,7 @@ namespace EnergyApp.API.Controllers
                 .FirstOrDefaultAsync(x => x.Id == id);
 
             if (issueRequest == null) return NotFound();
-            if (issueRequest.Status != "pending")
+            if (issueRequest.Status != UserStatus.Pending)
                 return BadRequest(new { message = "คำขอนี้ไม่ได้อยู่ในสถานะรออนุมัติ" });
 
             foreach (var approvedItem in req.Items)
@@ -278,7 +278,7 @@ namespace EnergyApp.API.Controllers
                 }
             }
 
-            issueRequest.Status = "approved";
+            issueRequest.Status = UserStatus.Approved;
             issueRequest.ApprovedByUid = actor.Uid;
             issueRequest.ApprovedByName = actor.DisplayName;
             issueRequest.ApprovedAt = DateTime.UtcNow;
@@ -301,10 +301,10 @@ namespace EnergyApp.API.Controllers
 
             var issueRequest = await _context.SparePartIssueRequests.FindAsync(id);
             if (issueRequest == null) return NotFound();
-            if (issueRequest.Status != "pending")
+            if (issueRequest.Status != UserStatus.Pending)
                 return BadRequest(new { message = "คำขอนี้ไม่ได้อยู่ในสถานะรออนุมัติ" });
 
-            issueRequest.Status = "rejected";
+            issueRequest.Status = UserStatus.Rejected;
             issueRequest.ApprovedByUid = actor.Uid;
             issueRequest.ApprovedByName = actor.DisplayName;
             issueRequest.RejectReason = req.Reason;

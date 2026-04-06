@@ -355,8 +355,7 @@ const router = createRouter({
   ],
 })
 
-// 💂‍♂️ Navigation Guard (อัปเดตใหม่สำหรับ .NET JWT)
-// 💂‍♂️ Navigation Guard (อัปเดตใหม่ ไร้รอยต่อ ไม่มี next())
+// 💂‍♂️ Navigation Guard
 router.beforeEach(async (to, _from) => {
   const authStore = useAuthStore()
 

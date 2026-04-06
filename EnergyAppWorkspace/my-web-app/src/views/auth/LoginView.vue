@@ -32,8 +32,8 @@ const fetchDepartments = async () => {
   try {
     const response = await api.get('/Department/all')
     departments.value = response.data
-  } catch (err) {
-    console.error('Failed to fetch departments:', err)
+  } catch {
+    // ถ้าโหลดหน่วยงานไม่ได้ ยังสมัครได้โดยไม่เลือกหน่วยงาน
   }
 }
 

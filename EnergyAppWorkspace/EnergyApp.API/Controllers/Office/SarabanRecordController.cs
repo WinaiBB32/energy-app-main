@@ -22,7 +22,7 @@ namespace EnergyApp.API.Controllers
             public DateTime? ReceivedDate { get; set; }
             public DateTime? DueDate { get; set; }
             public string Priority { get; set; } = "normal";
-            public string Status { get; set; } = "pending";
+            public string Status { get; set; } = UserStatus.Pending;
             public string AssignedTo { get; set; } = string.Empty;
             public string Note { get; set; } = string.Empty;
             public string RecordedBy { get; set; } = string.Empty;

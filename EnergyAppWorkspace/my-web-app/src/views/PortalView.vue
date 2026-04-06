@@ -49,8 +49,8 @@ onMounted(async () => {
   try {
     const response = await api.get('/ipphone/my-extensions')
     myLinkedExtensions.value = Array.isArray(response.data) ? response.data : (response.data?.data || [])
-  } catch (error) {
-    console.error('Failed to load linked extensions:', error)
+  } catch {
+    // โหลดเบอร์โทร IP-Phone ไม่สำเร็จ แสดง portal ได้ตามปกติ
   }
 })
 onUnmounted(() => window.removeEventListener('resize', checkMobile))

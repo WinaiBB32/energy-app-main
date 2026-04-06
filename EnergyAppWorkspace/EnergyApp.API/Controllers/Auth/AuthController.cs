@@ -37,7 +37,7 @@ namespace EnergyApp.API.Controllers
             // 3. ✨ โลจิกคนแรกเป็น SuperAdmin ✨
             // เช็คว่าในตาราง Users มีใครอยู่หรือยัง?
             bool isFirstUser = !await _context.Users.AnyAsync();
-            string assignRole = isFirstUser ? "SuperAdmin" : "User";
+            string assignRole = isFirstUser ? Roles.SuperAdmin : Roles.User;
 
             // 4. นำข้อมูลลง Database
             var user = new User
@@ -117,23 +117,6 @@ namespace EnergyApp.API.Controllers
                 return Unauthorized(new { message = "ไม่พบข้อมูลผู้ใช้งานในระบบ" });
 
             return Ok(new { user });
-        }
-
-        // ⚠️ API ลับสำหรับ Developer (ใช้เสร็จแล้วค่อยมาลบทิ้งทีหลังได้ครับ)
-        [HttpGet("make-me-admin/{email}")]
-        public async Task<IActionResult> MakeMeAdmin(string email)
-        {
-            // ค้นหา User จาก Email
-            var user = await _context.Users.FirstOrDefaultAsync(u => u.Email == email);
-
-            if (user == null)
-                return NotFound(new { message = "ไม่พบอีเมลนี้ในระบบ" });
-
-            // จับอัปเกรดสิทธิ์ทันที
-            user.Role = "SuperAdmin";
-            await _context.SaveChangesAsync();
-
-            return Ok(new { message = $"อัปเกรดบัญชี {email} เป็น SuperAdmin เรียบร้อยแล้ว!" });
         }
 
         // --- Helper Method สำหรับสร้าง JWT Token ---

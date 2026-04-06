@@ -20,8 +20,8 @@ namespace EnergyApp.API.Controllers
         {
             public string DisplayName { get; set; } = string.Empty;
             public Guid? DepartmentId { get; set; }
-            public string Role { get; set; } = "User";
-            public string Status { get; set; } = "pending";
+            public string Role { get; set; } = Roles.User;
+            public string Status { get; set; } = UserStatus.Pending;
             public List<string> AccessibleSystems { get; set; } = new();
             public List<string> AdminSystems { get; set; } = new();
         }
@@ -42,7 +42,7 @@ namespace EnergyApp.API.Controllers
                     accessibleSystems = u.AccessibleSystems,
                     adminSystems = u.AdminSystems
                 })
-                .OrderBy(u => u.status == "pending" ? 0 : 1) // ให้บัญชีรออนุมัติขึ้นก่อน
+                .OrderBy(u => u.status == UserStatus.Pending ? 0 : 1) // ให้บัญชีรออนุมัติขึ้นก่อน
                 .ThenBy(u => u.email)
                 .ToListAsync();
 

@@ -63,8 +63,8 @@ onMounted(async () => {
       entries: r.entries ?? (r.entriesJson ? JSON.parse(r.entriesJson) : []),
     }))
     departments.value = deptsRes.data
-  } catch (error: unknown) {
-    console.error(error)
+  } catch {
+    // แสดงหน้าว่างถ้าโหลดข้อมูลไม่สำเร็จ
   } finally {
     isLoading.value = false
   }

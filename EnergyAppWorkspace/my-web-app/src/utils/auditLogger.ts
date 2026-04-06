@@ -65,7 +65,6 @@ export async function logAudit(
       browser: parseBrowser(navigator.userAgent),
       userAgent: navigator.userAgent.substring(0, 300),
     }
-    // TODO: เรียกใช้ API เพื่อบันทึก Audit Log ลงระบบ
     await api.post('/Audit', logData)
   } catch (e) {
     console.warn('[AuditLogger] failed:', e)
