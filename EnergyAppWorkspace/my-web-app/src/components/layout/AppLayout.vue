@@ -44,12 +44,6 @@ const canOpenMaintenanceExternal = computed(
     hasMaintenancePermission(MAINTENANCE_ADMIN_BUILDING_PERMISSION) ||
     hasMaintenancePermission(MAINTENANCE_ADMIN_BUILDING_CENTRAL_PERMISSION),
 )
-const canOpenMaintenanceExternalTimeline = computed(
-  () =>
-    isSuperAdmin.value ||
-    roleText.value === 'adminbuilding' ||
-    hasMaintenancePermission(MAINTENANCE_ADMIN_BUILDING_CENTRAL_PERMISSION),
-)
 const canOpenMaintenanceSpareParts = computed(
   () =>
     isSuperAdmin.value ||
@@ -174,7 +168,11 @@ const sidebarMenus = computed(() => {
       menus.push({ name: 'ประวัติการเติมน้ำมัน', icon: 'pi pi-history', path: '/fuel/history' })
       menus.push({ name: 'พิมพ์หน้างบใบสำคัญฯ', icon: 'pi pi-print', path: '/fuel/print' })
       menus.push({ name: 'บันทึกใบรับรองแทนฯ', icon: 'pi pi-file-edit', path: '/fuel/receipt' })
-      menus.push({ name: 'ประวัติใบรับรองแทนฯ', icon: 'pi pi-history', path: '/fuel/receipt-history' })
+      menus.push({
+        name: 'ประวัติใบรับรองแทนฯ',
+        icon: 'pi pi-history',
+        path: '/fuel/receipt-history',
+      })
       menus.push({ name: 'พิมพ์ใบรับรองแทนฯ', icon: 'pi pi-print', path: '/fuel/receipt-print' })
     }
     return menus
@@ -217,17 +215,29 @@ const sidebarMenus = computed(() => {
     }
 
     if (canOpenMaintenanceSupervisor.value) {
-      menus.push({ name: 'หัวหน้าตรวจสอบงาน', icon: 'pi pi-verified', path: '/maintenance/supervisor-review' })
+      menus.push({
+        name: 'หัวหน้าตรวจสอบงาน',
+        icon: 'pi pi-verified',
+        path: '/maintenance/supervisor-review',
+      })
     }
 
     if (canOpenMaintenanceExternal.value) {
-      menus.push({ name: 'รับเรื่องจ้างช่างนอก', icon: 'pi pi-briefcase', path: '/maintenance/external-procurement' })
+      menus.push({
+        name: 'รับเรื่องจ้างช่างนอก',
+        icon: 'pi pi-briefcase',
+        path: '/maintenance/external-procurement',
+      })
     }
 
     // Timeline ช่างภายนอก menu removed as requested
 
     if (canOpenMaintenanceSpareParts.value) {
-      menus.push({ name: 'คลังอะไหล่งานอาคาร', icon: 'pi pi-box', path: '/maintenance/spare-parts' })
+      menus.push({
+        name: 'คลังอะไหล่งานอาคาร',
+        icon: 'pi pi-box',
+        path: '/maintenance/spare-parts',
+      })
     }
 
     return menus
@@ -312,7 +322,11 @@ const fetchMaintenanceNotifications = async () => {
 const pushNotificationItem = (item: MaintenanceNotificationItem) => {
   const deduped = maintenanceNotification.value.items.filter(
     (existing) =>
-      !(existing.requestId === item.requestId && existing.type === item.type && existing.createdAt === item.createdAt),
+      !(
+        existing.requestId === item.requestId &&
+        existing.type === item.type &&
+        existing.createdAt === item.createdAt
+      ),
   )
 
   const updated = [item, ...deduped]
@@ -329,7 +343,8 @@ const pushNotificationItem = (item: MaintenanceNotificationItem) => {
 
 const recomputeNotificationTotal = () => {
   maintenanceNotification.value.total =
-    maintenanceNotification.value.unreadChatCount + maintenanceNotification.value.timelineUpdateCount
+    maintenanceNotification.value.unreadChatCount +
+    maintenanceNotification.value.timelineUpdateCount
 }
 
 const clearNotificationItem = (item: MaintenanceNotificationItem) => {
@@ -413,44 +428,64 @@ const toggleNotifications = () => {
 
 <template>
   <div class="flex h-screen bg-gray-50 overflow-hidden">
-
     <!-- ── Sidebar ── -->
     <!-- Mobile overlay -->
-    <div v-if="isMobile && sidebarOpen && !isEmbed"
-      class="fixed inset-0 bg-slate-900/40 z-20 transition-opacity backdrop-blur-sm" @click="sidebarOpen = false"></div>
+    <div
+      v-if="isMobile && sidebarOpen && !isEmbed"
+      class="fixed inset-0 bg-slate-900/40 z-20 transition-opacity backdrop-blur-sm"
+      @click="sidebarOpen = false"
+    ></div>
 
     <Transition name="slide">
-      <aside v-if="(sidebarOpen || !isMobile) && !isEmbed"
-        class="bg-slate-900 flex flex-col z-50 transition-all duration-300 shrink-0 overflow-hidden" :class="[
-          isMobile
-            ? 'fixed inset-y-0 left-0 w-64 shadow-2xl'
-            : sidebarOpen ? 'w-56' : 'w-16',
-        ]">
+      <aside
+        v-if="(sidebarOpen || !isMobile) && !isEmbed"
+        class="bg-slate-900 flex flex-col z-50 transition-all duration-300 shrink-0 overflow-hidden"
+        :class="[
+          isMobile ? 'fixed inset-y-0 left-0 w-64 shadow-2xl' : sidebarOpen ? 'w-56' : 'w-16',
+        ]"
+      >
         <!-- Back to portal -->
-        <div class="h-14 flex items-center border-b border-slate-700/50 shrink-0"
-          :class="sidebarOpen || isMobile ? 'px-4' : 'justify-center px-2'">
-          <button v-if="sidebarOpen || isMobile" @click="navigateTo('/')"
-            class="flex items-center gap-2 text-slate-400 hover:text-white transition-colors text-sm">
+        <div
+          class="h-14 flex items-center border-b border-slate-700/50 shrink-0"
+          :class="sidebarOpen || isMobile ? 'px-4' : 'justify-center px-2'"
+        >
+          <button
+            v-if="sidebarOpen || isMobile"
+            @click="navigateTo('/')"
+            class="flex items-center gap-2 text-slate-400 hover:text-white transition-colors text-sm"
+          >
             <i class="pi pi-arrow-left text-xs"></i>
             <span>หน้าหลัก</span>
           </button>
-          <button v-else @click="navigateTo('/')" v-tooltip.right="'หน้าหลัก'"
-            class="text-slate-400 hover:text-white transition-colors">
+          <button
+            v-else
+            @click="navigateTo('/')"
+            v-tooltip.right="'หน้าหลัก'"
+            class="text-slate-400 hover:text-white transition-colors"
+          >
             <i class="pi pi-arrow-left text-sm"></i>
           </button>
         </div>
 
         <!-- System header -->
-        <div class="border-b border-slate-700/50 shrink-0"
-          :class="sidebarOpen || isMobile ? 'px-4 py-4' : 'py-3 flex justify-center'">
+        <div
+          class="border-b border-slate-700/50 shrink-0"
+          :class="sidebarOpen || isMobile ? 'px-4 py-4' : 'py-3 flex justify-center'"
+        >
           <div :class="sidebarOpen || isMobile ? 'flex items-center gap-2.5' : ''">
-            <div class="w-8 h-8 bg-indigo-600/20 rounded-lg flex items-center justify-center shrink-0"
-              v-tooltip="!(sidebarOpen || isMobile) ? currentSystemName : ''">
+            <div
+              class="w-8 h-8 bg-indigo-600/20 rounded-lg flex items-center justify-center shrink-0"
+              v-tooltip="!(sidebarOpen || isMobile) ? currentSystemName : ''"
+            >
               <i :class="`pi ${systemIcon} text-indigo-400 text-sm`"></i>
             </div>
             <div v-if="sidebarOpen || isMobile">
-              <p class="text-xs text-slate-500 uppercase tracking-wider font-semibold">ระบบปัจจุบัน</p>
-              <p class="text-white text-sm font-semibold leading-tight mt-0.5">{{ currentSystemName }}</p>
+              <p class="text-xs text-slate-500 uppercase tracking-wider font-semibold">
+                ระบบปัจจุบัน
+              </p>
+              <p class="text-white text-sm font-semibold leading-tight mt-0.5">
+                {{ currentSystemName }}
+              </p>
             </div>
           </div>
         </div>
@@ -459,14 +494,26 @@ const toggleNotifications = () => {
         <nav class="flex-1 py-3 overflow-y-auto" :class="sidebarOpen || isMobile ? 'px-3' : 'px-2'">
           <ul class="space-y-0.5">
             <li v-for="item in sidebarMenus" :key="item.path">
-              <button @click="navigateTo(item.path)"
-                class="w-full flex items-center rounded-lg text-left text-sm transition-all duration-150" :class="[
+              <button
+                @click="navigateTo(item.path)"
+                class="w-full flex items-center rounded-lg text-left text-sm transition-all duration-150"
+                :class="[
                   sidebarOpen || isMobile ? 'gap-2.5 px-3 py-2.5' : 'justify-center py-2.5',
                   route.path === item.path
                     ? 'bg-indigo-600 text-white font-semibold shadow-sm'
                     : 'text-slate-400 hover:text-white hover:bg-slate-800',
-                ]" v-tooltip="!(sidebarOpen || isMobile) ? { value: item.name, position: 'right' } : ''">
-                <i :class="[item.icon, 'text-sm shrink-0', sidebarOpen || isMobile ? 'w-4 text-center' : '']"></i>
+                ]"
+                v-tooltip="
+                  !(sidebarOpen || isMobile) ? { value: item.name, position: 'right' } : ''
+                "
+              >
+                <i
+                  :class="[
+                    item.icon,
+                    'text-sm shrink-0',
+                    sidebarOpen || isMobile ? 'w-4 text-center' : '',
+                  ]"
+                ></i>
                 <span v-if="sidebarOpen || isMobile">{{ item.name }}</span>
               </button>
             </li>
@@ -474,19 +521,29 @@ const toggleNotifications = () => {
         </nav>
 
         <!-- Toggle button (desktop only) -->
-        <div v-if="!isMobile" class="shrink-0 border-t border-slate-700/50 p-2 flex"
-          :class="sidebarOpen ? 'justify-end' : 'justify-center'">
-          <button @click="toggleSidebar"
+        <div
+          v-if="!isMobile"
+          class="shrink-0 border-t border-slate-700/50 p-2 flex"
+          :class="sidebarOpen ? 'justify-end' : 'justify-center'"
+        >
+          <button
+            @click="toggleSidebar"
             class="p-1.5 rounded-lg text-slate-500 hover:text-white hover:bg-slate-800 transition-colors"
-            :title="sidebarOpen ? 'ย่อ sidebar' : 'ขยาย sidebar'">
-            <i :class="sidebarOpen ? 'pi pi-chevron-left' : 'pi pi-chevron-right'" class="text-sm"></i>
+            :title="sidebarOpen ? 'ย่อ sidebar' : 'ขยาย sidebar'"
+          >
+            <i
+              :class="sidebarOpen ? 'pi pi-chevron-left' : 'pi pi-chevron-right'"
+              class="text-sm"
+            ></i>
           </button>
         </div>
 
         <!-- User (when open) -->
         <div v-if="sidebarOpen || isMobile" class="p-3 border-t border-slate-700/50 shrink-0">
           <div class="flex items-center gap-2 px-2 py-2">
-            <div class="w-7 h-7 bg-slate-700 rounded-full flex items-center justify-center shrink-0">
+            <div
+              class="w-7 h-7 bg-slate-700 rounded-full flex items-center justify-center shrink-0"
+            >
               <i class="pi pi-user text-slate-400 text-xs"></i>
             </div>
             <p class="text-slate-400 text-xs truncate flex-1">
@@ -496,8 +553,10 @@ const toggleNotifications = () => {
         </div>
         <!-- User icon only (when collapsed) -->
         <div v-else class="p-3 border-t border-slate-700/50 flex justify-center shrink-0">
-          <div class="w-7 h-7 bg-slate-700 rounded-full flex items-center justify-center"
-            v-tooltip.right="authStore.user?.displayName || authStore.user?.email">
+          <div
+            class="w-7 h-7 bg-slate-700 rounded-full flex items-center justify-center"
+            v-tooltip.right="authStore.user?.displayName || authStore.user?.email"
+          >
             <i class="pi pi-user text-slate-400 text-xs"></i>
           </div>
         </div>
@@ -505,37 +564,50 @@ const toggleNotifications = () => {
     </Transition>
 
     <!-- ── Content area ── -->
-    <div class="flex-1 flex flex-col overflow-hidden min-w-0" :class="isEmbed ? 'bg-transparent' : ''">
+    <div
+      class="flex-1 flex flex-col overflow-hidden min-w-0"
+      :class="isEmbed ? 'bg-transparent' : ''"
+    >
       <!-- Header -->
-      <header v-if="!isEmbed"
-        class="h-14 bg-white border-b border-gray-100 flex items-center justify-between px-4 shrink-0">
+      <header
+        v-if="!isEmbed"
+        class="h-14 bg-white border-b border-gray-100 flex items-center justify-between px-4 shrink-0"
+      >
         <div class="flex items-center gap-3">
           <!-- Hamburger / toggle -->
-          <button @click="toggleSidebar"
-            class="p-2 rounded-lg text-gray-500 hover:text-gray-800 hover:bg-gray-100 transition-colors">
+          <button
+            @click="toggleSidebar"
+            class="p-2 rounded-lg text-gray-500 hover:text-gray-800 hover:bg-gray-100 transition-colors"
+          >
             <i class="pi pi-bars text-sm"></i>
           </button>
           <p class="text-sm text-gray-400 hidden sm:block">ระบบการจัดการทรัพยากรภายในองค์กร</p>
         </div>
 
         <div class="flex items-center gap-1 relative">
-          <button @click="toggleNotifications"
+          <button
+            @click="toggleNotifications"
             class="relative p-2 rounded-lg text-gray-500 hover:text-gray-800 hover:bg-gray-100 transition-colors"
-            title="แจ้งเตือนงานซ่อม">
+            title="แจ้งเตือนงานซ่อม"
+          >
             <i class="pi pi-bell text-sm"></i>
-            <span v-if="maintenanceNotification.total > 0"
-              class="absolute -top-0.5 -right-0.5 min-w-4 h-4 px-1 rounded-full bg-red-500 text-white text-[10px] leading-4 text-center font-bold">
+            <span
+              v-if="maintenanceNotification.total > 0"
+              class="absolute -top-0.5 -right-0.5 min-w-4 h-4 px-1 rounded-full bg-red-500 text-white text-[10px] leading-4 text-center font-bold"
+            >
               {{ maintenanceNotification.total > 99 ? '99+' : maintenanceNotification.total }}
             </span>
           </button>
 
-          <div v-if="notificationOpen"
-            class="absolute right-0 top-12 w-[24rem] bg-white border border-gray-200 rounded-xl shadow-xl z-50 overflow-hidden">
+          <div
+            v-if="notificationOpen"
+            class="absolute right-0 top-12 w-[24rem] bg-white border border-gray-200 rounded-xl shadow-xl z-50 overflow-hidden"
+          >
             <div class="px-4 py-3 border-b border-gray-100 bg-slate-50">
               <p class="text-sm font-bold text-gray-800">แจ้งเตือนงานซ่อม</p>
               <p class="text-xs text-gray-500 mt-1">
-                แชทใหม่ {{ maintenanceNotification.unreadChatCount }} รายการ · อัปเดตไทม์ไลน์ {{
-                  maintenanceNotification.timelineUpdateCount }} รายการ
+                แชทใหม่ {{ maintenanceNotification.unreadChatCount }} รายการ · อัปเดตไทม์ไลน์
+                {{ maintenanceNotification.timelineUpdateCount }} รายการ
               </p>
             </div>
 
@@ -543,31 +615,43 @@ const toggleNotifications = () => {
               <div v-if="notificationLoading" class="px-4 py-6 text-center text-sm text-gray-400">
                 <i class="pi pi-spin pi-spinner mr-2"></i>กำลังโหลดแจ้งเตือน...
               </div>
-              <div v-else-if="maintenanceNotification.items.length === 0"
-                class="px-4 py-8 text-center text-sm text-gray-400">
+              <div
+                v-else-if="maintenanceNotification.items.length === 0"
+                class="px-4 py-8 text-center text-sm text-gray-400"
+              >
                 ไม่มีแจ้งเตือนใหม่
               </div>
-              <button v-for="item in maintenanceNotification.items"
-                :key="`${item.type}-${item.requestId}-${item.createdAt}`" @click="handleNotificationClick(item)"
-                class="w-full text-left px-4 py-3 border-b border-gray-100 hover:bg-gray-50 transition-colors">
+              <button
+                v-for="item in maintenanceNotification.items"
+                :key="`${item.type}-${item.requestId}-${item.createdAt}`"
+                @click="handleNotificationClick(item)"
+                class="w-full text-left px-4 py-3 border-b border-gray-100 hover:bg-gray-50 transition-colors"
+              >
                 <div class="flex items-start justify-between gap-3">
                   <div class="min-w-0">
-                    <p class="text-xs font-semibold"
-                      :class="item.type === 'chat' ? 'text-indigo-600' : 'text-emerald-600'">
+                    <p
+                      class="text-xs font-semibold"
+                      :class="item.type === 'chat' ? 'text-indigo-600' : 'text-emerald-600'"
+                    >
                       {{ item.type === 'chat' ? 'ข้อความใหม่' : 'อัปเดตไทม์ไลน์' }}
                     </p>
-                    <p class="text-sm font-semibold text-gray-800 truncate">{{ item.workOrderNo || 'ใบงาน' }} - {{
-                      item.title }}</p>
+                    <p class="text-sm font-semibold text-gray-800 truncate">
+                      {{ item.workOrderNo || 'ใบงาน' }} - {{ item.title }}
+                    </p>
                     <p class="text-xs text-gray-500 truncate">{{ item.message }}</p>
                   </div>
-                  <div class="text-[11px] text-gray-400 shrink-0">{{ formatNotificationTime(item.createdAt) }}</div>
+                  <div class="text-[11px] text-gray-400 shrink-0">
+                    {{ formatNotificationTime(item.createdAt) }}
+                  </div>
                 </div>
               </button>
             </div>
           </div>
 
-          <button @click="navigateTo('/profile')"
-            class="flex items-center gap-2 px-3 py-1.5 rounded-lg hover:bg-gray-50 transition-colors">
+          <button
+            @click="navigateTo('/profile')"
+            class="flex items-center gap-2 px-3 py-1.5 rounded-lg hover:bg-gray-50 transition-colors"
+          >
             <div class="w-7 h-7 bg-indigo-100 rounded-full flex items-center justify-center">
               <i class="pi pi-user text-indigo-600 text-xs"></i>
             </div>
@@ -575,8 +659,15 @@ const toggleNotifications = () => {
               {{ authStore.user?.displayName || authStore.user?.email?.split('@')[0] }}
             </span>
           </button>
-          <Button icon="pi pi-sign-out" severity="danger" text rounded size="small" aria-label="Logout"
-            @click="logout" />
+          <Button
+            icon="pi pi-sign-out"
+            severity="danger"
+            text
+            rounded
+            size="small"
+            aria-label="Logout"
+            @click="logout"
+          />
         </div>
       </header>
 

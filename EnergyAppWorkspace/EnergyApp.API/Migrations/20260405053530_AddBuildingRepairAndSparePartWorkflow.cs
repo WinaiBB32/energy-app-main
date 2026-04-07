@@ -196,53 +196,44 @@ namespace EnergyApp.API.Migrations
                 nullable: false,
                 defaultValue: "");
 
-            migrationBuilder.CreateTable(
-                name: "ElectricityBills",
-                columns: table => new
-                {
-                    Id = table.Column<Guid>(type: "uuid", nullable: false),
-                    DocReceiveNumber = table.Column<string>(type: "text", nullable: false),
-                    DocNumber = table.Column<string>(type: "text", nullable: false),
-                    BuildingId = table.Column<Guid>(type: "uuid", nullable: true),
-                    BillingCycle = table.Column<DateTime>(type: "timestamp without time zone", nullable: true),
-                    PeaUnitUsed = table.Column<decimal>(type: "numeric", nullable: false),
-                    PeaAmount = table.Column<decimal>(type: "numeric", nullable: false),
-                    FtRate = table.Column<decimal>(type: "numeric", nullable: false),
-                    Note = table.Column<string>(type: "text", nullable: false),
-                    RecordedBy = table.Column<string>(type: "text", nullable: false),
-                    DepartmentId = table.Column<string>(type: "text", nullable: false),
-                    CreatedAt = table.Column<DateTime>(type: "timestamp without time zone", nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_ElectricityBills", x => x.Id);
-                });
+            // Use IF NOT EXISTS because these tables may already exist in the database
+            migrationBuilder.Sql(@"
+CREATE TABLE IF NOT EXISTS ""ElectricityBills"" (
+    ""Id"" uuid NOT NULL,
+    ""DocReceiveNumber"" text NOT NULL DEFAULT '',
+    ""DocNumber"" text NOT NULL DEFAULT '',
+    ""BuildingId"" uuid,
+    ""BillingCycle"" timestamp without time zone,
+    ""PeaUnitUsed"" numeric NOT NULL DEFAULT 0,
+    ""PeaAmount"" numeric NOT NULL DEFAULT 0,
+    ""FtRate"" numeric NOT NULL DEFAULT 0,
+    ""Note"" text NOT NULL DEFAULT '',
+    ""RecordedBy"" text NOT NULL DEFAULT '',
+    ""DepartmentId"" text NOT NULL DEFAULT '',
+    ""CreatedAt"" timestamp without time zone NOT NULL DEFAULT now(),
+    CONSTRAINT ""PK_ElectricityBills"" PRIMARY KEY (""Id"")
+);");
 
-            migrationBuilder.CreateTable(
-                name: "SolarProductions",
-                columns: table => new
-                {
-                    Id = table.Column<Guid>(type: "uuid", nullable: false),
-                    BuildingId = table.Column<Guid>(type: "uuid", nullable: true),
-                    RecordDate = table.Column<DateTime>(type: "timestamp without time zone", nullable: true),
-                    SolarUnitProduced = table.Column<decimal>(type: "numeric", nullable: false),
-                    ProductionWh = table.Column<decimal>(type: "numeric", nullable: false),
-                    ToBatteryWh = table.Column<decimal>(type: "numeric", nullable: false),
-                    ToGridWh = table.Column<decimal>(type: "numeric", nullable: false),
-                    ToHomeWh = table.Column<decimal>(type: "numeric", nullable: false),
-                    ConsumptionWh = table.Column<decimal>(type: "numeric", nullable: false),
-                    FromBatteryWh = table.Column<decimal>(type: "numeric", nullable: false),
-                    FromGridWh = table.Column<decimal>(type: "numeric", nullable: false),
-                    FromSolarWh = table.Column<decimal>(type: "numeric", nullable: false),
-                    Note = table.Column<string>(type: "text", nullable: false),
-                    RecordedBy = table.Column<string>(type: "text", nullable: false),
-                    DepartmentId = table.Column<string>(type: "text", nullable: false),
-                    CreatedAt = table.Column<DateTime>(type: "timestamp without time zone", nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_SolarProductions", x => x.Id);
-                });
+            migrationBuilder.Sql(@"
+CREATE TABLE IF NOT EXISTS ""SolarProductions"" (
+    ""Id"" uuid NOT NULL,
+    ""BuildingId"" uuid,
+    ""RecordDate"" timestamp without time zone,
+    ""SolarUnitProduced"" numeric NOT NULL DEFAULT 0,
+    ""ProductionWh"" numeric NOT NULL DEFAULT 0,
+    ""ToBatteryWh"" numeric NOT NULL DEFAULT 0,
+    ""ToGridWh"" numeric NOT NULL DEFAULT 0,
+    ""ToHomeWh"" numeric NOT NULL DEFAULT 0,
+    ""ConsumptionWh"" numeric NOT NULL DEFAULT 0,
+    ""FromBatteryWh"" numeric NOT NULL DEFAULT 0,
+    ""FromGridWh"" numeric NOT NULL DEFAULT 0,
+    ""FromSolarWh"" numeric NOT NULL DEFAULT 0,
+    ""Note"" text NOT NULL DEFAULT '',
+    ""RecordedBy"" text NOT NULL DEFAULT '',
+    ""DepartmentId"" text NOT NULL DEFAULT '',
+    ""CreatedAt"" timestamp without time zone NOT NULL DEFAULT now(),
+    CONSTRAINT ""PK_SolarProductions"" PRIMARY KEY (""Id"")
+);");
 
             migrationBuilder.CreateTable(
                 name: "SparePartIssueRequests",

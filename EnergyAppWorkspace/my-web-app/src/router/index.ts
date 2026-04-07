@@ -387,13 +387,11 @@ router.beforeEach(async (to, _from) => {
 
   // 2. ไม่ได้ล็อกอิน -> ไปหน้า Login
   if (requiresAuth && !authStore.isAuthenticated) {
-    console.log('[RouterGuard] Block: not authenticated')
     return '/login'
   }
 
   // 3. ล็อกอินแล้ว -> ห้ามเข้าหน้า Login ซ้ำ
   if (to.path === '/login' && authStore.isAuthenticated) {
-    console.log('[RouterGuard] Block: already authenticated, redirect to portal')
     return '/'
   }
 
@@ -402,9 +400,6 @@ router.beforeEach(async (to, _from) => {
     const userRole = (authStore.user.role ?? '').trim().toLowerCase()
     // Redirect: ถ้า userRole เป็น 'user' และเข้า /maintenance/dashboard ให้ไป /maintenance/service (ต้องมาก่อนทุกเงื่อนไข)
     if (to.path === '/maintenance/dashboard' && userRole === 'user') {
-      console.log(
-        '[RouterGuard] Redirect: user เข้า /maintenance/dashboard -> /maintenance/service',
-      )
       return '/maintenance/service'
     }
     const userStatus = (authStore.user.status ?? '').trim().toLowerCase()
@@ -442,22 +437,6 @@ router.beforeEach(async (to, _from) => {
       return false
     }
 
-    // DEBUG LOGS
-    console.log('[RouterGuard] userRole:', userRole)
-    console.log('[RouterGuard] userStatus:', userStatus)
-    console.log('[RouterGuard] accessibleSystems:', accessibleSystems)
-    console.log('[RouterGuard] adminSystems:', adminSystems)
-    console.log('[RouterGuard] routeSystem:', routeSystem)
-    console.log('[RouterGuard] requiresAuth:', requiresAuth)
-    console.log('[RouterGuard] requiresAdmin:', requiresAdmin)
-    console.log('[RouterGuard] requiresSuperAdmin:', requiresSuperAdmin)
-    console.log('[RouterGuard] allowedRoles:', allowedRoles)
-    console.log(
-      '[RouterGuard] hasRouteLevelMaintenancePermission:',
-      hasRouteLevelMaintenancePermission(),
-    )
-    console.log('[RouterGuard] to.path:', to.path)
-
     // SuperAdmin ทะลวงด่าน
     if (isSuperAdmin) {
       if (to.path === '/pending') return '/'
@@ -466,13 +445,11 @@ router.beforeEach(async (to, _from) => {
 
     // ผู้ใช้สถานะ pending ให้ไปหน้ารออนุมัติ
     if (userStatus === 'pending' && to.path !== '/pending') {
-      console.log('[RouterGuard] Block: user pending')
       return '/pending'
     }
 
     // เช็คสิทธิ์หน้า SuperAdmin
     if (requiresSuperAdmin && !isSuperAdmin) {
-      console.log('[RouterGuard] Block: requiresSuperAdmin')
       return '/'
     }
 
@@ -480,18 +457,12 @@ router.beforeEach(async (to, _from) => {
     if (routeSystem && !isSuperAdmin) {
       const canAccessSystem =
         accessibleSystems.includes(routeSystem) || adminSystems.includes(routeSystem)
-      console.log('[RouterGuard] canAccessSystem:', canAccessSystem)
       if (!canAccessSystem) {
         const canAccessMaintenanceByPermission =
           routeSystem === 'system9' && hasRouteLevelMaintenancePermission()
-        console.log(
-          '[RouterGuard] canAccessMaintenanceByPermission:',
-          canAccessMaintenanceByPermission,
-        )
         if (canAccessMaintenanceByPermission) {
           return true
         }
-        console.log('[RouterGuard] Block: cannot access system')
         return '/'
       }
     }
@@ -499,11 +470,9 @@ router.beforeEach(async (to, _from) => {
     // เช็คสิทธิ์ admin รายระบบ
     if (requiresAdmin && !isSuperAdmin) {
       if (!routeSystem) {
-        console.log('[RouterGuard] Block: requiresAdmin but no routeSystem')
         return '/'
       }
       if (!adminSystems.includes(routeSystem)) {
-        console.log('[RouterGuard] Block: requiresAdmin but not in adminSystems')
         return '/'
       }
     }
@@ -512,18 +481,15 @@ router.beforeEach(async (to, _from) => {
     if (allowedRoles && allowedRoles.length > 0 && !allowedRoles.includes(userRole)) {
       // กรณีระบบซ่อม: ถ้ามีสิทธิ์ adminSystems:maintenance:adminbuilding ให้เข้าได้
       if (routeSystem === 'system9' && adminSystems.includes('maintenance:adminbuilding')) {
-        console.log('[RouterGuard] Allow: adminSystems includes maintenance:adminbuilding')
         return true
       }
       if (!hasRouteLevelMaintenancePermission()) {
-        console.log('[RouterGuard] Block: role not allowed and no maintenance permission')
         return '/'
       }
     }
 
     // กรณี route ต้องมีสิทธิ์ login แต่ไม่ผูกระบบ: ผ่านตามปกติ
     if (requiresAdmin && !isAdmin && !isSuperAdmin && !routeSystem) {
-      console.log('[RouterGuard] Block: requiresAdmin but not admin and no routeSystem')
       return '/'
     }
   }

@@ -6,165 +6,195 @@
 - Frontend: Vue 3 + Vite + Pinia + PrimeVue
 - Database: PostgreSQL
 
-README นี้อธิบายการติดตั้งและใช้งานแบบ ไม่ใช้ Docker
+---
 
 ## โครงสร้างโปรเจกต์
 
 ```
 EnergyAppWorkspace/
-├── EnergyApp.API/   # Backend (.NET 8 API)
-├── my-web-app/      # Frontend (Vue 3)
+├── EnergyApp.API/        # Backend (.NET 8 API)
+├── my-web-app/           # Frontend (Vue 3)
+├── deploy.bat            # Script build + package สำหรับ Deploy
+├── install-service.bat   # Script ติดตั้ง Windows Service บน Server
+├── nginx.conf            # Config nginx สำหรับ Server
 └── README.md
 ```
+
+---
 
 ## Port ที่ใช้
 
 | Service | Port |
 |---------|------|
-| Frontend (Vite) | 5173 |
+| Frontend Dev (Vite) | 5173 |
+| Frontend Production (XAMPP) | 8080 |
 | Backend API | 5008 |
 | PostgreSQL | 5432 |
 
+---
+
 ## สิ่งที่ต้องติดตั้ง
 
+### เครื่อง Dev
 1. .NET 8 SDK
-2. Node.js 20+ (แนะนำใช้ LTS)
-3. PostgreSQL 15+ (หรือเวอร์ชันที่รองรับกับ Npgsql)
-4. Git (ถ้าต้อง clone โค้ด)
+2. Node.js 20+ LTS
+3. PostgreSQL 15+
 
-## 1) ติดตั้งและตั้งค่า Database (PostgreSQL)
+### Server (Windows Server)
+1. .NET 8 Runtime (ไม่ต้อง SDK)
+2. PostgreSQL 15+
+3. XAMPP (สำหรับ Apache เสิร์ฟ Frontend) หรือ nginx
 
-### 1.1 สร้างฐานข้อมูล
+---
 
-ตัวอย่างชื่อฐานข้อมูล: energy-app
+## การติดตั้งสำหรับ Development
 
+### 1) ตั้งค่าฐานข้อมูล
+
+สร้าง database:
 ```sql
 CREATE DATABASE "energy-app";
 ```
 
-### 1.2 ตั้งค่า Connection String ใน API
-
-แก้ไฟล์ `EnergyApp.API/EnergyApp.API/appsettings.json` ในส่วน `ConnectionStrings:DefaultConnection`
-
-ตัวอย่าง:
-
+แก้ไข `EnergyApp.API/appsettings.json`:
 ```json
 {
   "ConnectionStrings": {
     "DefaultConnection": "Host=localhost;Port=5432;Database=energy-app;Username=postgres;Password=your_password;SslMode=Disable;"
-  }
-}
-```
-
-หมายเหตุ: ในไฟล์ปัจจุบันมีค่า Host/Username/Password ที่ผูกกับเครื่องเดิม ควรเปลี่ยนให้ตรงกับเครื่องที่ติดตั้งจริง
-
-### 1.3 ตั้งค่า AllowedOrigins (CORS)
-
-แก้ไฟล์ `EnergyApp.API/EnergyApp.API/appsettings.json`
-
-```json
-{
+  },
   "AllowedOrigins": "http://localhost:5173"
 }
 ```
 
-ถ้าต้องการหลาย origin ให้คั่นด้วย comma เช่น:
-
-```json
-"AllowedOrigins": "http://localhost:5173,http://192.168.1.100:5173"
-```
-
-## 2) รัน Backend API
-
-เปิด terminal ที่โฟลเดอร์โปรเจกต์หลัก แล้วรัน:
+### 2) รัน Backend API
 
 ```powershell
-cd EnergyApp.API\EnergyApp.API
-dotnet restore
-```
+cd EnergyApp.API
 
-ติดตั้ง EF CLI (ครั้งแรกในเครื่อง):
-
-```powershell
+# ครั้งแรก — ติดตั้ง EF CLI
 dotnet tool install --global dotnet-ef
-```
 
-อัปเดตโครงสร้างฐานข้อมูลจาก Migration:
-
-```powershell
+dotnet restore
 dotnet ef database update
-```
-
-รัน API:
-
-```powershell
 dotnet run
 ```
-
-เมื่อรันสำเร็จ:
 
 - Swagger: http://localhost:5008/swagger
 - Base API: http://localhost:5008
 
-## 3) รัน Web App (Frontend)
-
-เปิด terminal ใหม่ แล้วรัน:
+### 3) รัน Frontend
 
 ```powershell
 cd my-web-app
 npm install
-```
-
-สร้างไฟล์ `.env` ในโฟลเดอร์ `my-web-app` แล้วใส่ค่า:
-
-```env
-VITE_API_URL=http://localhost:5008/api/v1
-```
-
-รันเว็บ:
-
-```powershell
 npm run dev
 ```
 
 เปิดใช้งานที่: http://localhost:5173
 
-## 4) วิธีใช้งานระบบ (เริ่มต้น)
+---
 
-1. เปิดเว็บที่ http://localhost:5173
-2. สมัครผู้ใช้คนแรกในระบบ
-3. ผู้ใช้คนแรกจะได้สิทธิ์ SuperAdmin อัตโนมัติ
-4. ตั้งค่าหน่วยงาน/อาคาร/ข้อมูลพื้นฐาน
-5. เริ่มบันทึกข้อมูลระบบต่าง ๆ เช่น ไฟฟ้า น้ำ เชื้อเพลิง และโทรศัพท์
+## การ Deploy บน Windows Server
 
-## คำสั่งที่ใช้บ่อย
+### ขั้นตอนที่ 1 — Build และ Package (บนเครื่อง Dev)
 
-Backend:
-
-```powershell
-cd EnergyApp.API\EnergyApp.API
-dotnet run
-dotnet ef database update
+```bat
+cd EnergyAppWorkspace
+deploy.bat
 ```
 
-Frontend:
+สคริปต์จะ build frontend + publish API แล้วรวมไฟล์ไว้ที่ `C:\deploy-output\`
 
-```powershell
-cd my-web-app
-npm run dev
-npm run build
+### ขั้นตอนที่ 2 — Copy ไฟล์ไปที่ Server
+
+| จาก (Dev) | ไปที่ (Server) |
+|---|---|
+| `C:\deploy-output\frontend\` | `C:\energy-app\frontend\` |
+| `C:\deploy-output\api\` | `C:\energy-app\api\` |
+| `C:\deploy-output\nginx.conf` | `C:\nginx\conf\nginx.conf` |
+| `install-service.bat` | ที่ไหนก็ได้บน Server |
+
+### ขั้นตอนที่ 3 — ตั้งค่า appsettings.Production.json บน Server
+
+แก้ไขไฟล์ `C:\energy-app\api\appsettings.Production.json`:
+```json
+{
+  "ConnectionStrings": {
+    "DefaultConnection": "Host=localhost;Port=5432;Database=energy-app;Username=postgres;Password=your_password;SslMode=Disable;"
+  },
+  "JwtSettings": {
+    "Secret": "your_secret_key_min_32_chars"
+  },
+  "AllowedOrigins": "http://server-ip,http://server-ip:8080"
+}
 ```
+
+### ขั้นตอนที่ 4 — รัน API บน Server
+
+```bat
+cd C:\energy-app\api
+set ASPNETCORE_ENVIRONMENT=Production
+dotnet EnergyApp.API.dll
+```
+
+ติดตั้งเป็น Windows Service (รันตลอด ไม่ต้องเปิด cmd ค้าง) — รันด้วย Admin:
+```bat
+sc create EnergyAppAPI binPath= "C:\energy-app\api\EnergyApp.API.exe --environment Production" start= auto DisplayName= "EnergyApp API"
+sc start EnergyAppAPI
+```
+
+### ขั้นตอนที่ 5 — ติดตั้ง Frontend บน XAMPP
+
+1. Copy ไฟล์จาก `C:\deploy-output\frontend\` ไปที่ `C:\xampp\htdocs\energy-app\`
+2. สร้างไฟล์ `C:\xampp\htdocs\energy-app\.htaccess`:
+
+```apache
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteBase /energy-app/
+    RewriteRule ^index\.html$ - [L]
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteCond %{REQUEST_FILENAME} !-d
+    RewriteRule . /energy-app/index.html [L]
+</IfModule>
+```
+
+3. เปิดใช้งานที่: `http://server-ip:8080/energy-app/`
+
+### ขั้นตอนที่ 6 — เปิด Firewall Port 5008
+
+รันบน Server ด้วย Admin:
+```bat
+netsh advfirewall firewall add rule name="EnergyApp API" dir=in action=allow protocol=TCP localport=5008
+```
+
+---
+
+## วิธีใช้งานระบบ (เริ่มต้น)
+
+1. เปิดเว็บแล้ว **สมัครผู้ใช้คนแรก** — จะได้สิทธิ์ **SuperAdmin** อัตโนมัติ
+2. ตั้งค่าข้อมูลพื้นฐาน: หน่วยงาน / อาคาร
+3. เพิ่มผู้ใช้และกำหนดสิทธิ์
+4. เริ่มบันทึกข้อมูลระบบ: ไฟฟ้า, น้ำ, เชื้อเพลิง, โทรศัพท์
+
+---
 
 ## Troubleshooting
 
-1. Web เรียก API ไม่ได้ (CORS)
-   - ตรวจสอบ `AllowedOrigins` ใน `appsettings.json`
-   - ให้มี `http://localhost:5173`
+### เชื่อมต่อ API ไม่ได้จากเครื่องอื่น
+- ตรวจสอบว่าเปิด Firewall port 5008 แล้ว
+- ตรวจสอบว่า API รันอยู่: เปิด `http://server-ip:5008/swagger` บน Server
 
-2. ต่อฐานข้อมูลไม่สำเร็จ
-   - ตรวจสอบว่า PostgreSQL ทำงานอยู่ที่ port 5432
-   - ตรวจสอบ `Host`, `Database`, `Username`, `Password` ใน `DefaultConnection`
+### Frontend โหลดไม่ได้ (404 assets)
+- ตรวจสอบว่า `vite.config.ts` มี `base: '/energy-app/'`
+- Build ใหม่แล้ว copy ไปแทนที่
 
-3. Migration รันไม่ผ่าน
-   - ตรวจสอบว่าได้ติดตั้ง `dotnet-ef` แล้ว
-   - ใช้คำสั่ง `dotnet restore` ก่อน `dotnet ef database update`
+### Vue Router ไม่ทำงาน (refresh แล้ว 404)
+- ตรวจสอบว่ามีไฟล์ `.htaccess` ใน `C:\xampp\htdocs\energy-app\`
+
+### ต่อฐานข้อมูลไม่ได้
+- ตรวจสอบว่า PostgreSQL รันอยู่ที่ port 5432
+- ตรวจสอบ `Host`, `Username`, `Password` ใน `appsettings.json`
+
+### CORS Error
+- ตรวจสอบ `AllowedOrigins` ใน `appsettings.json` ให้ตรงกับ URL ของ Frontend

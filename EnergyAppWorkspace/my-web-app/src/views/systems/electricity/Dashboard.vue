@@ -505,8 +505,8 @@ const formatCurrency = (val: number): string =>
                   <div>
                     <p class="text-xs text-gray-500 font-semibold mb-1 uppercase">Consumption</p>
                     <h3 class="text-xl font-bold text-gray-800">
-                      {{ (sumConsumptionKwh * 1000).toLocaleString(undefined, { maximumFractionDigits: 0 }) }}
-                      <span class="text-sm font-normal text-gray-500">Wh</span>
+                      {{ sumConsumptionKwh.toLocaleString(undefined, { maximumFractionDigits: 2 }) }}
+                      <span class="text-sm font-normal text-gray-500">kWh</span>
                     </h3>
                     <p class="text-[10px] text-violet-600/80 mt-1">ปริมาณความต้องการไฟฟ้า</p>
                   </div>

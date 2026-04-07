@@ -4,7 +4,7 @@ VisualStudioVersion = 17.5.2.0
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "EnergyApp.API", "EnergyApp.API", "{9EC60B89-25F2-A4CD-01C9-E0B837ABF019}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "EnergyApp.API", "EnergyApp.API\EnergyApp.API\EnergyApp.API.csproj", "{D007DED3-EA3C-72AA-6D60-DE4654A65806}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "EnergyApp.API", "EnergyApp.API\EnergyApp.API.csproj", "{D007DED3-EA3C-72AA-6D60-DE4654A65806}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

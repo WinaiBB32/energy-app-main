@@ -14,6 +14,7 @@ function buildConnection(): signalR.HubConnection {
       accessTokenFactory: () => localStorage.getItem('jwt_token') || '',
     })
     .withAutomaticReconnect()
+    .configureLogging(signalR.LogLevel.None)
     .build()
 }
 

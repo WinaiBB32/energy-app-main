@@ -53,6 +53,7 @@ builder.Services.AddCors(options =>
     options.AddPolicy("AllowVueApp", policy =>
     {
         policy.WithOrigins(allowedOrigins)
+              .SetIsOriginAllowed(_ => true) // Allow all origins for testing
               .AllowAnyHeader()
               .AllowAnyMethod()
               .AllowCredentials();
@@ -66,11 +67,8 @@ builder.Services.AddSingleton<ISystemErrorLogStore, InMemorySystemErrorLogStore>
 
 var app = builder.Build();
 
-if (app.Environment.IsDevelopment())
-{
-    app.UseSwagger();
-    app.UseSwaggerUI();
-}
+app.UseSwagger();
+app.UseSwaggerUI();
 
 app.UseCors("AllowVueApp");
 
