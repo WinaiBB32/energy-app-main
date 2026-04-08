@@ -139,7 +139,7 @@ const fetchData = async (): Promise<void> => {
       api.get('/SolarProduction', { params }),
     ])
 
-    buildings.value = buildingsRes.data.items || []
+    buildings.value = Array.isArray(buildingsRes.data) ? buildingsRes.data : (buildingsRes.data.items || [])
     const peaRecords = (peaRes.data.items || []).map((r: FetchedRecord) => ({ ...r, type: 'PEA_BILL' as const }))
     const solarRecords = (solarRes.data.items || []).map((r: FetchedRecord) => ({ ...r, type: 'SOLAR_PRODUCTION' as const }))
 

@@ -34,7 +34,7 @@ export interface IPPhoneDirectory {
   ipPhoneNumber: string
   analogNumber: string
   deviceCode: string
-  departmentId: string
+  departmentId: string | null
   workgroup: string
   description: string
   keywords: string
@@ -55,7 +55,7 @@ export interface Department {
 interface DirImportRow {
   ownerName: string
   ipPhoneNumber: string
-  departmentId: string
+  departmentId: string | null
   workgroup: string
   location: string
   analogNumber: string
@@ -97,8 +97,7 @@ const fetchDepartments = async (): Promise<void> => {
 const fetchDirectories = async (): Promise<void> => {
   isLoading.value = true
   try {
-    const params: Record<string, string> = {}
-    if (searchQuery.value) params.keyword = searchQuery.value
+    const params = { take: 9999, skip: 0 }
     const res = await api.get('/IPPhoneDirectory', { params })
     directories.value = res.data.items || []
   } catch (e) {
@@ -129,7 +128,7 @@ const formDir = ref<IPPhoneDirectory>({
   ipPhoneNumber: '',
   analogNumber: '',
   deviceCode: '',
-  departmentId: '',
+  departmentId: null,
   workgroup: '',
   description: '',
   keywords: '',
@@ -147,7 +146,7 @@ const openNewDialog = (): void => {
     ipPhoneNumber: '',
     analogNumber: '',
     deviceCode: '',
-    departmentId: '',
+    departmentId: null,
     workgroup: '',
     description: '',
     keywords: '',
@@ -316,7 +315,7 @@ const handleImportDirFileSelect = (event: Event): void => {
         if (!ownerName || !ipPhoneNumber) continue
         const rawDept = cols[2] || ''
         const matchedDept = departments.value.find((d) => d.name === rawDept)
-        const departmentId = matchedDept ? matchedDept.id : rawDept
+        const departmentId = matchedDept ? matchedDept.id : null
         parsed.push({
           ownerName,
           ipPhoneNumber,
@@ -505,7 +504,7 @@ const handleUploadExcel = async (): Promise<void> => {
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
-const getDeptName = (id: string): string => departments.value.find((x) => x.id === id)?.name || id
+const getDeptName = (id: string | null): string => !id ? '' : departments.value.find((x) => x.id === id)?.name || id
 const formatThaiMonth = (dateStr: string | null | undefined): string => {
   if (!dateStr) return '-'
   const d = new Date(dateStr)

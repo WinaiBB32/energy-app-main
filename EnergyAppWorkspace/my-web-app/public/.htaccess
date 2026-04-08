@@ -1,0 +1,10 @@
+Options -MultiViews
+RewriteEngine On
+RewriteBase /energy-app/
+
+# ถ้าเป็นไฟล์หรือโฟลเดอร์จริง ให้ผ่านตรงๆ
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+
+# ทุก route ที่ไม่มีไฟล์จริง → ส่งไป index.html (Vue Router จัดการเอง)
+RewriteRule ^ index.html [L]

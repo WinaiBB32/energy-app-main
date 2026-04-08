@@ -6,7 +6,7 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "EnergyAppWorkspace", "Energ
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "EnergyApp.API", "EnergyApp.API", "{69040B23-9808-159B-C3D9-09A0DD3FC773}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "EnergyApp.API", "EnergyAppWorkspace\EnergyApp.API\EnergyApp.API\EnergyApp.API.csproj", "{9603D918-6F1D-FC8A-7D08-98F06919D06B}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "EnergyApp.API", "EnergyAppWorkspace\EnergyApp.API\EnergyApp.API.csproj", "{9603D918-6F1D-FC8A-7D08-98F06919D06B}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

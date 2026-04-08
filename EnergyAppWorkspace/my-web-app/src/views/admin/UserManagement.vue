@@ -129,6 +129,36 @@ const openEdit = (user: AppUser) => {
 }
 
 // 🟢 ลบผู้ใช้งานผ่าน .NET
+// 🔑 รีเซ็ตรหัสผ่าน
+const resetPasswordDialogVisible = ref(false)
+const resetPasswordValue = ref('')
+const isResetting = ref(false)
+
+const openResetPassword = () => {
+  resetPasswordValue.value = ''
+  resetPasswordDialogVisible.value = true
+}
+
+const confirmResetPassword = async () => {
+  if (!selectedUser.value) return
+  if (resetPasswordValue.value.length < 6) {
+    toast.error('รหัสผ่านต้องมีอย่างน้อย 6 ตัวอักษร')
+    return
+  }
+  isResetting.value = true
+  try {
+    await api.post(`/User/${selectedUser.value.id}/reset-password`, { newPassword: resetPasswordValue.value })
+    const actor = { uid: authStore.user?.id ?? '', displayName: authStore.user?.firstName ?? authStore.user?.email ?? '', email: authStore.user?.email ?? '', role: authStore.user?.role ?? 'User' }
+    logAudit(actor, 'UPDATE', 'UserManagement', `รีเซ็ตรหัสผ่านผู้ใช้: ${selectedUser.value.email}`)
+    resetPasswordDialogVisible.value = false
+    toast.success('รีเซ็ตรหัสผ่านสำเร็จ')
+  } catch (error) {
+    toast.fromError(error, 'ไม่สามารถรีเซ็ตรหัสผ่านได้')
+  } finally {
+    isResetting.value = false
+  }
+}
+
 const deleteUser = async (userId: string) => {
   if (!confirm('ต้องการลบข้อมูลผู้ใช้นี้ออกจากระบบใช่หรือไม่?')) return
   try {
@@ -417,7 +447,27 @@ const filterTabs = [
         <div class="flex items-center justify-between w-full">
           <Button label="ลบผู้ใช้" icon="pi pi-trash" severity="danger" text size="small"
             @click="deleteUser(selectedUser!.id)" />
-          <Button label="แก้ไขสิทธิ์" icon="pi pi-user-edit" @click="openEdit(selectedUser!)" />
+          <div class="flex gap-2">
+            <Button label="รีเซ็ตรหัสผ่าน" icon="pi pi-key" severity="warn" outlined size="small"
+              @click="openResetPassword" />
+            <Button label="แก้ไขสิทธิ์" icon="pi pi-user-edit" @click="openEdit(selectedUser!)" />
+          </div>
+        </div>
+      </template>
+    </Dialog>
+
+    <!-- Reset Password Dialog -->
+    <Dialog v-model:visible="resetPasswordDialogVisible" modal header="รีเซ็ตรหัสผ่าน"
+      :style="{ width: '22rem' }" :breakpoints="{ '575px': '95vw' }">
+      <div class="space-y-3 py-1">
+        <p class="text-sm text-gray-600">ตั้งรหัสผ่านใหม่สำหรับ <span class="font-semibold">{{ selectedUser?.displayName || selectedUser?.email }}</span></p>
+        <InputText v-model="resetPasswordValue" placeholder="รหัสผ่านใหม่ (อย่างน้อย 6 ตัวอักษร)"
+          type="password" class="w-full" />
+      </div>
+      <template #footer>
+        <div class="flex justify-end gap-2">
+          <Button label="ยกเลิก" severity="secondary" outlined @click="resetPasswordDialogVisible = false" />
+          <Button label="บันทึก" icon="pi pi-check" :loading="isResetting" @click="confirmResetPassword" />
         </div>
       </template>
     </Dialog>

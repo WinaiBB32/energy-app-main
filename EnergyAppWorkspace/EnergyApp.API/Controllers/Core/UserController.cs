@@ -74,7 +74,28 @@ namespace EnergyApp.API.Controllers
             return Ok(new { message = "อัปเดตข้อมูลสำเร็จ" });
         }
 
-        // 3. ลบ User
+        // 3. รีเซ็ตรหัสผ่าน (SuperAdmin เท่านั้น)
+        public class ResetPasswordDto
+        {
+            public string NewPassword { get; set; } = string.Empty;
+        }
+
+        [HttpPost("{id}/reset-password")]
+        public async Task<IActionResult> ResetPassword(Guid id, [FromBody] ResetPasswordDto req)
+        {
+            if (string.IsNullOrWhiteSpace(req.NewPassword) || req.NewPassword.Length < 6)
+                return BadRequest(new { message = "รหัสผ่านต้องมีอย่างน้อย 6 ตัวอักษร" });
+
+            var user = await _context.Users.FindAsync(id);
+            if (user == null) return NotFound(new { message = "ไม่พบผู้ใช้งาน" });
+
+            user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(req.NewPassword);
+            await _context.SaveChangesAsync();
+
+            return Ok(new { message = "รีเซ็ตรหัสผ่านสำเร็จ" });
+        }
+
+        // 4. ลบ User
         [HttpDelete("{id}")]
         public async Task<IActionResult> DeleteUser(Guid id)
         {
