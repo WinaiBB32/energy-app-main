@@ -28,11 +28,16 @@ import Dialog from 'primevue/dialog'
 interface ElectricityRecord {
   docReceiveNumber: string
   docNumber: string
+  invoiceNumber: string
+  meterCode: string
   buildingId: string
   billingCycle: Date | null
-  peaUnitUsed: number | null
+  onPeakUnits: number | null
+  offPeakUnits: number | null
   peaAmount: number | null
   ftRate: number | null
+  ftAmount: number | null
+  monthlyServiceFee: number | null
 }
 
 interface FetchedElectricityRecord {
@@ -40,11 +45,17 @@ interface FetchedElectricityRecord {
   type: string
   docReceiveNumber: string
   docNumber: string
+  invoiceNumber: string
+  meterCode: string
   buildingId: string
   billingCycle: string | null
+  onPeakUnits: number
+  offPeakUnits: number
   peaUnitUsed: number
   peaAmount: number
   ftRate: number
+  ftAmount: number
+  monthlyServiceFee: number
   recordedBy: string
   departmentId: string
   createdAt: string
@@ -63,11 +74,16 @@ const buildings = ref<Building[]>([])
 const formData = ref<ElectricityRecord>({
   docReceiveNumber: '',
   docNumber: '',
+  invoiceNumber: '',
+  meterCode: '',
   buildingId: '',
   billingCycle: null,
-  peaUnitUsed: null,
+  onPeakUnits: null,
+  offPeakUnits: null,
   peaAmount: null,
   ftRate: null,
+  ftAmount: null,
+  monthlyServiceFee: null,
 })
 
 const isSubmitting = ref<boolean>(false)
@@ -161,13 +177,7 @@ const submitForm = async (): Promise<void> => {
   successMessage.value = ''
   errorMessage.value = ''
 
-  if (
-    !formData.value.buildingId ||
-    !formData.value.billingCycle ||
-    formData.value.peaUnitUsed === null ||
-    formData.value.ftRate === null ||
-    formData.value.peaAmount === null
-  ) {
+  if (!formData.value.buildingId || !formData.value.billingCycle) {
     errorMessage.value = 'กรุณากรอกข้อมูลที่จำเป็น (*) ให้ครบถ้วน'
     return
   }
@@ -178,11 +188,16 @@ const submitForm = async (): Promise<void> => {
       departmentId: currentUserDepartment.value,
       docReceiveNumber: formData.value.docReceiveNumber,
       docNumber: formData.value.docNumber,
+      invoiceNumber: formData.value.invoiceNumber,
+      meterCode: formData.value.meterCode,
       buildingId: formData.value.buildingId,
       billingCycle: formData.value.billingCycle ? formData.value.billingCycle.toISOString() : null,
-      peaUnitUsed: formData.value.peaUnitUsed || 0,
+      onPeakUnits: formData.value.onPeakUnits || 0,
+      offPeakUnits: formData.value.offPeakUnits || 0,
       peaAmount: formData.value.peaAmount || 0,
       ftRate: formData.value.ftRate || 0,
+      ftAmount: formData.value.ftAmount || 0,
+      monthlyServiceFee: formData.value.monthlyServiceFee || 0,
       recordedBy: authStore.user?.uid || authStore.user?.email || 'unknown',
     }
 
@@ -191,11 +206,16 @@ const submitForm = async (): Promise<void> => {
     formData.value = {
       docReceiveNumber: '',
       docNumber: '',
+      invoiceNumber: '',
+      meterCode: '',
       buildingId: '',
       billingCycle: null,
-      peaUnitUsed: null,
+      onPeakUnits: null,
+      offPeakUnits: null,
       peaAmount: null,
       ftRate: null,
+      ftAmount: null,
+      monthlyServiceFee: null,
     }
     handleFilterChange()
   } catch (error: unknown) {
@@ -225,16 +245,23 @@ const isSaving = ref(false)
 interface ElectricityEditForm {
   docReceiveNumber: string
   docNumber: string
+  invoiceNumber: string
+  meterCode: string
   buildingId: string
   billingCycle: Date | null
-  peaUnitUsed: number | null
+  onPeakUnits: number | null
+  offPeakUnits: number | null
   peaAmount: number | null
   ftRate: number | null
+  ftAmount: number | null
+  monthlyServiceFee: number | null
 }
 
 const editForm = ref<ElectricityEditForm>({
-  docReceiveNumber: '', docNumber: '', buildingId: '', billingCycle: null,
-  peaUnitUsed: null, peaAmount: null, ftRate: null,
+  docReceiveNumber: '', docNumber: '', invoiceNumber: '', meterCode: '',
+  buildingId: '', billingCycle: null,
+  onPeakUnits: null, offPeakUnits: null, peaAmount: null,
+  ftRate: null, ftAmount: null, monthlyServiceFee: null,
 })
 
 const openDetail = (event: { data: FetchedElectricityRecord }) => {
@@ -248,11 +275,16 @@ const openEdit = () => {
   editForm.value = {
     docReceiveNumber: r.docReceiveNumber,
     docNumber: r.docNumber,
+    invoiceNumber: r.invoiceNumber || '',
+    meterCode: r.meterCode || '',
     buildingId: r.buildingId,
     billingCycle: r.billingCycle ? new Date(r.billingCycle) : null,
-    peaUnitUsed: r.peaUnitUsed,
+    onPeakUnits: r.onPeakUnits ?? null,
+    offPeakUnits: r.offPeakUnits ?? null,
     peaAmount: r.peaAmount,
     ftRate: r.ftRate,
+    ftAmount: r.ftAmount ?? null,
+    monthlyServiceFee: r.monthlyServiceFee ?? null,
   }
   detailVisible.value = false
   editVisible.value = true
@@ -265,11 +297,16 @@ const saveEdit = async () => {
     const updatedData = {
       docReceiveNumber: editForm.value.docReceiveNumber,
       docNumber: editForm.value.docNumber,
+      invoiceNumber: editForm.value.invoiceNumber,
+      meterCode: editForm.value.meterCode,
       buildingId: editForm.value.buildingId,
       billingCycle: editForm.value.billingCycle ? editForm.value.billingCycle.toISOString() : null,
-      peaUnitUsed: editForm.value.peaUnitUsed || 0,
+      onPeakUnits: editForm.value.onPeakUnits || 0,
+      offPeakUnits: editForm.value.offPeakUnits || 0,
       peaAmount: editForm.value.peaAmount || 0,
       ftRate: editForm.value.ftRate || 0,
+      ftAmount: editForm.value.ftAmount || 0,
+      monthlyServiceFee: editForm.value.monthlyServiceFee || 0,
     }
     await api.put(`/ElectricityBill/${selectedRecord.value.id}`, updatedData)
 
@@ -332,12 +369,8 @@ const deleteRecord = async () => {
           <Card class="shadow-sm border-none mt-2">
             <template #content>
               <form @submit.prevent="submitForm" class="flex flex-col gap-6">
-                <Message v-if="successMessage" severity="success" :closable="true">{{
-                  successMessage
-                  }}</Message>
-                <Message v-if="errorMessage" severity="error" :closable="true">{{
-                  errorMessage
-                  }}</Message>
+                <Message v-if="successMessage" severity="success" :closable="true">{{ successMessage }}</Message>
+                <Message v-if="errorMessage" severity="error" :closable="true">{{ errorMessage }}</Message>
 
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div class="flex flex-col gap-2">
@@ -349,33 +382,52 @@ const deleteRecord = async () => {
                     <InputText v-model="formData.docNumber" placeholder="เช่น 456/2567" class="w-full" />
                   </div>
                   <div class="flex flex-col gap-2">
-                    <label class="font-semibold text-sm text-gray-700">เลือกอาคาร/มิเตอร์ <span
-                        class="text-red-500">*</span></label><Select v-model="formData.buildingId" :options="buildings"
-                      optionLabel="name" optionValue="id" placeholder="-- กรุณาเลือกอาคาร --" class="w-full" />
+                    <label class="font-semibold text-sm text-gray-700">เลือกอาคาร/มิเตอร์ <span class="text-red-500">*</span></label>
+                    <Select v-model="formData.buildingId" :options="buildings" optionLabel="name" optionValue="id"
+                      placeholder="-- กรุณาเลือกอาคาร --" class="w-full" />
                   </div>
                   <div class="flex flex-col gap-2">
-                    <label class="font-semibold text-sm text-gray-700">วันที่ <span
-                        class="text-red-500">*</span></label>
-                    <DatePicker v-model="formData.billingCycle" dateFormat="dd/mm/yy" showIcon
-                      placeholder="-- เลือกวันที่ --" class="w-full" />
+                    <label class="font-semibold text-sm text-gray-700">ประจำเดือน/ปี <span class="text-red-500">*</span></label>
+                    <DatePicker v-model="formData.billingCycle" view="month" dateFormat="MM yy" showIcon
+                      placeholder="-- เลือกเดือน/ปี --" class="w-full" />
                   </div>
                   <div class="flex flex-col gap-2">
-                    <label class="font-semibold text-sm text-gray-700">หน่วยไฟฟ้า (Unit) <span class="text-red-500">*</span></label>
-                    <InputNumber v-model="formData.peaUnitUsed" :minFractionDigits="0" :maxFractionDigits="2"
-                      placeholder="0.00" class="w-full" />
+                    <label class="font-semibold text-sm text-gray-700">เลขที่ใบแจ้ง</label>
+                    <InputText v-model="formData.invoiceNumber" placeholder="เลขที่ใบแจ้งหนี้" class="w-full" />
                   </div>
-
                   <div class="flex flex-col gap-2">
-                    <label class="font-semibold text-sm text-gray-700">ค่า Ft (บาท/หน่วย) <span class="text-red-500">*</span></label>
+                    <label class="font-semibold text-sm text-gray-700">รหัสเครื่องวัดฯ</label>
+                    <InputText v-model="formData.meterCode" placeholder="รหัสมิเตอร์" class="w-full" />
+                  </div>
+                  <div class="flex flex-col gap-2">
+                    <label class="font-semibold text-sm text-gray-700">Ft (บาท/หน่วย)</label>
                     <InputNumber v-model="formData.ftRate" :minFractionDigits="0" :maxFractionDigits="4"
                       placeholder="0.0000" class="w-full" />
                   </div>
-
-                  <div class="flex flex-col gap-2 md:col-span-2">
-                    <label class="font-semibold text-sm text-gray-700">จำนวนเงินค่าไฟฟ้ารวม (บาท) <span
-                        class="text-red-500">*</span></label>
+                  <div class="flex flex-col gap-2">
+                    <label class="font-semibold text-sm text-gray-700">On Peak (หน่วย)</label>
+                    <InputNumber v-model="formData.onPeakUnits" :minFractionDigits="0" :maxFractionDigits="2"
+                      placeholder="0.00" class="w-full" />
+                  </div>
+                  <div class="flex flex-col gap-2">
+                    <label class="font-semibold text-sm text-gray-700">Off Peak (หน่วย)</label>
+                    <InputNumber v-model="formData.offPeakUnits" :minFractionDigits="0" :maxFractionDigits="2"
+                      placeholder="0.00" class="w-full" />
+                  </div>
+                  <div class="flex flex-col gap-2">
+                    <label class="font-semibold text-sm text-gray-700">ค่าบริการรายเดือน (บาท)</label>
+                    <InputNumber v-model="formData.monthlyServiceFee" :minFractionDigits="0" :maxFractionDigits="2"
+                      placeholder="0.00" class="w-full" />
+                  </div>
+                  <div class="flex flex-col gap-2">
+                    <label class="font-semibold text-sm text-gray-700">ค่าไฟฟ้าผันแปร Ft (บาท)</label>
+                    <InputNumber v-model="formData.ftAmount" :minFractionDigits="0" :maxFractionDigits="2"
+                      placeholder="0.00" class="w-full" />
+                  </div>
+                  <div class="flex flex-col gap-2">
+                    <label class="font-semibold text-sm text-gray-700">จำนวนเงินค่าไฟฟ้ารวม (บาท)</label>
                     <InputNumber v-model="formData.peaAmount" mode="currency" currency="THB" locale="th-TH"
-                      placeholder="฿ 0.00" class="w-full md:w-1/2" />
+                      placeholder="฿ 0.00" class="w-full" />
                   </div>
                 </div>
                 <div class="flex justify-end mt-4 border-t pt-6">
@@ -419,23 +471,41 @@ const deleteRecord = async () => {
                 <Column header="อาคาร/มิเตอร์">
                   <template #body="sp">
                     <span class="font-semibold">{{ getBuildingName(sp.data.buildingId) }}</span>
+                    <div v-if="sp.data.meterCode" class="text-xs text-gray-400 mt-0.5">{{ sp.data.meterCode }}</div>
                   </template>
                 </Column>
-                <Column header="วันที่">
+                <Column header="ประจำเดือน">
                   <template #body="sp">{{ formatThaiMonth(sp.data.billingCycle) }}</template>
                 </Column>
-                <Column header="รายละเอียด">
+                <Column header="เลขที่เอกสาร">
                   <template #body="sp">
-                    <div class="text-gray-600 text-sm">เลข: {{ sp.data.docNumber || '-' }}</div>
-                    <div class="text-xs text-orange-500 mt-1" v-if="sp.data.ftRate">
-                      Ft: {{ sp.data.ftRate }} บ./หน่วย
+                    <div v-if="sp.data.invoiceNumber" class="text-gray-700 text-sm">ใบแจ้ง: {{ sp.data.invoiceNumber }}</div>
+                    <div v-if="sp.data.docNumber" class="text-gray-500 text-xs mt-0.5">เลข: {{ sp.data.docNumber }}</div>
+                  </template>
+                </Column>
+                <Column header="On Peak / Off Peak">
+                  <template #body="sp">
+                    <div class="text-sm">
+                      <span class="text-rose-500 font-semibold">{{ sp.data.onPeakUnits || 0 }}</span>
+                      <span class="text-gray-400 mx-1">/</span>
+                      <span class="text-indigo-500 font-semibold">{{ sp.data.offPeakUnits || 0 }}</span>
+                      <span class="text-xs text-gray-400 ml-1">Unit</span>
                     </div>
+                    <div class="text-xs text-gray-400">รวม {{ sp.data.peaUnitUsed || 0 }} Unit</div>
+                  </template>
+                </Column>
+                <Column header="Ft (บ./หน่วย)">
+                  <template #body="sp">
+                    <div class="text-sm text-orange-600 font-medium">{{ sp.data.ftRate || '-' }}</div>
+                    <div v-if="sp.data.ftAmount" class="text-xs text-gray-400">{{ formatCurrency(sp.data.ftAmount) }}</div>
                   </template>
                 </Column>
                 <Column header="ยอดรวม">
                   <template #body="sp">
                     <div class="font-bold text-blue-600">{{ formatCurrency(sp.data.peaAmount) }}</div>
-                    <div class="text-xs text-gray-500">{{ sp.data.peaUnitUsed || 0 }} kWh</div>
+                    <div v-if="sp.data.monthlyServiceFee" class="text-xs text-gray-500">
+                      ค่าบริการ: {{ formatCurrency(sp.data.monthlyServiceFee) }}
+                    </div>
                   </template>
                 </Column>
                 <Column header="" style="width: 3rem">
@@ -462,7 +532,7 @@ const deleteRecord = async () => {
                   <p class="font-semibold text-gray-800">{{ getBuildingName(selectedRecord.buildingId) }}</p>
                 </div>
                 <div class="bg-gray-50 rounded-lg p-3">
-                  <p class="text-gray-500 text-xs mb-1">วันที่</p>
+                  <p class="text-gray-500 text-xs mb-1">ประจำเดือน/ปี</p>
                   <p class="font-semibold text-gray-800">{{ formatThaiMonth(selectedRecord.billingCycle) }}</p>
                 </div>
                 <div v-if="selectedRecord.docReceiveNumber" class="bg-gray-50 rounded-lg p-3">
@@ -473,17 +543,41 @@ const deleteRecord = async () => {
                   <p class="text-gray-500 text-xs mb-1">เลขที่หนังสือ</p>
                   <p class="font-semibold text-gray-800">{{ selectedRecord.docNumber }}</p>
                 </div>
+                <div v-if="selectedRecord.invoiceNumber" class="bg-gray-50 rounded-lg p-3">
+                  <p class="text-gray-500 text-xs mb-1">เลขที่ใบแจ้ง</p>
+                  <p class="font-semibold text-gray-800">{{ selectedRecord.invoiceNumber }}</p>
+                </div>
+                <div v-if="selectedRecord.meterCode" class="bg-gray-50 rounded-lg p-3">
+                  <p class="text-gray-500 text-xs mb-1">รหัสเครื่องวัดฯ</p>
+                  <p class="font-semibold text-gray-800">{{ selectedRecord.meterCode }}</p>
+                </div>
               </div>
               <div class="bg-blue-50 rounded-xl p-4 border border-blue-100">
                 <p class="font-bold text-blue-800 mb-3"><i class="pi pi-bolt mr-2"></i>รายละเอียดการใช้ไฟฟ้า</p>
                 <div class="flex flex-col gap-2 text-sm">
+                  <div v-if="selectedRecord.onPeakUnits" class="flex justify-between">
+                    <span class="text-gray-600">On Peak</span>
+                    <span class="font-semibold">{{ selectedRecord.onPeakUnits }} หน่วย</span>
+                  </div>
+                  <div v-if="selectedRecord.offPeakUnits" class="flex justify-between">
+                    <span class="text-gray-600">Off Peak</span>
+                    <span class="font-semibold">{{ selectedRecord.offPeakUnits }} หน่วย</span>
+                  </div>
                   <div class="flex justify-between">
-                    <span class="text-gray-600">หน่วยที่ใช้</span>
+                    <span class="text-gray-600">รวมหน่วย</span>
                     <span class="font-semibold">{{ selectedRecord.peaUnitUsed || 0 }} kWh</span>
                   </div>
                   <div v-if="selectedRecord.ftRate" class="flex justify-between">
-                    <span class="text-gray-600">ค่า Ft</span>
-                    <span class="font-semibold">{{ selectedRecord.ftRate }} บ./หน่วย</span>
+                    <span class="text-gray-600">Ft (บาท/หน่วย)</span>
+                    <span class="font-semibold">{{ selectedRecord.ftRate }}</span>
+                  </div>
+                  <div v-if="selectedRecord.ftAmount" class="flex justify-between">
+                    <span class="text-gray-600">ค่าไฟฟ้าผันแปร Ft</span>
+                    <span class="font-semibold">{{ formatCurrency(selectedRecord.ftAmount) }}</span>
+                  </div>
+                  <div v-if="selectedRecord.monthlyServiceFee" class="flex justify-between">
+                    <span class="text-gray-600">ค่าบริการรายเดือน</span>
+                    <span class="font-semibold">{{ formatCurrency(selectedRecord.monthlyServiceFee) }}</span>
                   </div>
                   <div class="flex justify-between border-t border-blue-200 pt-2 mt-1">
                     <span class="font-bold text-blue-800">ยอดรวม</span>
@@ -499,7 +593,7 @@ const deleteRecord = async () => {
           </Dialog>
 
           <!-- Edit Dialog -->
-          <Dialog v-model:visible="editVisible" modal header="แก้ไขบิลค่าไฟฟ้า" :style="{ width: '580px' }"
+          <Dialog v-model:visible="editVisible" modal header="แก้ไขบิลค่าไฟฟ้า" :style="{ width: '640px' }"
             :draggable="false">
             <div class="flex flex-col gap-4">
               <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -509,8 +603,8 @@ const deleteRecord = async () => {
                     class="w-full" />
                 </div>
                 <div class="flex flex-col gap-2">
-                  <label class="text-sm font-semibold text-gray-700">วันที่</label>
-                  <DatePicker v-model="editForm.billingCycle" dateFormat="dd/mm/yy" class="w-full" showIcon />
+                  <label class="text-sm font-semibold text-gray-700">ประจำเดือน/ปี</label>
+                  <DatePicker v-model="editForm.billingCycle" view="month" dateFormat="MM yy" class="w-full" showIcon />
                 </div>
                 <div class="flex flex-col gap-2">
                   <label class="text-sm font-semibold text-gray-700">เลขที่รับหน่วยงาน</label>
@@ -521,13 +615,32 @@ const deleteRecord = async () => {
                   <InputText v-model="editForm.docNumber" class="w-full" />
                 </div>
                 <div class="flex flex-col gap-2">
-                  <label class="text-sm font-semibold text-gray-700">หน่วยไฟฟ้า (Unit)</label>
-                  <InputNumber v-model="editForm.peaUnitUsed" :minFractionDigits="0" :maxFractionDigits="2"
-                    class="w-full" />
+                  <label class="text-sm font-semibold text-gray-700">เลขที่ใบแจ้ง</label>
+                  <InputText v-model="editForm.invoiceNumber" class="w-full" />
                 </div>
                 <div class="flex flex-col gap-2">
-                  <label class="text-sm font-semibold text-gray-700">ค่า Ft (บาท/หน่วย)</label>
+                  <label class="text-sm font-semibold text-gray-700">รหัสเครื่องวัดฯ</label>
+                  <InputText v-model="editForm.meterCode" class="w-full" />
+                </div>
+                <div class="flex flex-col gap-2">
+                  <label class="text-sm font-semibold text-gray-700">Ft (บาท/หน่วย)</label>
                   <InputNumber v-model="editForm.ftRate" :minFractionDigits="0" :maxFractionDigits="4" class="w-full" />
+                </div>
+                <div class="flex flex-col gap-2">
+                  <label class="text-sm font-semibold text-gray-700">On Peak (หน่วย)</label>
+                  <InputNumber v-model="editForm.onPeakUnits" :minFractionDigits="0" :maxFractionDigits="2" class="w-full" />
+                </div>
+                <div class="flex flex-col gap-2">
+                  <label class="text-sm font-semibold text-gray-700">Off Peak (หน่วย)</label>
+                  <InputNumber v-model="editForm.offPeakUnits" :minFractionDigits="0" :maxFractionDigits="2" class="w-full" />
+                </div>
+                <div class="flex flex-col gap-2">
+                  <label class="text-sm font-semibold text-gray-700">ค่าบริการรายเดือน (บาท)</label>
+                  <InputNumber v-model="editForm.monthlyServiceFee" :minFractionDigits="0" :maxFractionDigits="2" class="w-full" />
+                </div>
+                <div class="flex flex-col gap-2">
+                  <label class="text-sm font-semibold text-gray-700">ค่าไฟฟ้าผันแปร Ft (บาท)</label>
+                  <InputNumber v-model="editForm.ftAmount" :minFractionDigits="0" :maxFractionDigits="2" class="w-full" />
                 </div>
                 <div class="flex flex-col gap-2 sm:col-span-2">
                   <label class="text-sm font-semibold text-gray-700">จำนวนเงินค่าไฟฟ้ารวม (บาท)</label>

@@ -31,14 +31,6 @@ if %errorlevel% neq 0 (
 cd ..
 
 echo.
-echo [3/3] Copying to output folder...
-if not exist "%OUTPUT%\frontend" mkdir "%OUTPUT%\frontend"
-if not exist "%OUTPUT%\api" mkdir "%OUTPUT%\api"
-
-robocopy my-web-app\dist "%OUTPUT%\frontend" /E /IS /IT
-robocopy publish\api "%OUTPUT%\api" /E /IS /IT
-
-echo.
 echo ========================================
 echo  DONE! Files ready at: %OUTPUT%
 echo ========================================
@@ -46,6 +38,19 @@ echo.
 echo ขั้นตอนต่อไป — Copy ด้วยมือไปที่ Server:
 echo   frontend  →  C:\xampp\htdocs\energy-app\
 echo   api       →  C:\energy-app\api\
+echo.
+echo หลัง copy เสร็จ บน Server:
+echo   sc stop EnergyAppAPI ^& sc start EnergyAppAPI
+echo ========================================
+pause
+echo.
+echo ========================================
+echo  DONE! Build & Publish เสร็จสมบูรณ์
+echo ========================================
+echo.
+echo กรุณานำไฟล์ที่ build แล้วไปวางบน Server ด้วยตนเอง
+echo   frontend  →  my-web-app\dist\
+echo   api       →  publish\api\
 echo.
 echo หลัง copy เสร็จ บน Server:
 echo   sc stop EnergyAppAPI ^& sc start EnergyAppAPI
