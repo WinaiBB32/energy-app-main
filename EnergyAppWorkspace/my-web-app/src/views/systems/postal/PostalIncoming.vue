@@ -28,9 +28,7 @@ const authStore = useAuthStore()
 interface IncomingPostalRecordForm {
   departmentId: string
   recordMonth: Date | null
-  incomingNormalMail: number | null
-  incomingRegisteredMail: number | null
-  incomingEmsMail: number | null
+  totalMail: number | null
 }
 
 interface FetchedPostalRecord {
@@ -58,9 +56,7 @@ const departments = ref<Department[]>([])
 const incomingFormData = ref<IncomingPostalRecordForm>({
   departmentId: isSuperAdmin.value ? '' : currentUserDepartment.value,
   recordMonth: null,
-  incomingNormalMail: null,
-  incomingRegisteredMail: null,
-  incomingEmsMail: null,
+  totalMail: null,
 })
 
 const isSubmitting = ref<boolean>(false)
@@ -74,13 +70,7 @@ const hasMoreData = ref<boolean>(true)
 const page = ref(0)
 const FETCH_LIMIT = 15
 
-const computedIncomingTotalMail = computed<number>(() => {
-  return (
-    (incomingFormData.value.incomingNormalMail || 0) +
-    (incomingFormData.value.incomingRegisteredMail || 0) +
-    (incomingFormData.value.incomingEmsMail || 0)
-  )
-})
+// ไม่ต้องคำนวณรวม เพราะเหลือฟิลด์เดียว
 
 const getDeptName = (id: string): string => departments.value.find((x) => x.id === id)?.name || id
 const formatThaiDate = (dateStr: string | null | undefined): string => {
@@ -144,8 +134,8 @@ const submitIncomingForm = async (): Promise<void> => {
   successMessage.value = ''
   errorMessage.value = ''
 
-  if (!incomingFormData.value.recordMonth || !incomingFormData.value.departmentId) {
-    errorMessage.value = 'กรุณากรอกข้อมูลรอบเดือน และหน่วยงานให้ครบถ้วน'
+  if (!incomingFormData.value.recordMonth || !incomingFormData.value.departmentId || incomingFormData.value.totalMail == null) {
+    errorMessage.value = 'กรุณากรอกข้อมูลให้ครบถ้วน'
     return
   }
 
@@ -156,20 +146,11 @@ const submitIncomingForm = async (): Promise<void> => {
       ? incomingFormData.value.departmentId
       : currentUserDepartment.value
 
+
     const docData = {
       departmentId: saveDeptId,
       recordMonth: incomingFormData.value.recordMonth,
-      incomingNormalMail: incomingFormData.value.incomingNormalMail || 0,
-      incomingRegisteredMail: incomingFormData.value.incomingRegisteredMail || 0,
-      incomingEmsMail: incomingFormData.value.incomingEmsMail || 0,
-      incomingTotalMail: computedIncomingTotalMail.value,
-      normalMail: 0,
-      normalMailUnitPrice: 0,
-      registeredMail: 0,
-      registeredMailUnitPrice: 0,
-      emsMail: 0,
-      emsMailUnitPrice: 0,
-      totalMail: 0,
+      incomingTotalMail: incomingFormData.value.totalMail || 0,
       recordedByName: authStore.userProfile?.displayName || authStore.user?.email || 'ไม่ระบุชื่อ',
       recordedBy: authStore.user?.uid || 'unknown',
     }
@@ -179,9 +160,7 @@ const submitIncomingForm = async (): Promise<void> => {
     successMessage.value = 'บันทึกสถิติไปรษณีย์เข้าหน่วยงานสำเร็จ'
     await fetchHistory(true)
 
-    incomingFormData.value.incomingNormalMail = null
-    incomingFormData.value.incomingRegisteredMail = null
-    incomingFormData.value.incomingEmsMail = null
+    incomingFormData.value.totalMail = null
   } catch (error: unknown) {
     errorMessage.value = error instanceof Error ? `เกิดข้อผิดพลาด: ${error.message}` : 'เกิดข้อผิดพลาด'
   } finally {
@@ -240,24 +219,9 @@ const submitIncomingForm = async (): Promise<void> => {
                     <i class="pi pi-inbox mr-2"></i>รายละเอียดไปรษณีย์เข้าหน่วยงาน
                   </h3>
                   <p class="text-xs text-emerald-700 mb-4">บันทึกจำนวนไปรษณีย์ที่หน่วยงานได้รับ</p>
-
-                  <div class="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
-                    <div class="flex flex-col gap-2">
-                      <label class="font-semibold text-sm text-gray-700">รับเข้า - ธรรมดา (ชิ้น)</label>
-                      <InputNumber v-model="incomingFormData.incomingNormalMail" :min="0" placeholder="0" class="w-full" />
-                    </div>
-                    <div class="flex flex-col gap-2">
-                      <label class="font-semibold text-sm text-gray-700">รับเข้า - ลงทะเบียน (ชิ้น)</label>
-                      <InputNumber v-model="incomingFormData.incomingRegisteredMail" :min="0" placeholder="0" class="w-full" />
-                    </div>
-                    <div class="flex flex-col gap-2">
-                      <label class="font-semibold text-sm text-gray-700">รับเข้า - EMS (ชิ้น)</label>
-                      <InputNumber v-model="incomingFormData.incomingEmsMail" :min="0" placeholder="0" class="w-full" />
-                    </div>
-                    <div class="flex flex-col gap-2 bg-emerald-100 p-3 rounded-lg border border-emerald-200">
-                      <label class="font-bold text-sm text-emerald-800">รวมไปรษณีย์เข้า (ชิ้น)</label>
-                      <InputNumber :modelValue="computedIncomingTotalMail" readonly class="w-full" inputClass="bg-transparent border-none text-right font-black text-emerald-700 text-xl p-0" />
-                    </div>
+                  <div class="flex flex-col gap-2 max-w-xs">
+                    <label class="font-semibold text-sm text-gray-700">จำนวนไปรษณีย์ที่ได้รับ (ชิ้น) <span class="text-red-500">*</span></label>
+                    <InputNumber v-model="incomingFormData.totalMail" :min="0" placeholder="0" class="w-full" />
                   </div>
                 </div>
 
