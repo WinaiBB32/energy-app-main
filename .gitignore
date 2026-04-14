@@ -38,6 +38,10 @@ firebase-key.json
 
 # Other
 .eslintcache
+err.txt
+err2.txt
+out.txt
+out2.txt
 
 
 # .NET / Visual Studio
@@ -58,5 +62,9 @@ build/
 *.db-shm
 *.db-wal
 appsettings.Development.json
+appsettings.Production.json
 appsettings.Local.json
+
+# Published build output (contains binaries and sensitive config)
+publish/
 
