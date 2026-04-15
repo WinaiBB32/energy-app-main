@@ -302,6 +302,31 @@ const router = createRouter({
           meta: { system: 'system10', requiresSuperAdmin: true },
         },
 
+        {
+          path: '/vehicle',
+          name: 'vehicle-management',
+          component: () => import('../views/systems/office/VehicleManagement.vue'),
+          meta: { system: 'system11' },
+        },
+        {
+          path: '/vehicle/person/:faceScanId',
+          name: 'vehicle-person-detail',
+          component: () => import('../views/systems/office/VehiclePersonDetail.vue'),
+          meta: { system: 'system11' },
+        },
+        {
+          path: '/vehicle/departments',
+          name: 'vehicle-departments',
+          component: () => import('../views/systems/office/VehicleDepartmentManagement.vue'),
+          meta: { system: 'system11' },
+        },
+        {
+          path: '/vehicle/provinces',
+          name: 'vehicle-provinces',
+          component: () => import('../views/systems/office/VehicleProvinceManagement.vue'),
+          meta: { system: 'system11' },
+        },
+
         // --- จัดการหลังบ้าน (SuperAdmin) ---
         {
           path: '/admin/users',

@@ -128,6 +128,7 @@ const currentSystemName = computed(() => {
   if (route.path.startsWith('/telephone')) return 'ค่าโทรศัพท์'
   if (route.path.startsWith('/saraban')) return 'งานสารบรรณ'
   if (route.path.startsWith('/ipphone')) return 'IP-Phone'
+  if (route.path.startsWith('/vehicle')) return 'ระบบรถยนต์สำนักงาน'
   if (route.path.startsWith('/maintenance')) return 'แจ้งซ่อมงานอาคาร'
   if (route.path.startsWith('/admin')) return 'ผู้ดูแลระบบ'
   return 'E-Portal'
@@ -140,6 +141,7 @@ const systemIcon = computed(() => {
   if (route.path.startsWith('/telephone')) return 'pi-phone'
   if (route.path.startsWith('/saraban')) return 'pi-folder-open'
   if (route.path.startsWith('/ipphone')) return 'pi-desktop'
+  if (route.path.startsWith('/vehicle')) return 'pi-car'
   if (route.path.startsWith('/maintenance')) return 'pi-wrench'
   if (route.path.startsWith('/admin')) return 'pi-shield'
   return 'pi-home'
@@ -255,6 +257,15 @@ const sidebarMenus = computed(() => {
     const menus = [{ name: 'ภาพรวม', icon: 'pi pi-chart-bar', path: '/meeting/dashboard' }]
     if (isSystemAdmin('meeting')) {
       menus.push({ name: 'บันทึกสถิติรายเดือน', icon: 'pi pi-file-edit', path: '/meeting' })
+    }
+    return menus
+  }
+
+  if (route.path.startsWith('/vehicle')) {
+    const menus = [{ name: 'ข้อมูลรถยนต์', icon: 'pi pi-car', path: '/vehicle' }]
+    if (isSystemAdmin('system11')) {
+      menus.push({ name: 'จัดการหน่วยงาน', icon: 'pi pi-sitemap', path: '/vehicle/departments' })
+      menus.push({ name: 'จัดการจังหวัด', icon: 'pi pi-map-marker', path: '/vehicle/provinces' })
     }
     return menus
   }

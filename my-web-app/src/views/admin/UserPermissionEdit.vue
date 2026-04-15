@@ -5,7 +5,7 @@ import { useAuthStore } from '@/stores/auth'
 import { logAudit } from '@/utils/auditLogger'
 import { useAppToast } from '@/composables/useAppToast'
 import api from '@/services/api'
-import axios from 'axios'
+import { ApiError } from '@/services/api'
 
 import Button from 'primevue/button'
 import Select from 'primevue/select'
@@ -17,6 +17,7 @@ import TabList from 'primevue/tablist'
 import Tab from 'primevue/tab'
 import TabPanels from 'primevue/tabpanels'
 import TabPanel from 'primevue/tabpanel'
+import Dialog from 'primevue/dialog'
 import {
     MAINTENANCE_ADMIN_BUILDING_PERMISSION,
     MAINTENANCE_ADMIN_BUILDING_CENTRAL_PERMISSION,
@@ -83,6 +84,7 @@ const systemModules: SystemModule[] = [
     { id: 'system10', name: 'Admin Tool', shortLabel: 'Admin Tool', description: 'เครื่องมือผู้ดูแลระบบและการกำหนดสิทธิ์', icon: 'pi-shield', cardBorder: 'border-l-slate-400' },
     { id: 'system7', name: 'ระบบไปรษณีย์', shortLabel: 'ไปรษณีย์', description: 'สถิติจัดส่ง ธรรมดา/ลงทะเบียน/EMS', icon: 'pi-envelope', cardBorder: 'border-l-blue-400' },
     { id: 'system8', name: 'สถิติห้องประชุมส่วนกลาง', shortLabel: 'ห้องประชุม', description: 'สถิติการใช้ห้องประชุม', icon: 'pi-users', cardBorder: 'border-l-indigo-400' },
+    { id: 'system11', name: 'ระบบรถยนต์สำนักงาน', shortLabel: 'รถยนต์สำนักงาน', description: 'บันทึกรถยนต์ Officer = เพิ่ม/แก้ไข/ลบ', icon: 'pi-car', cardBorder: 'border-l-teal-400' },
 ]
 
 
@@ -276,6 +278,56 @@ const goBack = () => {
     router.push('/admin/users')
 }
 
+// ─── Delete user ───────────────────────────────────────────
+const isDeleting = ref(false)
+
+const deleteUser = async () => {
+    if (!editingUser.value) return
+    if (!confirm(`ต้องการลบผู้ใช้ "${editingUser.value.displayName || editingUser.value.email}" ออกจากระบบใช่หรือไม่?`)) return
+    isDeleting.value = true
+    try {
+        await api.delete(`/User/${editingUser.value.id}`)
+        const actor = { uid: authStore.user?.id ?? '', displayName: authStore.user?.firstName ?? authStore.user?.email ?? '', email: authStore.user?.email ?? '', role: authStore.user?.role ?? 'User' }
+        logAudit(actor, 'DELETE', 'UserManagement', `ลบผู้ใช้: ${editingUser.value.email}`)
+        toast.success('ลบผู้ใช้สำเร็จ')
+        router.push('/admin/users')
+    } catch (error) {
+        toast.fromError(error, 'ไม่สามารถลบผู้ใช้งานได้')
+    } finally {
+        isDeleting.value = false
+    }
+}
+
+// ─── Reset password ────────────────────────────────────────
+const resetPasswordDialogVisible = ref(false)
+const resetPasswordValue = ref('')
+const isResetting = ref(false)
+
+const openResetPassword = () => {
+    resetPasswordValue.value = ''
+    resetPasswordDialogVisible.value = true
+}
+
+const confirmResetPassword = async () => {
+    if (!editingUser.value) return
+    if (resetPasswordValue.value.length < 6) {
+        toast.error('รหัสผ่านต้องมีอย่างน้อย 6 ตัวอักษร')
+        return
+    }
+    isResetting.value = true
+    try {
+        await api.post(`/User/${editingUser.value.id}/reset-password`, { newPassword: resetPasswordValue.value })
+        const actor = { uid: authStore.user?.id ?? '', displayName: authStore.user?.firstName ?? authStore.user?.email ?? '', email: authStore.user?.email ?? '', role: authStore.user?.role ?? 'User' }
+        logAudit(actor, 'UPDATE', 'UserManagement', `รีเซ็ตรหัสผ่าน: ${editingUser.value.email}`)
+        resetPasswordDialogVisible.value = false
+        toast.success('รีเซ็ตรหัสผ่านสำเร็จ')
+    } catch (error) {
+        toast.fromError(error, 'ไม่สามารถรีเซ็ตรหัสผ่านได้')
+    } finally {
+        isResetting.value = false
+    }
+}
+
 const saveUser = async () => {
     if (!editingUser.value) return
     try {
@@ -303,7 +355,7 @@ const saveUser = async () => {
         successMessage.value = 'บันทึกสำเร็จ'
         await fetchData()
     } catch (error: unknown) {
-        if (axios.isAxiosError(error)) {
+        if (error instanceof ApiError) {
             errorMessage.value = error.response?.data?.message || 'เกิดข้อผิดพลาดในการบันทึก'
         } else {
             errorMessage.value = 'เกิดข้อผิดพลาด'
@@ -410,7 +462,11 @@ const saveUser = async () => {
                                 </p>
                             </div>
 
-                            <div class="flex justify-end pt-2 border-t border-gray-100">
+                            <div class="flex items-center justify-between pt-2 border-t border-gray-100">
+                                <div class="flex gap-2">
+                                    <Button label="รีเซ็ตรหัสผ่าน" icon="pi pi-key" severity="warn" outlined size="small" @click="openResetPassword" />
+                                    <Button label="ลบผู้ใช้" icon="pi pi-trash" severity="danger" outlined size="small" :loading="isDeleting" @click="deleteUser" />
+                                </div>
                                 <Button label="บันทึกข้อมูล" icon="pi pi-save" :loading="isSaving" @click="saveUser" />
                             </div>
                         </div>
@@ -509,5 +565,19 @@ const saveUser = async () => {
                 </TabPanels>
             </Tabs>
         </div>
+
+        <!-- Reset Password Dialog -->
+        <Dialog v-model:visible="resetPasswordDialogVisible" modal header="รีเซ็ตรหัสผ่าน" :style="{ width: '22rem' }">
+            <div class="space-y-3 py-1">
+                <p class="text-sm text-gray-600">ตั้งรหัสผ่านใหม่สำหรับ <span class="font-semibold">{{ editingUser?.displayName || editingUser?.email }}</span></p>
+                <InputText v-model="resetPasswordValue" placeholder="รหัสผ่านใหม่ (อย่างน้อย 6 ตัวอักษร)" type="password" class="w-full" />
+            </div>
+            <template #footer>
+                <div class="flex justify-end gap-2">
+                    <Button label="ยกเลิก" severity="secondary" outlined @click="resetPasswordDialogVisible = false" />
+                    <Button label="บันทึก" icon="pi pi-check" :loading="isResetting" @click="confirmResetPassword" />
+                </div>
+            </template>
+        </Dialog>
     </div>
 </template>

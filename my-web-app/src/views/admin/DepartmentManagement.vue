@@ -4,7 +4,7 @@ import { useAuthStore } from '@/stores/auth'
 import { logAudit } from '@/utils/auditLogger'
 import { useAppToast } from '@/composables/useAppToast'
 import api from '@/services/api' // <--- เปลี่ยนมาใช้ API ของเรา
-import axios from 'axios'
+import { ApiError } from '@/services/api'
 
 import Card from 'primevue/card'
 import DataTable from 'primevue/datatable'
@@ -105,7 +105,7 @@ const saveDepartment = async () => {
         setTimeout(() => { dialogVisible.value = false }, 1000)
 
     } catch (error: unknown) {
-        if (axios.isAxiosError(error)) {
+        if (error instanceof ApiError) {
             errorMessage.value = error.response?.data?.message || 'เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์'
         } else {
             errorMessage.value = 'เกิดข้อผิดพลาดที่ไม่ทราบสาเหตุ'
@@ -134,7 +134,7 @@ const deleteDepartment = async (id: string, name: string) => {
             toast.success('ลบหน่วยงานสำเร็จ')
 
         } catch (error: unknown) {
-            if (axios.isAxiosError(error) && error.response?.status === 400) {
+            if (error instanceof ApiError && error.response?.status === 400) {
                 // แจ้งเตือนกรณีมี User อยู่ใน Department แล้วลบไม่ได้ (ดักจับจาก Backend)
                 toast.warn(error.response.data.message)
             } else {

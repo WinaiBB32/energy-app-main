@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 import api from '@/services/api'
 import type { User, UserProfile, UserRole } from '@/types'
-import axios from 'axios' // <--- Import axios เพื่อมาทำ Type Guard
+import { ApiError } from '@/services/api'
 
 export const useAuthStore = defineStore('auth', {
   state: () => ({
@@ -65,7 +65,7 @@ export const useAuthStore = defineStore('auth', {
         // <--- เปลี่ยนจาก any เป็น unknown
 
         // --- กระบวนการ Type Guard ---
-        if (axios.isAxiosError(err)) {
+        if (err instanceof ApiError) {
           // กรณี Error มาจากการยิง API (Backend ตอบ 400, 401 ฯลฯ)
           this.error = err.response?.data?.message || 'อีเมลหรือรหัสผ่านไม่ถูกต้อง'
         } else if (err instanceof Error) {
@@ -99,7 +99,7 @@ export const useAuthStore = defineStore('auth', {
         localStorage.setItem('user_data', JSON.stringify(this.user))
         return true
       } catch (err: unknown) {
-        if (axios.isAxiosError(err) && err.response?.status === 401) {
+        if (err instanceof ApiError && err.response?.status === 401) {
           this.logout()
         }
         return false

@@ -1,4 +1,5 @@
 using EnergyApp.API.Models;
+using EnergyApp.API.Models.Office;
 using Microsoft.EntityFrameworkCore;
 
 namespace EnergyApp.API.Data
@@ -32,5 +33,8 @@ namespace EnergyApp.API.Data
         public DbSet<SparePartTransaction> SparePartTransactions { get; set; }
         public DbSet<SparePartIssueRequest> SparePartIssueRequests { get; set; }
         public DbSet<SparePartIssueRequestItem> SparePartIssueRequestItems { get; set; }
+        public DbSet<VehicleRecord> VehicleRecords { get; set; }
+        public DbSet<VehicleDepartment> VehicleDepartments { get; set; }
+        public DbSet<VehicleProvince> VehicleProvinces { get; set; }
     }
 }

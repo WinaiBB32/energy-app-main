@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import axios from 'axios'
+import { ApiError } from '@/services/api'
 import api from '@/services/api'
 import { useAuthStore } from '@/stores/auth'
 import { logAudit } from '@/utils/auditLogger'
@@ -109,7 +109,7 @@ const saveRoom = async (): Promise<void> => {
         await fetchMeetingRooms()
         setTimeout(() => { dialogVisible.value = false }, 900)
     } catch (error: unknown) {
-        if (axios.isAxiosError(error)) {
+        if (error instanceof ApiError) {
             errorMessage.value = error.response?.data?.message || 'เกิดข้อผิดพลาดในการบันทึกข้อมูล'
         } else if (error instanceof Error) {
             errorMessage.value = `Error: ${error.message}`

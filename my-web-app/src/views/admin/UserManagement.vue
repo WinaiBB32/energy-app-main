@@ -1,8 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
-import { useAuthStore } from '@/stores/auth'
-import { logAudit } from '@/utils/auditLogger'
+import { useRouter } from 'vue-router'
 import { useAppToast } from '@/composables/useAppToast'
 import api from '@/services/api'
 
@@ -10,7 +8,6 @@ import DataTable from 'primevue/datatable'
 import Column from 'primevue/column'
 import Button from 'primevue/button'
 import Tag from 'primevue/tag'
-import Dialog from 'primevue/dialog'
 import IconField from 'primevue/iconfield'
 import InputIcon from 'primevue/inputicon'
 import InputText from 'primevue/inputtext'
@@ -26,56 +23,30 @@ interface AppUser {
   accessibleSystems: string[]
 }
 
-const authStore = useAuthStore()
 const toast = useAppToast()
-const route = useRoute()
 const router = useRouter()
 
 interface Department { id: string; name: string }
 const departments = ref<Department[]>([])
 
-interface SystemModule {
-  id: string
-  name: string
-  shortLabel: string
-  description: string
-  icon: string
-  cardBorder: string
-}
-
-// ลิสต์โมดูลยังเหมือนเดิม...
-const systemModules: SystemModule[] = [
-  { id: 'system1', name: 'ระบบไฟฟ้า & Solar', shortLabel: 'ไฟฟ้า & Solar', description: 'บิลค่าไฟ กฟภ./กฟน. และ Solar', icon: 'pi-bolt', cardBorder: 'border-l-amber-400' },
-  { id: 'system2', name: 'ระบบน้ำประปา', shortLabel: 'น้ำประปา', description: 'บันทึกมิเตอร์และค่าน้ำ', icon: 'pi-tint', cardBorder: 'border-l-cyan-400' },
-  { id: 'system3', name: 'ระบบน้ำมันเชื้อเพลิง', shortLabel: 'น้ำมันเชื้อเพลิง', description: 'การเติมน้ำมันและใบรับรอง', icon: 'pi-car', cardBorder: 'border-l-rose-400' },
-  { id: 'system4', name: 'ระบบโทรศัพท์', shortLabel: 'ค่าโทรศัพท์', description: 'บันทึกค่าใช้จ่ายโทรศัพท์', icon: 'pi-phone', cardBorder: 'border-l-emerald-400' },
-  { id: 'system5', name: 'ระบบสารบรรณ', shortLabel: 'สารบรรณ', description: 'สถิติงานรับ–ส่งเอกสาร', icon: 'pi-folder-open', cardBorder: 'border-l-violet-400' },
-  { id: 'system6', name: 'ระบบ IP-Phone', shortLabel: 'IP-Phone', description: 'สมุดโทรศัพท์และสถิติการโทร', icon: 'pi-desktop', cardBorder: 'border-l-teal-400' },
-  { id: 'system9', name: 'ระบบแจ้งซ่อมงานอาคาร', shortLabel: 'ซ่อมงานอาคาร', description: 'ใบงานซ่อม คลังอะไหล่ และช่างภายนอก', icon: 'pi-wrench', cardBorder: 'border-l-orange-400' },
-  { id: 'system10', name: 'Admin Tool', shortLabel: 'Admin Tool', description: 'เครื่องมือผู้ดูแลระบบและการกำหนดสิทธิ์', icon: 'pi-shield', cardBorder: 'border-l-slate-400' },
-  { id: 'system7', name: 'ระบบไปรษณีย์', shortLabel: 'ไปรษณีย์', description: 'สถิติจัดส่ง ธรรมดา/ลงทะเบียน/EMS', icon: 'pi-envelope', cardBorder: 'border-l-blue-400' },
-  { id: 'system8', name: 'สถิติห้องประชุมส่วนกลาง', shortLabel: 'ห้องประชุม', description: 'สถิติการใช้ห้องประชุม', icon: 'pi-users', cardBorder: 'border-l-indigo-400' },
+const systemModules: { id: string; shortLabel: string }[] = [
+  { id: 'system1', shortLabel: 'ไฟฟ้า & Solar' },
+  { id: 'system2', shortLabel: 'น้ำประปา' },
+  { id: 'system3', shortLabel: 'น้ำมันเชื้อเพลิง' },
+  { id: 'system4', shortLabel: 'ค่าโทรศัพท์' },
+  { id: 'system5', shortLabel: 'สารบรรณ' },
+  { id: 'system6', shortLabel: 'IP-Phone' },
+  { id: 'system7', shortLabel: 'ไปรษณีย์' },
+  { id: 'system8', shortLabel: 'ห้องประชุม' },
+  { id: 'system9', shortLabel: 'ซ่อมงานอาคาร' },
+  { id: 'system10', shortLabel: 'Admin Tool' },
+  { id: 'system11', shortLabel: 'รถยนต์สำนักงาน' },
 ]
-
-const focusedSystemId = computed(() => {
-  const q = route.query.focusSystem
-  return typeof q === 'string' ? q : ''
-})
-
-const focusedSystem = computed(() =>
-  systemModules.find((m) => m.id === focusedSystemId.value) ?? null,
-)
 
 const users = ref<AppUser[]>([])
 const isLoading = ref(true)
 const searchQuery = ref('')
 const statusFilter = ref<string>('all')
-
-const detailDialogVisible = ref(false)
-const selectedUser = ref<AppUser | null>(null)
-
-function selectedUserHasAccess(sysId: string): boolean { return selectedUser.value?.accessibleSystems?.includes(sysId) ?? false }
-function selectedUserIsAdmin(sysId: string): boolean { return selectedUser.value?.adminSystems?.includes(sysId) ?? false }
 
 // 🟢 ดึงข้อมูลจาก .NET
 const fetchData = async () => {
@@ -107,14 +78,6 @@ const filteredUsers = computed(() => {
   let list = users.value
   if (statusFilter.value !== 'all') list = list.filter((u) => u.status === statusFilter.value)
 
-  if (focusedSystemId.value) {
-    list = list.filter(
-      (u) =>
-        (u.accessibleSystems ?? []).includes(focusedSystemId.value) ||
-        (u.adminSystems ?? []).includes(focusedSystemId.value),
-    )
-  }
-
   const q = searchQuery.value.trim().toLowerCase()
   if (!q) return list
   return list.filter(
@@ -122,58 +85,6 @@ const filteredUsers = computed(() => {
   )
 })
 
-const openDetail = (user: AppUser) => { selectedUser.value = user; detailDialogVisible.value = true }
-const openEdit = (user: AppUser) => {
-  detailDialogVisible.value = false
-  router.push(`/admin/users/${user.id}/permissions`)
-}
-
-// 🟢 ลบผู้ใช้งานผ่าน .NET
-// 🔑 รีเซ็ตรหัสผ่าน
-const resetPasswordDialogVisible = ref(false)
-const resetPasswordValue = ref('')
-const isResetting = ref(false)
-
-const openResetPassword = () => {
-  resetPasswordValue.value = ''
-  resetPasswordDialogVisible.value = true
-}
-
-const confirmResetPassword = async () => {
-  if (!selectedUser.value) return
-  if (resetPasswordValue.value.length < 6) {
-    toast.error('รหัสผ่านต้องมีอย่างน้อย 6 ตัวอักษร')
-    return
-  }
-  isResetting.value = true
-  try {
-    await api.post(`/User/${selectedUser.value.id}/reset-password`, { newPassword: resetPasswordValue.value })
-    const actor = { uid: authStore.user?.id ?? '', displayName: authStore.user?.firstName ?? authStore.user?.email ?? '', email: authStore.user?.email ?? '', role: authStore.user?.role ?? 'User' }
-    logAudit(actor, 'UPDATE', 'UserManagement', `รีเซ็ตรหัสผ่านผู้ใช้: ${selectedUser.value.email}`)
-    resetPasswordDialogVisible.value = false
-    toast.success('รีเซ็ตรหัสผ่านสำเร็จ')
-  } catch (error) {
-    toast.fromError(error, 'ไม่สามารถรีเซ็ตรหัสผ่านได้')
-  } finally {
-    isResetting.value = false
-  }
-}
-
-const deleteUser = async (userId: string) => {
-  if (!confirm('ต้องการลบข้อมูลผู้ใช้นี้ออกจากระบบใช่หรือไม่?')) return
-  try {
-    await api.delete(`/User/${userId}`)
-
-    const actor = { uid: authStore.user?.id ?? '', displayName: authStore.user?.firstName ?? authStore.user?.email ?? '', email: authStore.user?.email ?? '', role: authStore.user?.role ?? 'User' }
-    logAudit(actor, 'DELETE', 'UserManagement', `ลบผู้ใช้ ID: ${userId}`)
-
-    detailDialogVisible.value = false
-    await fetchData()
-    toast.success('ลบผู้ใช้สำเร็จ')
-  } catch (error) {
-    toast.fromError(error, 'ไม่สามารถลบผู้ใช้งานได้')
-  }
-}
 
 const getDeptName = (id: string | null) => {
   if (!id) return 'ไม่ระบุ'
@@ -223,11 +134,6 @@ const filterTabs = [
     <div>
       <h2 class="text-3xl font-bold text-gray-800">จัดการสิทธิ์ผู้ใช้งาน</h2>
       <p class="text-gray-500 mt-1">อนุมัติการเข้าใช้งาน กำหนดหน่วยงาน และจัดการสิทธิ์ระบบ</p>
-      <div v-if="focusedSystem"
-        class="mt-3 inline-flex items-center gap-2 rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-1.5 text-sm text-indigo-700">
-        <i class="pi pi-filter text-xs"></i>
-        โฟกัสระบบ: <span class="font-semibold">{{ focusedSystem.name }}</span>
-      </div>
     </div>
 
     <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -291,7 +197,8 @@ const filterTabs = [
     </div>
 
     <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-      <DataTable :value="filteredUsers" :loading="isLoading" paginator :rows="10" @row-click="(e) => openDetail(e.data)"
+      <DataTable :value="filteredUsers" :loading="isLoading" paginator :rows="10"
+        @row-click="(e) => router.push(`/admin/users/${e.data.id}/permissions`)"
         :rowClass="(data: AppUser) => [
           'cursor-pointer transition-colors',
           data.status === 'pending' ? 'bg-amber-50/60 hover:bg-amber-50' : 'hover:bg-blue-50/40'
@@ -378,99 +285,6 @@ const filterTabs = [
       </DataTable>
     </div>
 
-    <Dialog v-model:visible="detailDialogVisible" modal :style="{ width: '34rem' }" :breakpoints="{ '575px': '95vw' }">
-      <template #header>
-        <div class="flex items-center gap-3 w-full">
-          <div
-            :class="`w-12 h-12 rounded-full flex items-center justify-center font-bold text-lg shrink-0 ${selectedUser ? getAvatarColor(selectedUser.role) : 'bg-gray-100 text-gray-600'}`">
-            {{ (selectedUser?.displayName || selectedUser?.email || '?').charAt(0).toUpperCase() }}
-          </div>
-          <div class="flex-1 min-w-0">
-            <p class="font-bold text-gray-800 truncate">{{ selectedUser?.displayName || 'ไม่มีชื่อ' }}</p>
-            <p class="text-xs text-gray-400 truncate">{{ selectedUser?.email }}</p>
-          </div>
-        </div>
-      </template>
-
-      <div v-if="selectedUser" class="space-y-4 py-1">
-        <div class="flex items-center gap-2 p-3 rounded-lg" :class="{
-          'bg-amber-50 border border-amber-200': selectedUser.status === 'pending',
-          'bg-green-50 border border-green-200': selectedUser.status === 'active',
-          'bg-red-50 border border-red-200': selectedUser.status === 'suspended',
-        }">
-          <i class="pi"
-            :class="{ 'pi-clock text-amber-500': selectedUser.status === 'pending', 'pi-check-circle text-green-500': selectedUser.status === 'active', 'pi-ban text-red-500': selectedUser.status === 'suspended' }"></i>
-          <span class="font-semibold text-sm"
-            :class="{ 'text-amber-700': selectedUser.status === 'pending', 'text-green-700': selectedUser.status === 'active', 'text-red-700': selectedUser.status === 'suspended' }">
-            {{ getStatusName(selectedUser.status) }}
-          </span>
-          <Tag :value="getRoleLabel(selectedUser.role)" :severity="getRoleSeverity(selectedUser.role)" rounded
-            class="ml-auto text-xs" />
-        </div>
-
-        <div class="bg-gray-50 rounded-lg p-3 border border-gray-100">
-          <p class="text-[11px] text-gray-400 uppercase tracking-wide mb-1">หน่วยงาน</p>
-          <p class="font-semibold text-gray-800 text-sm">{{ getDeptName(selectedUser.departmentId) }}</p>
-        </div>
-
-        <div class="space-y-2">
-          <p class="text-[11px] text-gray-400 uppercase tracking-wide">สิทธิ์ตามระบบ</p>
-          <div v-if="selectedUser.role === 'SuperAdmin' || selectedUser.role === 'Admin'"
-            class="rounded-lg border border-violet-100 bg-violet-50/80 px-3 py-2.5 text-sm text-violet-800">
-            <i class="pi pi-info-circle mr-1.5 text-violet-500"></i>
-            บทบาท {{ selectedUser.role === 'SuperAdmin' ? 'Superadmin' : 'Admin องค์กร' }} มีสิทธิ์ครอบคลุมตามนโยบายแอป
-          </div>
-          <div class="max-h-56 overflow-y-auto pr-1 grid grid-cols-1 sm:grid-cols-2 gap-2">
-            <div v-for="sys in systemModules" :key="sys.id"
-              class="rounded-lg border border-gray-100 bg-white p-2.5 shadow-sm flex items-center justify-between gap-2 border-l-4"
-              :class="[sys.cardBorder, focusedSystemId === sys.id ? 'ring-2 ring-indigo-300 bg-indigo-50/40' : '']">
-              <div class="flex items-center gap-2 min-w-0">
-                <div class="w-8 h-8 rounded-md bg-gray-50 flex items-center justify-center shrink-0">
-                  <i :class="['pi text-sm text-gray-600', sys.icon]"></i>
-                </div>
-                <span class="text-xs font-semibold text-gray-800 truncate">{{ sys.shortLabel }}</span>
-              </div>
-              <div class="flex flex-col items-end gap-0.5 shrink-0">
-                <Tag v-if="selectedUserHasAccess(sys.id)" value="User" severity="success"
-                  class="text-[10px] px-1.5! py-0!" />
-                <Tag v-if="selectedUserIsAdmin(sys.id)" value="Officer" severity="warn"
-                  class="text-[10px] px-1.5! py-0!" />
-                <span v-if="!selectedUserHasAccess(sys.id) && !selectedUserIsAdmin(sys.id)"
-                  class="text-[10px] text-gray-400">—</span>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <template #footer>
-        <div class="flex items-center justify-between w-full">
-          <Button label="ลบผู้ใช้" icon="pi pi-trash" severity="danger" text size="small"
-            @click="deleteUser(selectedUser!.id)" />
-          <div class="flex gap-2">
-            <Button label="รีเซ็ตรหัสผ่าน" icon="pi pi-key" severity="warn" outlined size="small"
-              @click="openResetPassword" />
-            <Button label="แก้ไขสิทธิ์" icon="pi pi-user-edit" @click="openEdit(selectedUser!)" />
-          </div>
-        </div>
-      </template>
-    </Dialog>
-
-    <!-- Reset Password Dialog -->
-    <Dialog v-model:visible="resetPasswordDialogVisible" modal header="รีเซ็ตรหัสผ่าน"
-      :style="{ width: '22rem' }" :breakpoints="{ '575px': '95vw' }">
-      <div class="space-y-3 py-1">
-        <p class="text-sm text-gray-600">ตั้งรหัสผ่านใหม่สำหรับ <span class="font-semibold">{{ selectedUser?.displayName || selectedUser?.email }}</span></p>
-        <InputText v-model="resetPasswordValue" placeholder="รหัสผ่านใหม่ (อย่างน้อย 6 ตัวอักษร)"
-          type="password" class="w-full" />
-      </div>
-      <template #footer>
-        <div class="flex justify-end gap-2">
-          <Button label="ยกเลิก" severity="secondary" outlined @click="resetPasswordDialogVisible = false" />
-          <Button label="บันทึก" icon="pi pi-check" :loading="isResetting" @click="confirmResetPassword" />
-        </div>
-      </template>
-    </Dialog>
 
   </div>
 </template>

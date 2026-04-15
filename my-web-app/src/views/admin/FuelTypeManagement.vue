@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import axios from 'axios'
+import { ApiError } from '@/services/api'
 import api from '@/services/api'
 import { useAuthStore } from '@/stores/auth'
 import { logAudit } from '@/utils/auditLogger'
@@ -135,7 +135,7 @@ const saveFuelType = async () => {
       dialogVisible.value = false
     }, 900)
   } catch (error: unknown) {
-    if (axios.isAxiosError(error)) {
+    if (error instanceof ApiError) {
       errorMessage.value = error.response?.data?.message || 'เกิดข้อผิดพลาดในการเชื่อมต่อ'
     } else if (error instanceof Error) {
       errorMessage.value = error.message

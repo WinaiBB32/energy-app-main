@@ -3,7 +3,7 @@ import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import api from '@/services/api'
-import axios from 'axios'
+import { ApiError } from '@/services/api'
 
 // นำเข้า PrimeVue Components ตามเดิม
 import InputText from 'primevue/inputtext'
@@ -99,7 +99,7 @@ const handleEmailAuth = async (): Promise<void> => {
     }
   } catch (error: unknown) {
     // 🔴 จัดการ Error แบบ Strict TypeScript
-    if (axios.isAxiosError(error)) {
+    if (error instanceof ApiError) {
       // ดึง Error Message ที่พ่นมาจาก .NET
       errorMessage.value = error.response?.data?.message || 'ไม่สามารถเชื่อมต่อกับเซิร์ฟเวอร์ได้'
     } else if (error instanceof Error) {

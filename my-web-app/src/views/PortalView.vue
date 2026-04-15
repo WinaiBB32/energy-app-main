@@ -155,6 +155,15 @@ const systems = computed(() => [
     show: hasAccess('system8'),
   },
   {
+    id: 'system11',
+    path: '/vehicle',
+    label: 'ระบบรถยนต์สำนักงาน',
+    desc: 'บันทึกและจัดการข้อมูลรถยนต์สำนักงาน ทะเบียน ยี่ห้อ และผู้ใช้งาน',
+    icon: 'pi-car',
+    color: 'teal',
+    show: hasAccess('system11'),
+  },
+  {
     id: 'system10',
     path: '/admin/system-management',
     label: 'Admin Tool',

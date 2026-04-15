@@ -113,6 +113,17 @@ const systems: SystemAdminItem[] = [
       { label: 'Timeline ช่างภายนอก', path: '/maintenance/external-timeline' },
     ],
   },
+  {
+    id: 'system11',
+    name: 'ระบบรถยนต์สำนักงาน',
+    permissionLabel: 'ตั้งสิทธิ์ system11',
+    dataLabel: 'จัดการข้อมูลรถยนต์สำนักงาน',
+    dataPath: '/vehicle',
+    extraPaths: [
+      { label: 'จัดการหน่วยงาน', path: '/vehicle/departments' },
+      { label: 'จัดการจังหวัด', path: '/vehicle/provinces' },
+    ],
+  },
 ]
 
 const globalTools: GlobalAdminTool[] = [
