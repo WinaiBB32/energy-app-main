@@ -8,6 +8,7 @@ namespace EnergyApp.API
         public const string Technician = "technician";
         public const string Supervisor = "supervisor";
         public const string AdminBuilding = "adminbuilding";
+        public const string Officer = "officer";
     }
 
     public static class UserStatus

@@ -1384,6 +1384,60 @@ namespace EnergyApp.API.Migrations
                     b.ToTable("WaterRecords");
                 });
 
+            modelBuilder.Entity("EnergyApp.API.Models.Office.SarabanStat", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("BookName")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("BookType")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("DepartmentId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("ExternalDigitalCount")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("ExternalPaperCount")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("ForwardedCount")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("InternalDigitalCount")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("InternalPaperCount")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("ReceivedCount")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("ReceiverName")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime>("RecordMonth")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("RecordedBy")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("SarabanStats");
+                });
+
             modelBuilder.Entity("EnergyApp.API.Models.SparePartIssueRequestItem", b =>
                 {
                     b.HasOne("EnergyApp.API.Models.SparePart", "SparePart")
@@ -1432,6 +1486,7 @@ namespace EnergyApp.API.Migrations
                 {
                     b.Navigation("Items");
                 });
+
 #pragma warning restore 612, 618
         }
     }

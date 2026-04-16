@@ -26,21 +26,20 @@ import TabPanel from 'primevue/tabpanel'
 import Dialog from 'primevue/dialog'
 
 // ─── Interfaces ───────────────────────────────────────────────────────────────
-interface FetchedSarabanRecord {
+interface SarabanStat {
   id: string
-  docType: string
-  docNumber: string
-  subject: string
-  fromOrganization: string
-  toOrganization: string
-  receivedDate: string | null
-  dueDate: string | null
-  priority: string
-  status: string
-  assignedTo: string
-  note: string
+  departmentId: string | null
+  bookType: string
+  bookName: string
+  recordMonth: string
+  receiverName: string
+  receivedCount: number
+  internalPaperCount: number
+  internalDigitalCount: number
+  externalPaperCount: number
+  externalDigitalCount: number
+  forwardedCount: number
   recordedBy: string
-  departmentId: string
   createdAt: string
 }
 
@@ -48,12 +47,14 @@ interface Department { id: string; name: string }
 
 // ─── State ────────────────────────────────────────────────────────────────────
 const authStore = useAuthStore()
-const { isSuperAdmin, isSystemAdmin } = usePermissions()
+const { isSuperAdmin, isOfficer, isSystemAdmin } = usePermissions()
 const isAdmin = isSystemAdmin('saraban')
+// officer และ superadmin สามารถเพิ่ม/แก้ไข/ลบได้
+const canEdit = computed(() => isSuperAdmin.value || isOfficer.value || isAdmin)
 const currentUserDepartment = computed(() => authStore.userProfile?.departmentId || '')
 
 const departments = ref<Department[]>([])
-const historyRecords = ref<FetchedSarabanRecord[]>([])
+const historyRecords = ref<SarabanStat[]>([])
 const isLoadingHistory = ref(true)
 const isLoadingMore = ref(false)
 const hasMore = ref(true)
@@ -61,87 +62,79 @@ const skip = ref(0)
 const take = 20
 
 // --- History Filters ---
-const filterDateFrom = ref<Date | null>(null)
-const filterDateTo = ref<Date | null>(null)
 const filterDeptId = ref('')
-const filterStatus = ref('')
-const filterDocType = ref('')
+const filterBookType = ref('')
+const filterYear = ref<number | null>(null)
 
 // ─── Form (Add new) ───────────────────────────────────────────────────────────
 const formData = ref({
   departmentId: isSuperAdmin.value ? '' : currentUserDepartment.value,
-  docType: '',
-  docNumber: '',
-  subject: '',
-  fromOrganization: '',
-  toOrganization: '',
-  receivedDate: null as Date | null,
-  dueDate: null as Date | null,
-  priority: 'normal',
-  status: 'pending',
-  assignedTo: '',
-  note: '',
+  bookType: '',
+  bookName: '',
+  recordMonth: null as Date | null,
+  receiverName: '',
+  receivedCount: null as number | null,
+  internalPaperCount: null as number | null,
+  internalDigitalCount: null as number | null,
+  externalPaperCount: null as number | null,
+  externalDigitalCount: null as number | null,
+  forwardedCount: null as number | null,
 })
 
 const isSubmitting = ref(false)
 const successMessage = ref('')
 const errorMessage = ref('')
 
-const docTypeOptions = [
-  { label: 'หนังสือรับ', value: 'received' },
-  { label: 'หนังสือส่ง', value: 'sent' },
-  { label: 'หนังสือเวียน', value: 'circular' },
-  { label: 'บันทึกข้อความ', value: 'memo' },
+const bookTypeOptions = [
+  { label: 'ทะเบียนหนังสือรับ', value: 'received' },
+  { label: 'ทะเบียนหนังสือส่ง', value: 'sent' },
+  { label: 'ทะเบียนหนังสือเวียน', value: 'circular' },
+  { label: 'ทะเบียนบันทึกข้อความ', value: 'memo' },
+  { label: 'อื่นๆ', value: 'other' },
 ]
 
-const priorityOptions = [
-  { label: 'ปกติ', value: 'normal' },
-  { label: 'ด่วน', value: 'urgent' },
-  { label: 'ด่วนมาก', value: 'very_urgent' },
-  { label: 'ด่วนที่สุด', value: 'most_urgent' },
-]
-
-const statusOptions = [
-  { label: 'รอดำเนินการ', value: 'pending' },
-  { label: 'กำลังดำเนินการ', value: 'in_progress' },
-  { label: 'เสร็จสิ้น', value: 'completed' },
-]
+const getBookTypeLabel = (val: string) => bookTypeOptions.find(o => o.value === val)?.label || val
 
 // ─── Submit ───────────────────────────────────────────────────────────────────
 const submitForm = async (): Promise<void> => {
   successMessage.value = ''; errorMessage.value = ''
-  if (!formData.value.receivedDate) { errorMessage.value = 'กรุณาเลือกวันที่รับหนังสือ'; return }
+
+  if (!formData.value.recordMonth) { errorMessage.value = 'กรุณาเลือกเดือน/ปี'; return }
+  if (!formData.value.bookType) { errorMessage.value = 'กรุณาเลือกประเภทเล่มทะเบียน'; return }
+  if (!formData.value.bookName.trim()) { errorMessage.value = 'กรุณากรอกชื่อเล่มทะเบียน'; return }
+  if (!formData.value.receiverName.trim()) { errorMessage.value = 'กรุณากรอกรายชื่อผู้รับ'; return }
+
   const saveDeptId = isSuperAdmin.value ? formData.value.departmentId : currentUserDepartment.value
   if (!saveDeptId) { errorMessage.value = 'กรุณาเลือกหน่วยงาน'; return }
-  if (!formData.value.subject.trim()) { errorMessage.value = 'กรุณากรอกเรื่อง'; return }
 
   isSubmitting.value = true
   try {
     const payload = {
       departmentId: saveDeptId,
-      docType: formData.value.docType,
-      docNumber: formData.value.docNumber,
-      subject: formData.value.subject,
-      fromOrganization: formData.value.fromOrganization,
-      toOrganization: formData.value.toOrganization,
-      receivedDate: formData.value.receivedDate.toISOString(),
-      dueDate: formData.value.dueDate ? formData.value.dueDate.toISOString() : null,
-      priority: formData.value.priority,
-      status: formData.value.status,
-      assignedTo: formData.value.assignedTo,
-      note: formData.value.note,
+      bookType: formData.value.bookType,
+      bookName: formData.value.bookName,
+      recordMonth: new Date(Date.UTC(
+        formData.value.recordMonth.getFullYear(),
+        formData.value.recordMonth.getMonth(), 1
+      )).toISOString(),
+      receiverName: formData.value.receiverName,
+      receivedCount: formData.value.receivedCount ?? 0,
+      internalPaperCount: formData.value.internalPaperCount ?? 0,
+      internalDigitalCount: formData.value.internalDigitalCount ?? 0,
+      externalPaperCount: formData.value.externalPaperCount ?? 0,
+      externalDigitalCount: formData.value.externalDigitalCount ?? 0,
+      forwardedCount: formData.value.forwardedCount ?? 0,
       recordedBy: authStore.user?.uid || '',
     }
 
-    await api.post('/SarabanRecord', payload)
-    successMessage.value = 'บันทึกข้อมูลสารบรรณสำเร็จ'
+    await api.post('/SarabanStat', payload)
+    successMessage.value = 'บันทึกสถิติสารบรรณสำเร็จ'
     formData.value = {
       departmentId: isSuperAdmin.value ? '' : currentUserDepartment.value,
-      docType: '', docNumber: '', subject: '',
-      fromOrganization: '', toOrganization: '',
-      receivedDate: null, dueDate: null,
-      priority: 'normal', status: 'pending',
-      assignedTo: '', note: '',
+      bookType: '', bookName: '', recordMonth: null,
+      receiverName: '',
+      receivedCount: null, internalPaperCount: null, internalDigitalCount: null,
+      externalPaperCount: null, externalDigitalCount: null, forwardedCount: null,
     }
     handleFilterChange()
   } catch (e: unknown) {
@@ -154,64 +147,74 @@ const submitForm = async (): Promise<void> => {
 // ─── Detail / Edit / Delete dialogs ──────────────────────────────────────────
 const detailVisible = ref(false)
 const editVisible = ref(false)
-const selectedRecord = ref<FetchedSarabanRecord | null>(null)
+const selectedRecord = ref<SarabanStat | null>(null)
 const isUpdating = ref(false)
 const deleteConfirmVisible = ref(false)
-const recordToDelete = ref<FetchedSarabanRecord | null>(null)
+const recordToDelete = ref<SarabanStat | null>(null)
 
 const editForm = ref({
-  departmentId: '', docType: '', docNumber: '', subject: '',
-  fromOrganization: '', toOrganization: '',
-  receivedDate: null as Date | null, dueDate: null as Date | null,
-  priority: 'normal', status: 'pending', assignedTo: '', note: '',
+  departmentId: '',
+  bookType: '', bookName: '',
+  recordMonth: null as Date | null,
+  receiverName: '',
+  receivedCount: 0,
+  internalPaperCount: 0, internalDigitalCount: 0,
+  externalPaperCount: 0, externalDigitalCount: 0,
+  forwardedCount: 0,
 })
 
-const openDetail = (record: FetchedSarabanRecord) => { selectedRecord.value = record; detailVisible.value = true }
-const openEdit = (record: FetchedSarabanRecord) => {
+const openDetail = (record: SarabanStat) => { selectedRecord.value = record; detailVisible.value = true }
+const openEdit = (record: SarabanStat) => {
   selectedRecord.value = record
   editForm.value = {
-    departmentId: record.departmentId,
-    docType: record.docType,
-    docNumber: record.docNumber,
-    subject: record.subject,
-    fromOrganization: record.fromOrganization,
-    toOrganization: record.toOrganization,
-    receivedDate: record.receivedDate ? new Date(record.receivedDate) : null,
-    dueDate: record.dueDate ? new Date(record.dueDate) : null,
-    priority: record.priority,
-    status: record.status,
-    assignedTo: record.assignedTo,
-    note: record.note,
+    departmentId: record.departmentId || '',
+    bookType: record.bookType,
+    bookName: record.bookName,
+    recordMonth: record.recordMonth ? new Date(record.recordMonth) : null,
+    receiverName: record.receiverName,
+    receivedCount: record.receivedCount,
+    internalPaperCount: record.internalPaperCount,
+    internalDigitalCount: record.internalDigitalCount,
+    externalPaperCount: record.externalPaperCount,
+    externalDigitalCount: record.externalDigitalCount,
+    forwardedCount: record.forwardedCount,
   }
   editVisible.value = true
 }
 
 const saveEdit = async (): Promise<void> => {
   if (!selectedRecord.value) return
-  if (!editForm.value.subject.trim()) {
-    toast.error('กรุณากรอกเรื่อง'); return
+  if (!editForm.value.bookName.trim()) {
+    toast.error('กรุณากรอกชื่อเล่มทะเบียน'); return
   }
   isUpdating.value = true
   try {
     const payload = {
-      departmentId: editForm.value.departmentId,
-      docType: editForm.value.docType,
-      docNumber: editForm.value.docNumber,
-      subject: editForm.value.subject,
-      fromOrganization: editForm.value.fromOrganization,
-      toOrganization: editForm.value.toOrganization,
-      receivedDate: editForm.value.receivedDate ? editForm.value.receivedDate.toISOString() : null,
-      dueDate: editForm.value.dueDate ? editForm.value.dueDate.toISOString() : null,
-      priority: editForm.value.priority,
-      status: editForm.value.status,
-      assignedTo: editForm.value.assignedTo,
-      note: editForm.value.note,
+      departmentId: editForm.value.departmentId || null,
+      bookType: editForm.value.bookType,
+      bookName: editForm.value.bookName,
+      recordMonth: editForm.value.recordMonth ? new Date(Date.UTC(
+        editForm.value.recordMonth.getFullYear(),
+        editForm.value.recordMonth.getMonth(), 1
+      )).toISOString() : null,
+      receiverName: editForm.value.receiverName,
+      receivedCount: editForm.value.receivedCount,
+      internalPaperCount: editForm.value.internalPaperCount,
+      internalDigitalCount: editForm.value.internalDigitalCount,
+      externalPaperCount: editForm.value.externalPaperCount,
+      externalDigitalCount: editForm.value.externalDigitalCount,
+      forwardedCount: editForm.value.forwardedCount,
+      recordedBy: authStore.user?.uid || '',
     }
-    await api.put(`/SarabanRecord/${selectedRecord.value.id}`, payload)
+    await api.put(`/SarabanStat/${selectedRecord.value.id}`, payload)
     const index = historyRecords.value.findIndex(r => r.id === selectedRecord.value!.id)
-    const existing = historyRecords.value[index]
-    if (index !== -1 && existing) {
-      historyRecords.value[index] = { ...existing, ...payload, receivedDate: payload.receivedDate || null, dueDate: payload.dueDate || null }
+    if (index !== -1) {
+      historyRecords.value[index] = {
+        ...historyRecords.value[index]!,
+        ...payload,
+        recordMonth: payload.recordMonth || '',
+        departmentId: payload.departmentId || null,
+      }
     }
     editVisible.value = false
     toast.success('แก้ไขข้อมูลสำเร็จ')
@@ -222,13 +225,13 @@ const saveEdit = async (): Promise<void> => {
   }
 }
 
-const confirmDelete = (record: FetchedSarabanRecord) => {
+const confirmDelete = (record: SarabanStat) => {
   recordToDelete.value = record; deleteConfirmVisible.value = true
 }
 const deleteRecord = async (): Promise<void> => {
   if (!recordToDelete.value) return
   try {
-    await api.delete(`/SarabanRecord/${recordToDelete.value.id}`)
+    await api.delete(`/SarabanStat/${recordToDelete.value.id}`)
     historyRecords.value = historyRecords.value.filter(r => r.id !== recordToDelete.value!.id)
     toast.success('ลบข้อมูลสำเร็จ')
   } catch (e: unknown) {
@@ -256,11 +259,11 @@ const fetchHistory = async (loadMore = false): Promise<void> => {
       : currentUserDepartment.value
 
     if (saveDeptId) params.departmentId = saveDeptId
-    if (filterStatus.value) params.status = filterStatus.value
-    if (filterDocType.value) params.docType = filterDocType.value
+    if (filterBookType.value) params.bookType = filterBookType.value
+    if (filterYear.value) params.year = filterYear.value
 
-    const response = await api.get('/SarabanRecord', { params })
-    const newRecords: FetchedSarabanRecord[] = response.data
+    const response = await api.get('/SarabanStat', { params })
+    const newRecords: SarabanStat[] = response.data.items || []
 
     if (loadMore) historyRecords.value.push(...newRecords)
     else historyRecords.value = newRecords
@@ -284,7 +287,7 @@ const handleFilterChange = () => {
   fetchHistory(false)
 }
 
-watch([filterDateFrom, filterDateTo, filterDeptId, filterStatus, filterDocType], handleFilterChange)
+watch([filterDeptId, filterBookType, filterYear], handleFilterChange)
 
 onMounted(async () => {
   handleFilterChange()
@@ -297,20 +300,24 @@ onMounted(async () => {
 })
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
-const getDeptName = (id: string) => departments.value.find((x) => x.id === id)?.name || id
-const formatThaiDate = (dateStr: string | null | undefined) =>
-  dateStr ? new Date(dateStr).toLocaleDateString('th-TH', { year: 'numeric', month: 'long', day: 'numeric' }) : '-'
+const getDeptName = (id: string | null) => id ? (departments.value.find((x) => x.id === id)?.name || id) : '-'
+const formatMonthYear = (dateStr: string | null | undefined) => {
+  if (!dateStr) return '-'
+  const utcStr = /Z|[+-]\d{2}:\d{2}$/.test(dateStr) ? dateStr : dateStr + 'Z'
+  return new Date(utcStr).toLocaleDateString('th-TH', { year: 'numeric', month: 'long' })
+}
 const formatDateTime = (dateStr: string | null | undefined) =>
   dateStr ? new Date(dateStr).toLocaleString('th-TH', { dateStyle: 'medium', timeStyle: 'short' }) : '-'
 
-const getDocTypeLabel = (val: string) => docTypeOptions.find(o => o.value === val)?.label || val
-const getPriorityLabel = (val: string) => priorityOptions.find(o => o.value === val)?.label || val
-const getStatusLabel = (val: string) => statusOptions.find(o => o.value === val)?.label || val
-const getStatusSeverity = (val: string) => {
-  if (val === 'completed') return 'text-green-600'
-  if (val === 'in_progress') return 'text-blue-600'
-  return 'text-orange-500'
-}
+const yearOptions = computed(() => {
+  return [
+    { label: 'ทุกปี', value: null },
+    ...Array.from({ length: 5 }, (_, i) => {
+      const y = new Date().getFullYear() - i
+      return { label: `${y + 543}`, value: y }
+    })
+  ]
+})
 </script>
 
 <template>
@@ -320,13 +327,13 @@ const getStatusSeverity = (val: string) => {
         <h2 class="text-2xl font-bold text-gray-800">
           <i class="pi pi-folder-open text-purple-600 mr-2"></i>บันทึกสถิติงานสารบรรณ
         </h2>
-        <p class="text-gray-500 mt-1">บันทึกและติดตามเอกสารรับ-ส่ง</p>
+        <p class="text-gray-500 mt-1">บันทึกสถิติเอกสารรับ-ลงรับ-ส่งต่อ รายเดือน</p>
       </div>
     </div>
 
     <Tabs value="0" lazy>
       <TabList>
-        <Tab value="0"><i class="pi pi-file-edit mr-2"></i>บันทึกข้อมูล</Tab>
+        <Tab value="0"><i class="pi pi-file-edit mr-2"></i>บันทึกสถิติ</Tab>
         <Tab value="1">
           <i class="pi pi-history mr-2"></i>ประวัติย้อนหลัง
           <span v-if="historyRecords.length > 0"
@@ -345,75 +352,123 @@ const getStatusSeverity = (val: string) => {
                 <Message v-if="successMessage" severity="success" :closable="true">{{ successMessage }}</Message>
                 <Message v-if="errorMessage" severity="error" :closable="true">{{ errorMessage }}</Message>
 
-                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 p-4 bg-gray-50 rounded-xl border border-gray-200">
-                  <div class="flex flex-col gap-2">
-                    <label class="font-semibold text-sm text-gray-700">
-                      <i class="pi pi-calendar mr-1 text-purple-500"></i>วันที่รับหนังสือ
-                      <span class="text-red-500">*</span>
-                    </label>
-                    <DatePicker v-model="formData.receivedDate" dateFormat="dd/mm/yy" class="w-full" showIcon />
-                  </div>
-                  <div class="flex flex-col gap-2">
-                    <label class="font-semibold text-sm text-gray-700">
-                      <i class="pi pi-building mr-1 text-purple-500"></i>หน่วยงาน
-                      <span class="text-red-500">*</span>
-                    </label>
-                    <Select v-if="isSuperAdmin" v-model="formData.departmentId" :options="departments" optionLabel="name"
-                      optionValue="id" placeholder="-- เลือกหน่วยงาน --" class="w-full" />
-                    <InputText v-else :value="getDeptName(currentUserDepartment)" disabled
-                      class="w-full bg-gray-100 font-bold" />
-                  </div>
-                  <div class="flex flex-col gap-2">
-                    <label class="font-semibold text-sm text-gray-700">
-                      <i class="pi pi-tag mr-1 text-purple-500"></i>ประเภทเอกสาร
-                    </label>
-                    <Select v-model="formData.docType" :options="docTypeOptions" optionLabel="label" optionValue="value"
-                      placeholder="-- เลือกประเภท --" class="w-full" showClear />
-                  </div>
-                  <div class="flex flex-col gap-2">
-                    <label class="font-semibold text-sm text-gray-700">เลขที่หนังสือ</label>
-                    <InputText v-model="formData.docNumber" placeholder="เช่น นร 0001/2567" class="w-full" />
-                  </div>
-                  <div class="flex flex-col gap-2">
-                    <label class="font-semibold text-sm text-gray-700">ความเร่งด่วน</label>
-                    <Select v-model="formData.priority" :options="priorityOptions" optionLabel="label" optionValue="value" class="w-full" />
-                  </div>
-                  <div class="flex flex-col gap-2">
-                    <label class="font-semibold text-sm text-gray-700">สถานะ</label>
-                    <Select v-model="formData.status" :options="statusOptions" optionLabel="label" optionValue="value" class="w-full" />
-                  </div>
-                </div>
-
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div class="flex flex-col gap-2">
-                    <label class="font-semibold text-sm text-gray-700">เรื่อง <span class="text-red-500">*</span></label>
-                    <InputText v-model="formData.subject" placeholder="เรื่องของหนังสือ" class="w-full" />
-                  </div>
-                  <div class="flex flex-col gap-2">
-                    <label class="font-semibold text-sm text-gray-700">ผู้รับผิดชอบ</label>
-                    <InputText v-model="formData.assignedTo" placeholder="ชื่อผู้รับผิดชอบ" class="w-full" />
-                  </div>
-                  <div class="flex flex-col gap-2">
-                    <label class="font-semibold text-sm text-gray-700">จาก (หน่วยงาน/บุคคล)</label>
-                    <InputText v-model="formData.fromOrganization" placeholder="หน่วยงานต้นทาง" class="w-full" />
-                  </div>
-                  <div class="flex flex-col gap-2">
-                    <label class="font-semibold text-sm text-gray-700">ถึง (หน่วยงาน/บุคคล)</label>
-                    <InputText v-model="formData.toOrganization" placeholder="หน่วยงานปลายทาง" class="w-full" />
-                  </div>
-                  <div class="flex flex-col gap-2">
-                    <label class="font-semibold text-sm text-gray-700">วันที่ครบกำหนด</label>
-                    <DatePicker v-model="formData.dueDate" dateFormat="dd/mm/yy" class="w-full" showIcon />
+                <!-- ส่วนที่ 1: ข้อมูลเล่มทะเบียน -->
+                <div>
+                  <p class="text-sm font-bold text-purple-700 mb-3 flex items-center gap-2">
+                    <i class="pi pi-book"></i>ข้อมูลเล่มทะเบียน
+                  </p>
+                  <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 p-4 bg-purple-50 rounded-xl border border-purple-100">
+                    <div class="flex flex-col gap-2">
+                      <label class="font-semibold text-sm text-gray-700">
+                        <i class="pi pi-calendar mr-1 text-purple-500"></i>เดือน/ปี
+                        <span class="text-red-500">*</span>
+                      </label>
+                      <DatePicker v-model="formData.recordMonth" view="month" dateFormat="mm/yy"
+                        class="w-full" showIcon placeholder="เลือกเดือน/ปี" />
+                    </div>
+                    <div v-if="isSuperAdmin" class="flex flex-col gap-2">
+                      <label class="font-semibold text-sm text-gray-700">
+                        <i class="pi pi-building mr-1 text-purple-500"></i>หน่วยงาน
+                        <span class="text-red-500">*</span>
+                      </label>
+                      <Select v-model="formData.departmentId" :options="departments" optionLabel="name"
+                        optionValue="id" placeholder="-- เลือกหน่วยงาน --" class="w-full" />
+                    </div>
+                    <div class="flex flex-col gap-2">
+                      <label class="font-semibold text-sm text-gray-700">
+                        <i class="pi pi-tag mr-1 text-purple-500"></i>ประเภทเล่มทะเบียน
+                        <span class="text-red-500">*</span>
+                      </label>
+                      <Select v-model="formData.bookType" :options="bookTypeOptions" optionLabel="label"
+                        optionValue="value" placeholder="-- เลือกประเภท --" class="w-full" />
+                    </div>
+                    <div class="flex flex-col gap-2">
+                      <label class="font-semibold text-sm text-gray-700">
+                        <i class="pi pi-book mr-1 text-purple-500"></i>ชื่อเล่มทะเบียน
+                        <span class="text-red-500">*</span>
+                      </label>
+                      <InputText v-model="formData.bookName" placeholder="เช่น ทะเบียนหนังสือรับ 2568" class="w-full" />
+                    </div>
+                    <div class="flex flex-col gap-2 lg:col-span-4">
+                      <label class="font-semibold text-sm text-gray-700">
+                        <i class="pi pi-user mr-1 text-purple-500"></i>รายชื่อผู้รับ
+                        <span class="text-red-500">*</span>
+                      </label>
+                      <InputText v-model="formData.receiverName" placeholder="ชื่อผู้รับเอกสาร" class="w-full" />
+                    </div>
                   </div>
                 </div>
 
-                <div class="flex flex-col gap-2">
-                  <label class="font-semibold text-sm text-gray-700">หมายเหตุ</label>
-                  <InputText v-model="formData.note" placeholder="รายละเอียดเพิ่มเติม" class="w-full" />
+                <!-- ส่วนที่ 2: สถิติจำนวนเอกสาร -->
+                <div>
+                  <p class="text-sm font-bold text-blue-700 mb-3 flex items-center gap-2">
+                    <i class="pi pi-chart-bar"></i>สถิติจำนวนเอกสาร (ฉบับ)
+                  </p>
+                  <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 p-4 bg-blue-50 rounded-xl border border-blue-100">
+                    <!-- รับเข้าทั้งหมด -->
+                    <div class="flex flex-col gap-2 col-span-2 md:col-span-1 lg:col-span-1">
+                      <label class="font-semibold text-sm text-gray-700 text-center">
+                        <i class="pi pi-inbox text-purple-500 block text-lg mb-1"></i>
+                        จำนวนเอกสารรับเข้า
+                      </label>
+                      <InputNumber v-model="formData.receivedCount" :min="0" class="w-full"
+                        inputClass="text-center font-bold text-purple-700" placeholder="0" />
+                    </div>
+
+                    <!-- ลงรับภายใน กระดาษ -->
+                    <div class="flex flex-col gap-2">
+                      <label class="font-semibold text-sm text-gray-700 text-center">
+                        <i class="pi pi-file text-orange-400 block text-lg mb-1"></i>
+                        ภายใน (กระดาษ)
+                      </label>
+                      <InputNumber v-model="formData.internalPaperCount" :min="0" class="w-full"
+                        inputClass="text-center font-bold text-orange-600" placeholder="0" />
+                    </div>
+
+                    <!-- ลงรับภายใน ดิจิทัล -->
+                    <div class="flex flex-col gap-2">
+                      <label class="font-semibold text-sm text-gray-700 text-center">
+                        <i class="pi pi-desktop text-blue-400 block text-lg mb-1"></i>
+                        ภายใน (ดิจิทัล)
+                      </label>
+                      <InputNumber v-model="formData.internalDigitalCount" :min="0" class="w-full"
+                        inputClass="text-center font-bold text-blue-600" placeholder="0" />
+                    </div>
+
+                    <!-- ลงรับภายนอก กระดาษ -->
+                    <div class="flex flex-col gap-2">
+                      <label class="font-semibold text-sm text-gray-700 text-center">
+                        <i class="pi pi-file-export text-amber-500 block text-lg mb-1"></i>
+                        ภายนอก (กระดาษ)
+                      </label>
+                      <InputNumber v-model="formData.externalPaperCount" :min="0" class="w-full"
+                        inputClass="text-center font-bold text-amber-600" placeholder="0" />
+                    </div>
+
+                    <!-- ลงรับภายนอก ดิจิทัล -->
+                    <div class="flex flex-col gap-2">
+                      <label class="font-semibold text-sm text-gray-700 text-center">
+                        <i class="pi pi-cloud text-teal-500 block text-lg mb-1"></i>
+                        ภายนอก (ดิจิทัล)
+                      </label>
+                      <InputNumber v-model="formData.externalDigitalCount" :min="0" class="w-full"
+                        inputClass="text-center font-bold text-teal-600" placeholder="0" />
+                    </div>
+
+                    <!-- ส่งต่อ -->
+                    <div class="flex flex-col gap-2">
+                      <label class="font-semibold text-sm text-gray-700 text-center">
+                        <i class="pi pi-send text-emerald-500 block text-lg mb-1"></i>
+                        จำนวนส่งต่อ
+                      </label>
+                      <InputNumber v-model="formData.forwardedCount" :min="0" class="w-full"
+                        inputClass="text-center font-bold text-emerald-600" placeholder="0" />
+                    </div>
+                  </div>
                 </div>
 
                 <div class="flex justify-end border-t border-gray-100 pt-4">
-                  <Button type="submit" label="บันทึกข้อมูลสารบรรณ" icon="pi pi-save" severity="help"
+                  <Button type="submit" label="บันทึกสถิติสารบรรณ" icon="pi pi-save" severity="help"
                     :loading="isSubmitting" class="px-8 py-3 text-base" />
                 </div>
               </form>
@@ -432,52 +487,79 @@ const getStatusSeverity = (val: string) => {
                   <Select v-model="filterDeptId" :options="[{id:'',name:'ทุกหน่วยงาน'},...departments]"
                     optionLabel="name" optionValue="id" class="w-full" />
                 </div>
-                <div class="flex flex-col gap-1 min-w-[160px]">
-                  <label class="text-xs font-semibold text-gray-500">ประเภทเอกสาร</label>
-                  <Select v-model="filterDocType" :options="[{label:'ทุกประเภท',value:''},...docTypeOptions]"
+                <div class="flex flex-col gap-1 min-w-[180px]">
+                  <label class="text-xs font-semibold text-gray-500">ประเภทเล่มทะเบียน</label>
+                  <Select v-model="filterBookType" :options="[{label:'ทุกประเภท',value:''},...bookTypeOptions]"
                     optionLabel="label" optionValue="value" class="w-full" />
                 </div>
-                <div class="flex flex-col gap-1 min-w-[160px]">
-                  <label class="text-xs font-semibold text-gray-500">สถานะ</label>
-                  <Select v-model="filterStatus" :options="[{label:'ทุกสถานะ',value:''},...statusOptions]"
-                    optionLabel="label" optionValue="value" class="w-full" />
+                <div class="flex flex-col gap-1 min-w-[130px]">
+                  <label class="text-xs font-semibold text-gray-500">ปี</label>
+                  <Select v-model="filterYear" :options="yearOptions" optionLabel="label" optionValue="value" class="w-full" />
                 </div>
               </div>
 
               <DataTable :value="historyRecords" :loading="isLoadingHistory" paginator :rows="10" stripedRows
                 responsiveLayout="scroll" emptyMessage="ยังไม่มีข้อมูล">
 
-                <Column v-if="isAdmin" header="หน่วยงาน" style="min-width: 130px">
+                <Column v-if="isAdmin" header="หน่วยงาน" style="min-width: 120px">
                   <template #body="{ data }">
                     <div class="font-bold text-gray-700 text-sm">{{ getDeptName(data.departmentId) }}</div>
                     <div class="text-xs text-gray-400"><i class="pi pi-user mr-1"></i>{{ data.recordedBy }}</div>
                   </template>
                 </Column>
 
-                <Column header="วันที่รับ" style="min-width: 130px">
+                <Column header="เดือน/ปี" style="min-width: 110px">
                   <template #body="{ data }">
-                    <div class="font-semibold text-gray-800 text-sm">{{ formatThaiDate(data.receivedDate) }}</div>
+                    <div class="font-semibold text-gray-800 text-sm">{{ formatMonthYear(data.recordMonth) }}</div>
                   </template>
                 </Column>
 
-                <Column header="ประเภท" style="min-width: 120px">
+                <Column header="ประเภท / ชื่อเล่ม" style="min-width: 180px">
                   <template #body="{ data }">
-                    <div class="text-sm text-gray-600">{{ getDocTypeLabel(data.docType) || '-' }}</div>
+                    <div class="font-semibold text-gray-800 text-sm">{{ data.bookName }}</div>
+                    <div class="text-xs text-purple-500">{{ getBookTypeLabel(data.bookType) }}</div>
                   </template>
                 </Column>
 
-                <Column header="เรื่อง" style="min-width: 200px">
+                <Column header="ผู้รับ" style="min-width: 130px">
                   <template #body="{ data }">
-                    <div class="font-semibold text-gray-800">{{ data.subject || '-' }}</div>
-                    <div class="text-xs text-gray-400">{{ data.docNumber || '' }}</div>
+                    <span class="text-sm text-gray-700">{{ data.receiverName || '-' }}</span>
                   </template>
                 </Column>
 
-                <Column header="สถานะ" style="width: 120px">
+                <Column header="รับเข้า" style="width: 80px; text-align:center">
                   <template #body="{ data }">
-                    <span :class="['font-semibold text-sm', getStatusSeverity(data.status)]">
-                      {{ getStatusLabel(data.status) }}
-                    </span>
+                    <span class="font-bold text-purple-700">{{ data.receivedCount.toLocaleString() }}</span>
+                  </template>
+                </Column>
+
+                <Column header="ภายใน กระดาษ" style="width: 100px; text-align:center">
+                  <template #body="{ data }">
+                    <span class="text-orange-600 font-semibold">{{ data.internalPaperCount.toLocaleString() }}</span>
+                  </template>
+                </Column>
+
+                <Column header="ภายใน ดิจิทัล" style="width: 100px; text-align:center">
+                  <template #body="{ data }">
+                    <span class="text-blue-600 font-semibold">{{ data.internalDigitalCount.toLocaleString() }}</span>
+                  </template>
+                </Column>
+
+                <Column header="ภายนอก กระดาษ" style="width: 110px; text-align:center">
+                  <template #body="{ data }">
+                    <span class="text-amber-600 font-semibold">{{ data.externalPaperCount.toLocaleString() }}</span>
+                  </template>
+                </Column>
+
+                <Column header="ภายนอก ดิจิทัล" style="width: 110px; text-align:center">
+                  <template #body="{ data }">
+                    <span class="text-teal-600 font-semibold">{{ data.externalDigitalCount.toLocaleString() }}</span>
+                  </template>
+                </Column>
+
+                <Column header="ส่งต่อ" style="width: 80px; text-align:center">
+                  <template #body="{ data }">
+                    <span class="text-emerald-600 font-semibold">{{ data.forwardedCount.toLocaleString() }}</span>
                   </template>
                 </Column>
 
@@ -486,14 +568,15 @@ const getStatusSeverity = (val: string) => {
                     <div class="flex gap-1">
                       <Button icon="pi pi-eye" text rounded severity="info" size="small" v-tooltip.top="'ดูรายละเอียด'"
                         @click="openDetail(data)" />
-                      <Button v-if="isAdmin" icon="pi pi-pencil" text rounded severity="secondary" size="small"
+                      <Button v-if="canEdit" icon="pi pi-pencil" text rounded severity="secondary" size="small"
                         v-tooltip.top="'แก้ไข'" @click="openEdit(data)" />
-                      <Button v-if="isAdmin" icon="pi pi-trash" text rounded severity="danger" size="small"
+                      <Button v-if="canEdit" icon="pi pi-trash" text rounded severity="danger" size="small"
                         v-tooltip.top="'ลบ'" @click="confirmDelete(data)" />
                     </div>
                   </template>
                 </Column>
               </DataTable>
+
               <div class="flex justify-center mt-4">
                 <Button v-if="hasMore" label="โหลดเพิ่มเติม" icon="pi pi-chevron-down" severity="secondary" outlined
                   :loading="isLoadingMore" @click="fetchHistory(true)" />
@@ -508,16 +591,16 @@ const getStatusSeverity = (val: string) => {
     </Tabs>
 
     <!-- Detail Dialog -->
-    <Dialog v-model:visible="detailVisible" modal header="รายละเอียดข้อมูลสารบรรณ" :style="{ width: '480px' }"
+    <Dialog v-model:visible="detailVisible" modal header="รายละเอียดสถิติสารบรรณ" :style="{ width: '520px' }"
       :draggable="false">
       <div v-if="selectedRecord" class="flex flex-col gap-4">
         <div class="flex items-center gap-3 p-4 bg-purple-50 rounded-xl">
           <div class="w-12 h-12 bg-purple-100 rounded-xl flex items-center justify-center">
-            <i class="pi pi-file text-purple-600 text-xl"></i>
+            <i class="pi pi-book text-purple-600 text-xl"></i>
           </div>
           <div>
-            <p class="font-bold text-gray-800 text-lg">{{ selectedRecord.subject || '-' }}</p>
-            <p class="text-sm text-gray-500">{{ formatThaiDate(selectedRecord.receivedDate) }}</p>
+            <p class="font-bold text-gray-800 text-lg">{{ selectedRecord.bookName }}</p>
+            <p class="text-sm text-gray-500">{{ getBookTypeLabel(selectedRecord.bookType) }} — {{ formatMonthYear(selectedRecord.recordMonth) }}</p>
           </div>
         </div>
 
@@ -527,40 +610,36 @@ const getStatusSeverity = (val: string) => {
             <p class="font-semibold text-gray-800">{{ getDeptName(selectedRecord.departmentId) }}</p>
           </div>
           <div class="bg-gray-50 rounded-lg p-3">
-            <p class="text-xs text-gray-400 mb-1">ประเภทเอกสาร</p>
-            <p class="font-semibold text-gray-800">{{ getDocTypeLabel(selectedRecord.docType) || '-' }}</p>
+            <p class="text-xs text-gray-400 mb-1">รายชื่อผู้รับ</p>
+            <p class="font-semibold text-gray-800">{{ selectedRecord.receiverName || '-' }}</p>
           </div>
-          <div class="bg-gray-50 rounded-lg p-3">
-            <p class="text-xs text-gray-400 mb-1">เลขที่หนังสือ</p>
-            <p class="font-semibold text-gray-800">{{ selectedRecord.docNumber || '-' }}</p>
+        </div>
+
+        <!-- สถิติตัวเลข -->
+        <div class="grid grid-cols-3 gap-2">
+          <div class="bg-purple-50 rounded-lg p-3 text-center">
+            <p class="text-xs text-purple-400 mb-1">รับเข้าทั้งหมด</p>
+            <p class="font-black text-2xl text-purple-700">{{ selectedRecord.receivedCount.toLocaleString() }}</p>
           </div>
-          <div class="bg-gray-50 rounded-lg p-3">
-            <p class="text-xs text-gray-400 mb-1">ความเร่งด่วน</p>
-            <p class="font-semibold text-gray-800">{{ getPriorityLabel(selectedRecord.priority) }}</p>
+          <div class="bg-orange-50 rounded-lg p-3 text-center">
+            <p class="text-xs text-orange-400 mb-1">ภายใน (กระดาษ)</p>
+            <p class="font-black text-2xl text-orange-600">{{ selectedRecord.internalPaperCount.toLocaleString() }}</p>
           </div>
-          <div class="bg-purple-50 rounded-lg p-3">
-            <p class="text-xs text-purple-400 mb-1">สถานะ</p>
-            <p :class="['font-bold text-lg', getStatusSeverity(selectedRecord.status)]">{{ getStatusLabel(selectedRecord.status) }}</p>
+          <div class="bg-blue-50 rounded-lg p-3 text-center">
+            <p class="text-xs text-blue-400 mb-1">ภายใน (ดิจิทัล)</p>
+            <p class="font-black text-2xl text-blue-600">{{ selectedRecord.internalDigitalCount.toLocaleString() }}</p>
           </div>
-          <div class="bg-gray-50 rounded-lg p-3">
-            <p class="text-xs text-gray-400 mb-1">ผู้รับผิดชอบ</p>
-            <p class="font-semibold text-gray-800">{{ selectedRecord.assignedTo || '-' }}</p>
+          <div class="bg-amber-50 rounded-lg p-3 text-center">
+            <p class="text-xs text-amber-400 mb-1">ภายนอก (กระดาษ)</p>
+            <p class="font-black text-2xl text-amber-600">{{ selectedRecord.externalPaperCount.toLocaleString() }}</p>
           </div>
-          <div class="bg-gray-50 rounded-lg p-3">
-            <p class="text-xs text-gray-400 mb-1">จาก</p>
-            <p class="font-semibold text-gray-800">{{ selectedRecord.fromOrganization || '-' }}</p>
+          <div class="bg-teal-50 rounded-lg p-3 text-center">
+            <p class="text-xs text-teal-400 mb-1">ภายนอก (ดิจิทัล)</p>
+            <p class="font-black text-2xl text-teal-600">{{ selectedRecord.externalDigitalCount.toLocaleString() }}</p>
           </div>
-          <div class="bg-gray-50 rounded-lg p-3">
-            <p class="text-xs text-gray-400 mb-1">ถึง</p>
-            <p class="font-semibold text-gray-800">{{ selectedRecord.toOrganization || '-' }}</p>
-          </div>
-          <div v-if="selectedRecord.dueDate" class="bg-orange-50 rounded-lg p-3 col-span-2">
-            <p class="text-xs text-orange-400 mb-1">วันครบกำหนด</p>
-            <p class="font-bold text-orange-700">{{ formatThaiDate(selectedRecord.dueDate) }}</p>
-          </div>
-          <div v-if="selectedRecord.note" class="bg-gray-50 rounded-lg p-3 col-span-2">
-            <p class="text-xs text-gray-400 mb-1">หมายเหตุ</p>
-            <p class="font-semibold text-gray-800">{{ selectedRecord.note }}</p>
+          <div class="bg-emerald-50 rounded-lg p-3 text-center">
+            <p class="text-xs text-emerald-400 mb-1">ส่งต่อ</p>
+            <p class="font-black text-2xl text-emerald-600">{{ selectedRecord.forwardedCount.toLocaleString() }}</p>
           </div>
         </div>
 
@@ -571,65 +650,59 @@ const getStatusSeverity = (val: string) => {
       </div>
       <template #footer>
         <Button label="ปิด" severity="secondary" text @click="detailVisible = false" />
-        <Button v-if="isAdmin && selectedRecord" label="แก้ไข" icon="pi pi-pencil" severity="help"
+        <Button v-if="canEdit && selectedRecord" label="แก้ไข" icon="pi pi-pencil" severity="help"
           @click="detailVisible = false; openEdit(selectedRecord!)" />
       </template>
     </Dialog>
 
     <!-- Edit Dialog -->
-    <Dialog v-model:visible="editVisible" modal header="แก้ไขข้อมูลสารบรรณ" :style="{ width: '560px' }"
+    <Dialog v-model:visible="editVisible" modal header="แก้ไขสถิติสารบรรณ" :style="{ width: '600px' }"
       :draggable="false">
       <div class="flex flex-col gap-4 mt-2">
         <div class="grid grid-cols-2 gap-4">
           <div class="flex flex-col gap-2">
-            <label class="text-sm font-semibold text-gray-700">วันที่รับหนังสือ <span class="text-red-500">*</span></label>
-            <DatePicker v-model="editForm.receivedDate" dateFormat="dd/mm/yy" class="w-full" showIcon />
+            <label class="text-sm font-semibold text-gray-700">เดือน/ปี <span class="text-red-500">*</span></label>
+            <DatePicker v-model="editForm.recordMonth" view="month" dateFormat="mm/yy" class="w-full" showIcon />
           </div>
           <div class="flex flex-col gap-2">
-            <label class="text-sm font-semibold text-gray-700">หน่วยงาน</label>
-            <Select v-if="isSuperAdmin" v-model="editForm.departmentId" :options="departments" optionLabel="name"
-              optionValue="id" class="w-full" />
-            <InputText v-else :value="getDeptName(editForm.departmentId)" disabled class="w-full bg-gray-50" />
-          </div>
-          <div class="flex flex-col gap-2">
-            <label class="text-sm font-semibold text-gray-700">ประเภทเอกสาร</label>
-            <Select v-model="editForm.docType" :options="docTypeOptions" optionLabel="label" optionValue="value" class="w-full" />
-          </div>
-          <div class="flex flex-col gap-2">
-            <label class="text-sm font-semibold text-gray-700">เลขที่หนังสือ</label>
-            <InputText v-model="editForm.docNumber" class="w-full" />
+            <label class="text-sm font-semibold text-gray-700">ประเภทเล่มทะเบียน</label>
+            <Select v-model="editForm.bookType" :options="bookTypeOptions" optionLabel="label" optionValue="value" class="w-full" />
           </div>
           <div class="flex flex-col gap-2 col-span-2">
-            <label class="text-sm font-semibold text-gray-700">เรื่อง <span class="text-red-500">*</span></label>
-            <InputText v-model="editForm.subject" class="w-full" />
-          </div>
-          <div class="flex flex-col gap-2">
-            <label class="text-sm font-semibold text-gray-700">จาก</label>
-            <InputText v-model="editForm.fromOrganization" class="w-full" />
-          </div>
-          <div class="flex flex-col gap-2">
-            <label class="text-sm font-semibold text-gray-700">ถึง</label>
-            <InputText v-model="editForm.toOrganization" class="w-full" />
-          </div>
-          <div class="flex flex-col gap-2">
-            <label class="text-sm font-semibold text-gray-700">ความเร่งด่วน</label>
-            <Select v-model="editForm.priority" :options="priorityOptions" optionLabel="label" optionValue="value" class="w-full" />
-          </div>
-          <div class="flex flex-col gap-2">
-            <label class="text-sm font-semibold text-gray-700">สถานะ</label>
-            <Select v-model="editForm.status" :options="statusOptions" optionLabel="label" optionValue="value" class="w-full" />
-          </div>
-          <div class="flex flex-col gap-2">
-            <label class="text-sm font-semibold text-gray-700">ผู้รับผิดชอบ</label>
-            <InputText v-model="editForm.assignedTo" class="w-full" />
-          </div>
-          <div class="flex flex-col gap-2">
-            <label class="text-sm font-semibold text-gray-700">วันครบกำหนด</label>
-            <DatePicker v-model="editForm.dueDate" dateFormat="dd/mm/yy" class="w-full" showIcon />
+            <label class="text-sm font-semibold text-gray-700">ชื่อเล่มทะเบียน <span class="text-red-500">*</span></label>
+            <InputText v-model="editForm.bookName" class="w-full" />
           </div>
           <div class="flex flex-col gap-2 col-span-2">
-            <label class="text-sm font-semibold text-gray-700">หมายเหตุ</label>
-            <InputText v-model="editForm.note" class="w-full" />
+            <label class="text-sm font-semibold text-gray-700">รายชื่อผู้รับ</label>
+            <InputText v-model="editForm.receiverName" class="w-full" />
+          </div>
+        </div>
+
+        <p class="text-xs font-bold text-blue-700 -mb-2">สถิติจำนวนเอกสาร (ฉบับ)</p>
+        <div class="grid grid-cols-3 gap-3">
+          <div class="flex flex-col gap-1">
+            <label class="text-xs font-semibold text-gray-500">รับเข้าทั้งหมด</label>
+            <InputNumber v-model="editForm.receivedCount" :min="0" class="w-full" inputClass="text-center font-bold text-purple-700" />
+          </div>
+          <div class="flex flex-col gap-1">
+            <label class="text-xs font-semibold text-gray-500">ภายใน (กระดาษ)</label>
+            <InputNumber v-model="editForm.internalPaperCount" :min="0" class="w-full" inputClass="text-center font-bold text-orange-600" />
+          </div>
+          <div class="flex flex-col gap-1">
+            <label class="text-xs font-semibold text-gray-500">ภายใน (ดิจิทัล)</label>
+            <InputNumber v-model="editForm.internalDigitalCount" :min="0" class="w-full" inputClass="text-center font-bold text-blue-600" />
+          </div>
+          <div class="flex flex-col gap-1">
+            <label class="text-xs font-semibold text-gray-500">ภายนอก (กระดาษ)</label>
+            <InputNumber v-model="editForm.externalPaperCount" :min="0" class="w-full" inputClass="text-center font-bold text-amber-600" />
+          </div>
+          <div class="flex flex-col gap-1">
+            <label class="text-xs font-semibold text-gray-500">ภายนอก (ดิจิทัล)</label>
+            <InputNumber v-model="editForm.externalDigitalCount" :min="0" class="w-full" inputClass="text-center font-bold text-teal-600" />
+          </div>
+          <div class="flex flex-col gap-1">
+            <label class="text-xs font-semibold text-gray-500">ส่งต่อ</label>
+            <InputNumber v-model="editForm.forwardedCount" :min="0" class="w-full" inputClass="text-center font-bold text-emerald-600" />
           </div>
         </div>
       </div>
@@ -647,9 +720,9 @@ const getStatusSeverity = (val: string) => {
           <i class="pi pi-exclamation-triangle text-red-500"></i>
         </div>
         <p class="text-gray-700">
-          ต้องการลบข้อมูล
-          <strong>{{ recordToDelete?.subject }}</strong>
-          หรือไม่?
+          ต้องการลบสถิติ
+          <strong>{{ recordToDelete?.bookName }}</strong>
+          ({{ formatMonthYear(recordToDelete?.recordMonth) }}) หรือไม่?
         </p>
       </div>
       <template #footer>

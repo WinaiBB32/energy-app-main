@@ -10,6 +10,7 @@ using System.Text;
 AppContext.SetSwitch("Npgsql.EnableLegacyTimestampBehavior", true);
 
 var builder = WebApplication.CreateBuilder(args);
+builder.Host.UseWindowsService();
 
 // --- เชื่อมต่อ Database PostgreSQL ---
 builder.Services.AddDbContext<AppDbContext>(options =>
@@ -126,4 +127,33 @@ app.UseAuthorization();
 app.MapHub<MaintenanceHub>("/hubs/maintenance");
 app.MapHub<MaintenanceHub>("/api/v1/hubs/maintenance");
 app.MapControllers();
+
+// Auto-apply migrations on startup
+using (var scope = app.Services.CreateScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    db.Database.Migrate();
+
+    // Ensure SarabanStats table exists (manual migration fallback)
+    db.Database.ExecuteSqlRaw(@"
+        CREATE TABLE IF NOT EXISTS ""SarabanStats"" (
+            ""Id"" uuid NOT NULL,
+            ""DepartmentId"" uuid NULL,
+            ""BookType"" text NOT NULL DEFAULT '',
+            ""BookName"" text NOT NULL DEFAULT '',
+            ""RecordMonth"" timestamptz NOT NULL DEFAULT now(),
+            ""ReceiverName"" text NOT NULL DEFAULT '',
+            ""ReceivedCount"" integer NOT NULL DEFAULT 0,
+            ""InternalPaperCount"" integer NOT NULL DEFAULT 0,
+            ""InternalDigitalCount"" integer NOT NULL DEFAULT 0,
+            ""ExternalPaperCount"" integer NOT NULL DEFAULT 0,
+            ""ExternalDigitalCount"" integer NOT NULL DEFAULT 0,
+            ""ForwardedCount"" integer NOT NULL DEFAULT 0,
+            ""RecordedBy"" text NOT NULL DEFAULT '',
+            ""CreatedAt"" timestamptz NOT NULL DEFAULT now(),
+            CONSTRAINT ""PK_SarabanStats"" PRIMARY KEY (""Id"")
+        )
+    ");
+}
+
 app.Run("http://0.0.0.0:5008");

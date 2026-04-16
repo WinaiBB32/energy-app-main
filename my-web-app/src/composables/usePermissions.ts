@@ -21,6 +21,7 @@ export function usePermissions() {
   const adminSystems = computed(() => authStore.userProfile?.adminSystems ?? [])
 
   const isSuperAdmin = computed(() => currentUserRole.value === 'superadmin')
+  const isOfficer = computed(() => currentUserRole.value === 'officer')
 
   function isSystemAdmin(system: string): boolean {
     if (isSuperAdmin.value) return true
@@ -31,6 +32,7 @@ export function usePermissions() {
 
   return {
     isSuperAdmin,
+    isOfficer,
     isSystemAdmin,
     currentUserRole,
     adminSystems,

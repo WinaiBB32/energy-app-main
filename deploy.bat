@@ -3,8 +3,6 @@ echo ========================================
 echo  BUILD + PACKAGE for Deploy
 echo ========================================
 
-set OUTPUT=C:\deploy-output
-
 echo.
 echo [1/3] Building Frontend...
 cd my-web-app
@@ -32,11 +30,7 @@ cd ..
 
 echo.
 echo ========================================
-echo  DONE! Files ready at: %OUTPUT%
-echo ========================================
-echo.
-echo ========================================
-echo  DONE! Build & Publish เสร็จสมบูรณ์
+echo  DONE! Build ^& Publish เสร็จสมบูรณ์
 echo ========================================
 echo.
 echo Copy ไฟล์ไปบน Server:

@@ -36,5 +36,6 @@ namespace EnergyApp.API.Data
         public DbSet<VehicleRecord> VehicleRecords { get; set; }
         public DbSet<VehicleDepartment> VehicleDepartments { get; set; }
         public DbSet<VehicleProvince> VehicleProvinces { get; set; }
+        public DbSet<SarabanStat> SarabanStats { get; set; }
     }
 }

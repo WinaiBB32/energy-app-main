@@ -130,7 +130,8 @@ const formatMoney = (value: number): string =>
 const getDeptName = (id: string): string => departments.value.find((x) => x.id === id)?.name || id
 const formatThaiMonth = (dateStr: string | null | undefined): string => {
     if (!dateStr) return '-'
-    return new Date(dateStr).toLocaleDateString('th-TH', { year: 'numeric', month: 'long' })
+    const utcStr = /Z|[+-]\d{2}:\d{2}$/.test(dateStr) ? dateStr : dateStr + 'Z'
+    return new Date(utcStr).toLocaleDateString('th-TH', { year: 'numeric', month: 'long' })
 }
 
 // ─── Data Fetching ──────────────────────────────────

@@ -103,16 +103,21 @@ const processData = (): void => {
     const start = selectedDateRange.value?.[0]
     const end = selectedDateRange.value?.[1]
 
+    // end ให้นับถึงสิ้นวันสุดท้าย
+    const endOfDay = end ? new Date(end.getFullYear(), end.getMonth(), end.getDate(), 23, 59, 59, 999) : null
+
     rawRecords.value.forEach(record => {
         if (!record.recordMonth) return;
 
-        const recordDate = new Date(record.recordMonth)
-        if (start && end) {
-            if (recordDate < start || recordDate > end) {
+        // เติม Z เพื่อบังคับ parse เป็น UTC (backend ส่งมาโดยไม่มี timezone suffix)
+        const utcStr = /Z|[+-]\d{2}:\d{2}$/.test(record.recordMonth) ? record.recordMonth : record.recordMonth + 'Z'
+        const recordDate = new Date(utcStr)
+        if (start && endOfDay) {
+            if (recordDate < start || recordDate > endOfDay) {
                 return
             }
         }
-        
+
         const monthKey = `${recordDate.getFullYear()}-${String(recordDate.getMonth() + 1).padStart(2, '0')}`
 
         if (!monthlyTrend[monthKey]) {

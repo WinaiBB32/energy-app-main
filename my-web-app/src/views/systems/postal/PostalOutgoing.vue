@@ -19,6 +19,7 @@ import Tab from 'primevue/tab'
 import TabPanels from 'primevue/tabpanels'
 import TabPanel from 'primevue/tabpanel'
 import InputText from 'primevue/inputtext'
+import Dialog from 'primevue/dialog'
 
 defineOptions({ name: 'PostalOutgoingSystem' })
 
@@ -56,8 +57,9 @@ interface Department {
   name: string
 }
 
-const { isSuperAdmin, isSystemAdmin } = usePermissions()
+const { isSuperAdmin, isOfficer, isSystemAdmin } = usePermissions()
 const isAdmin = isSystemAdmin('postal')
+const canEdit = computed(() => isSuperAdmin.value || isOfficer.value || isAdmin)
 const currentUserDepartment = computed(() => authStore.userProfile?.departmentId || '')
 const departments = ref<Department[]>([])
 
@@ -103,7 +105,9 @@ const formatMoney = (value: number): string =>
 const getDeptName = (id: string): string => departments.value.find((x) => x.id === id)?.name || id
 const formatThaiMonth = (dateStr: string | null | undefined): string => {
   if (!dateStr) return '-'
-  return new Date(dateStr).toLocaleDateString('th-TH', { year: 'numeric', month: 'long' })
+  // บังคับ parse เป็น UTC (เติม Z ถ้า backend ส่งมาโดยไม่มี timezone suffix)
+  const utcStr = /Z|[+-]\d{2}:\d{2}$/.test(dateStr) ? dateStr : dateStr + 'Z'
+  return new Date(utcStr).toLocaleDateString('th-TH', { year: 'numeric', month: 'long' })
 }
 
 onMounted(async () => {
@@ -170,16 +174,25 @@ const submitOutgoingForm = async (): Promise<void> => {
       ? outgoingFormData.value.departmentId
       : currentUserDepartment.value
 
+    const selectedMonth = outgoingFormData.value.recordMonth!
+    // บังคับเป็น UTC วันที่ 1 ของเดือน เพื่อป้องกัน UTC+7 shift เดือน
+    const recordMonthIso = new Date(
+      Date.UTC(selectedMonth.getFullYear(), selectedMonth.getMonth(), 1)
+    ).toISOString()
+
     const docData = {
-      ...outgoingFormData.value,
       departmentId: saveDeptId,
+      recordMonth: recordMonthIso,
+      normalMail: outgoingFormData.value.normalMail || 0,
+      normalMailUnitPrice: outgoingFormData.value.normalMailUnitPrice || 0,
+      registeredMail: outgoingFormData.value.registeredMail || 0,
+      registeredMailUnitPrice: outgoingFormData.value.registeredMailUnitPrice || 0,
+      emsMail: outgoingFormData.value.emsMail || 0,
+      emsMailUnitPrice: outgoingFormData.value.emsMailUnitPrice || 0,
       incomingNormalMail: 0,
       incomingRegisteredMail: 0,
       incomingEmsMail: 0,
       incomingTotalMail: 0,
-      normalMailUnitPrice: outgoingFormData.value.normalMailUnitPrice || 0,
-      registeredMailUnitPrice: outgoingFormData.value.registeredMailUnitPrice || 0,
-      emsMailUnitPrice: outgoingFormData.value.emsMailUnitPrice || 0,
       totalMail: computedTotalMail.value,
       recordedByName: authStore.userProfile?.displayName || authStore.user?.email || 'ไม่ระบุชื่อ',
       recordedBy: authStore.user?.uid || 'unknown',
@@ -200,6 +213,110 @@ const submitOutgoingForm = async (): Promise<void> => {
     errorMessage.value = error instanceof Error ? `เกิดข้อผิดพลาด: ${error.message}` : 'เกิดข้อผิดพลาด'
   } finally {
     isSubmitting.value = false
+  }
+}
+
+// ─── Edit / Delete ────────────────────────────────────────────────────────────
+const editVisible = ref(false)
+const deleteConfirmVisible = ref(false)
+const selectedRecord = ref<FetchedPostalRecord | null>(null)
+const recordToDelete = ref<FetchedPostalRecord | null>(null)
+const isUpdating = ref(false)
+
+const editForm = ref({
+  recordMonth: null as Date | null,
+  normalMail: 0,
+  normalMailUnitPrice: 0,
+  registeredMail: 0,
+  registeredMailUnitPrice: 0,
+  emsMail: 0,
+  emsMailUnitPrice: 0,
+})
+
+const editTotalMail = computed(() =>
+  editForm.value.normalMail + editForm.value.registeredMail + editForm.value.emsMail
+)
+const editTotalCost = computed(() =>
+  editForm.value.normalMailUnitPrice + editForm.value.registeredMailUnitPrice + editForm.value.emsMailUnitPrice
+)
+
+const openEdit = (record: FetchedPostalRecord) => {
+  selectedRecord.value = record
+  editForm.value = {
+    recordMonth: record.recordMonth ? new Date(
+      /Z|[+-]\d{2}:\d{2}$/.test(record.recordMonth) ? record.recordMonth : record.recordMonth + 'Z'
+    ) : null,
+    normalMail: record.normalMail,
+    normalMailUnitPrice: record.normalMailUnitPrice,
+    registeredMail: record.registeredMail,
+    registeredMailUnitPrice: record.registeredMailUnitPrice,
+    emsMail: record.emsMail,
+    emsMailUnitPrice: record.emsMailUnitPrice,
+  }
+  editVisible.value = true
+}
+
+const saveEdit = async () => {
+  if (!selectedRecord.value || !editForm.value.recordMonth) {
+    toast.error('กรุณาเลือกรอบเดือน'); return
+  }
+  isUpdating.value = true
+  try {
+    const m = editForm.value.recordMonth
+    const recordMonthIso = new Date(Date.UTC(m.getFullYear(), m.getMonth(), 1)).toISOString()
+    await api.put(`/PostalRecord/${selectedRecord.value.id}`, {
+      departmentId: selectedRecord.value.departmentId,
+      recordMonth: recordMonthIso,
+      normalMail: editForm.value.normalMail,
+      normalMailUnitPrice: editForm.value.normalMailUnitPrice,
+      registeredMail: editForm.value.registeredMail,
+      registeredMailUnitPrice: editForm.value.registeredMailUnitPrice,
+      emsMail: editForm.value.emsMail,
+      emsMailUnitPrice: editForm.value.emsMailUnitPrice,
+      incomingNormalMail: 0, incomingRegisteredMail: 0, incomingEmsMail: 0, incomingTotalMail: 0,
+      totalMail: editTotalMail.value,
+      recordedByName: selectedRecord.value.recordedByName,
+      recordedBy: authStore.user?.uid || 'unknown',
+    })
+    const idx = historyRecords.value.findIndex(r => r.id === selectedRecord.value!.id)
+    if (idx !== -1) {
+      historyRecords.value[idx] = {
+        ...historyRecords.value[idx]!,
+        recordMonth: recordMonthIso,
+        normalMail: editForm.value.normalMail,
+        normalMailUnitPrice: editForm.value.normalMailUnitPrice,
+        registeredMail: editForm.value.registeredMail,
+        registeredMailUnitPrice: editForm.value.registeredMailUnitPrice,
+        emsMail: editForm.value.emsMail,
+        emsMailUnitPrice: editForm.value.emsMailUnitPrice,
+        totalMail: editTotalMail.value,
+      }
+    }
+    editVisible.value = false
+    toast.success('แก้ไขข้อมูลสำเร็จ')
+  } catch (e: unknown) {
+    toast.fromError(e, 'เกิดข้อผิดพลาด กรุณาลองใหม่')
+  } finally {
+    isUpdating.value = false
+  }
+}
+
+const confirmDelete = (record: FetchedPostalRecord) => {
+  recordToDelete.value = record
+  deleteConfirmVisible.value = true
+}
+
+const deleteRecord = async () => {
+  if (!recordToDelete.value) return
+  try {
+    await api.delete(`/PostalRecord/${recordToDelete.value.id}`)
+    historyRecords.value = historyRecords.value.filter(r => r.id !== recordToDelete.value!.id)
+    toast.success('ลบข้อมูลสำเร็จ')
+  } catch (e: unknown) {
+    toast.fromError(e, 'เกิดข้อผิดพลาด กรุณาลองใหม่')
+  } finally {
+    deleteConfirmVisible.value = false
+    recordToDelete.value = null
   }
 }
 </script>
@@ -366,6 +483,17 @@ const submitOutgoingForm = async (): Promise<void> => {
                     </div>
                   </template>
                 </Column>
+
+                <Column v-if="canEdit" header="จัดการ" style="width: 90px">
+                  <template #body="sp">
+                    <div class="flex gap-1">
+                      <Button icon="pi pi-pencil" text rounded severity="secondary" size="small"
+                        v-tooltip.top="'แก้ไข'" @click="openEdit(sp.data)" />
+                      <Button icon="pi pi-trash" text rounded severity="danger" size="small"
+                        v-tooltip.top="'ลบ'" @click="confirmDelete(sp.data)" />
+                    </div>
+                  </template>
+                </Column>
               </DataTable>
 
               <div v-if="hasMoreData" class="flex justify-center mt-6 mb-2">
@@ -377,6 +505,67 @@ const submitOutgoingForm = async (): Promise<void> => {
         </TabPanel>
       </TabPanels>
     </Tabs>
+
+    <!-- Edit Dialog -->
+    <Dialog v-model:visible="editVisible" modal header="แก้ไขข้อมูลไปรษณีย์ออก" :style="{ width: '480px' }" :draggable="false">
+      <div class="flex flex-col gap-4 mt-2">
+        <div class="flex flex-col gap-2">
+          <label class="text-sm font-semibold text-gray-700">รอบเดือน <span class="text-red-500">*</span></label>
+          <DatePicker v-model="editForm.recordMonth" view="month" dateFormat="MM yy" class="w-full" showIcon />
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div class="col-span-2 text-xs font-bold text-gray-500 -mb-1">ไปรษณีย์ธรรมดา</div>
+          <div class="flex flex-col gap-1">
+            <label class="text-xs text-gray-500">จำนวน (ชิ้น)</label>
+            <InputNumber v-model="editForm.normalMail" :min="0" class="w-full" />
+          </div>
+          <div class="flex flex-col gap-1">
+            <label class="text-xs text-gray-500">ราคา (รวม)</label>
+            <InputNumber v-model="editForm.normalMailUnitPrice" :min="0" :minFractionDigits="2" :maxFractionDigits="2" class="w-full" />
+          </div>
+          <div class="col-span-2 text-xs font-bold text-gray-500 -mb-1">ไปรษณีย์ลงทะเบียน</div>
+          <div class="flex flex-col gap-1">
+            <label class="text-xs text-gray-500">จำนวน (ชิ้น)</label>
+            <InputNumber v-model="editForm.registeredMail" :min="0" class="w-full" />
+          </div>
+          <div class="flex flex-col gap-1">
+            <label class="text-xs text-gray-500">ราคา (รวม)</label>
+            <InputNumber v-model="editForm.registeredMailUnitPrice" :min="0" :minFractionDigits="2" :maxFractionDigits="2" class="w-full" />
+          </div>
+          <div class="col-span-2 text-xs font-bold text-gray-500 -mb-1">EMS</div>
+          <div class="flex flex-col gap-1">
+            <label class="text-xs text-gray-500">จำนวน (ชิ้น)</label>
+            <InputNumber v-model="editForm.emsMail" :min="0" class="w-full" />
+          </div>
+          <div class="flex flex-col gap-1">
+            <label class="text-xs text-gray-500">ราคา (รวม)</label>
+            <InputNumber v-model="editForm.emsMailUnitPrice" :min="0" :minFractionDigits="2" :maxFractionDigits="2" class="w-full" />
+          </div>
+        </div>
+        <div class="bg-blue-50 rounded-lg p-3 flex justify-between text-sm">
+          <span class="font-semibold text-blue-800">รวม: {{ editTotalMail }} ชิ้น</span>
+          <span class="font-semibold text-blue-800">{{ formatMoney(editTotalCost) }} บาท</span>
+        </div>
+      </div>
+      <template #footer>
+        <Button label="ยกเลิก" severity="secondary" text @click="editVisible = false" />
+        <Button label="บันทึกการแก้ไข" icon="pi pi-check" severity="info" :loading="isUpdating" @click="saveEdit" />
+      </template>
+    </Dialog>
+
+    <!-- Delete Confirm Dialog -->
+    <Dialog v-model:visible="deleteConfirmVisible" modal header="ยืนยันการลบ" :style="{ width: '360px' }" :draggable="false">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 bg-red-100 rounded-full flex items-center justify-center shrink-0">
+          <i class="pi pi-exclamation-triangle text-red-500"></i>
+        </div>
+        <p class="text-gray-700">ต้องการลบข้อมูลไปรษณีย์ออก รอบ <strong>{{ formatThaiMonth(recordToDelete?.recordMonth) }}</strong> หรือไม่?</p>
+      </div>
+      <template #footer>
+        <Button label="ยกเลิก" severity="secondary" text @click="deleteConfirmVisible = false" />
+        <Button label="ลบข้อมูล" icon="pi pi-trash" severity="danger" @click="deleteRecord" />
+      </template>
+    </Dialog>
   </div>
 </template>
 

@@ -19,6 +19,7 @@ import Tab from 'primevue/tab'
 import TabPanels from 'primevue/tabpanels'
 import TabPanel from 'primevue/tabpanel'
 import InputText from 'primevue/inputtext'
+import Dialog from 'primevue/dialog'
 
 defineOptions({ name: 'PostalIncomingSystem' })
 
@@ -48,8 +49,9 @@ interface Department {
   name: string
 }
 
-const { isSuperAdmin, isSystemAdmin } = usePermissions()
+const { isSuperAdmin, isOfficer, isSystemAdmin } = usePermissions()
 const isAdmin = isSystemAdmin('postal')
+const canEdit = computed(() => isSuperAdmin.value || isOfficer.value || isAdmin)
 const currentUserDepartment = computed(() => authStore.userProfile?.departmentId || '')
 const departments = ref<Department[]>([])
 
@@ -75,7 +77,8 @@ const FETCH_LIMIT = 15
 const getDeptName = (id: string): string => departments.value.find((x) => x.id === id)?.name || id
 const formatThaiDate = (dateStr: string | null | undefined): string => {
   if (!dateStr) return '-'
-  return new Date(dateStr).toLocaleDateString('th-TH', {
+  const utcStr = /Z|[+-]\d{2}:\d{2}$/.test(dateStr) ? dateStr : dateStr + 'Z'
+  return new Date(utcStr).toLocaleDateString('th-TH', {
     year: 'numeric',
     month: 'long',
     day: 'numeric',
@@ -147,9 +150,14 @@ const submitIncomingForm = async (): Promise<void> => {
       : currentUserDepartment.value
 
 
+    const selectedMonth = incomingFormData.value.recordMonth!
+    const recordMonthIso = new Date(
+      Date.UTC(selectedMonth.getFullYear(), selectedMonth.getMonth(), selectedMonth.getDate())
+    ).toISOString()
+
     const docData = {
       departmentId: saveDeptId,
-      recordMonth: incomingFormData.value.recordMonth,
+      recordMonth: recordMonthIso,
       incomingTotalMail: incomingFormData.value.totalMail || 0,
       recordedByName: authStore.userProfile?.displayName || authStore.user?.email || 'ไม่ระบุชื่อ',
       recordedBy: authStore.user?.uid || 'unknown',
@@ -165,6 +173,85 @@ const submitIncomingForm = async (): Promise<void> => {
     errorMessage.value = error instanceof Error ? `เกิดข้อผิดพลาด: ${error.message}` : 'เกิดข้อผิดพลาด'
   } finally {
     isSubmitting.value = false
+  }
+}
+
+// ─── Edit / Delete ────────────────────────────────────────────────────────────
+const editVisible = ref(false)
+const deleteConfirmVisible = ref(false)
+const selectedRecord = ref<FetchedPostalRecord | null>(null)
+const recordToDelete = ref<FetchedPostalRecord | null>(null)
+const isUpdating = ref(false)
+
+const editForm = ref({
+  recordMonth: null as Date | null,
+  incomingTotalMail: 0,
+})
+
+const openEdit = (record: FetchedPostalRecord) => {
+  selectedRecord.value = record
+  editForm.value = {
+    recordMonth: record.recordMonth ? new Date(
+      /Z|[+-]\d{2}:\d{2}$/.test(record.recordMonth) ? record.recordMonth : record.recordMonth + 'Z'
+    ) : null,
+    incomingTotalMail: record.incomingTotalMail,
+  }
+  editVisible.value = true
+}
+
+const saveEdit = async () => {
+  if (!selectedRecord.value || !editForm.value.recordMonth) {
+    toast.error('กรุณาเลือกรอบเดือน'); return
+  }
+  isUpdating.value = true
+  try {
+    const m = editForm.value.recordMonth
+    const recordMonthIso = new Date(Date.UTC(m.getFullYear(), m.getMonth(), m.getDate())).toISOString()
+    await api.put(`/PostalRecord/${selectedRecord.value.id}`, {
+      departmentId: selectedRecord.value.departmentId,
+      recordMonth: recordMonthIso,
+      incomingTotalMail: editForm.value.incomingTotalMail,
+      normalMail: 0, normalMailUnitPrice: 0,
+      registeredMail: 0, registeredMailUnitPrice: 0,
+      emsMail: 0, emsMailUnitPrice: 0,
+      incomingNormalMail: 0, incomingRegisteredMail: 0, incomingEmsMail: 0,
+      totalMail: 0,
+      recordedByName: selectedRecord.value.recordedByName,
+      recordedBy: authStore.user?.uid || 'unknown',
+    })
+    const idx = historyRecords.value.findIndex(r => r.id === selectedRecord.value!.id)
+    if (idx !== -1) {
+      historyRecords.value[idx] = {
+        ...historyRecords.value[idx]!,
+        recordMonth: recordMonthIso,
+        incomingTotalMail: editForm.value.incomingTotalMail,
+      }
+    }
+    editVisible.value = false
+    toast.success('แก้ไขข้อมูลสำเร็จ')
+  } catch (e: unknown) {
+    toast.fromError(e, 'เกิดข้อผิดพลาด กรุณาลองใหม่')
+  } finally {
+    isUpdating.value = false
+  }
+}
+
+const confirmDelete = (record: FetchedPostalRecord) => {
+  recordToDelete.value = record
+  deleteConfirmVisible.value = true
+}
+
+const deleteRecord = async () => {
+  if (!recordToDelete.value) return
+  try {
+    await api.delete(`/PostalRecord/${recordToDelete.value.id}`)
+    historyRecords.value = historyRecords.value.filter(r => r.id !== recordToDelete.value!.id)
+    toast.success('ลบข้อมูลสำเร็จ')
+  } catch (e: unknown) {
+    toast.fromError(e, 'เกิดข้อผิดพลาด กรุณาลองใหม่')
+  } finally {
+    deleteConfirmVisible.value = false
+    recordToDelete.value = null
   }
 }
 </script>
@@ -265,6 +352,17 @@ const submitIncomingForm = async (): Promise<void> => {
                 <Column header="รวมทั้งหมด" class="text-center">
                   <template #body="sp"><div class="font-bold text-emerald-600 text-lg">{{ sp.data.incomingTotalMail || 0 }} ชิ้น</div></template>
                 </Column>
+
+                <Column v-if="canEdit" header="จัดการ" style="width: 90px">
+                  <template #body="sp">
+                    <div class="flex gap-1">
+                      <Button icon="pi pi-pencil" text rounded severity="secondary" size="small"
+                        v-tooltip.top="'แก้ไข'" @click="openEdit(sp.data)" />
+                      <Button icon="pi pi-trash" text rounded severity="danger" size="small"
+                        v-tooltip.top="'ลบ'" @click="confirmDelete(sp.data)" />
+                    </div>
+                  </template>
+                </Column>
               </DataTable>
 
               <div v-if="hasMoreData" class="flex justify-center mt-6 mb-2">
@@ -276,6 +374,38 @@ const submitIncomingForm = async (): Promise<void> => {
         </TabPanel>
       </TabPanels>
     </Tabs>
+
+    <!-- Edit Dialog -->
+    <Dialog v-model:visible="editVisible" modal header="แก้ไขข้อมูลไปรษณีย์เข้า" :style="{ width: '400px' }" :draggable="false">
+      <div class="flex flex-col gap-4 mt-2">
+        <div class="flex flex-col gap-2">
+          <label class="text-sm font-semibold text-gray-700">รอบเดือน <span class="text-red-500">*</span></label>
+          <DatePicker v-model="editForm.recordMonth" dateFormat="dd/mm/yy" class="w-full" showIcon />
+        </div>
+        <div class="flex flex-col gap-2">
+          <label class="text-sm font-semibold text-gray-700">จำนวนไปรษณีย์เข้า (ชิ้น)</label>
+          <InputNumber v-model="editForm.incomingTotalMail" :min="0" class="w-full" />
+        </div>
+      </div>
+      <template #footer>
+        <Button label="ยกเลิก" severity="secondary" text @click="editVisible = false" />
+        <Button label="บันทึกการแก้ไข" icon="pi pi-check" severity="success" :loading="isUpdating" @click="saveEdit" />
+      </template>
+    </Dialog>
+
+    <!-- Delete Confirm Dialog -->
+    <Dialog v-model:visible="deleteConfirmVisible" modal header="ยืนยันการลบ" :style="{ width: '360px' }" :draggable="false">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 bg-red-100 rounded-full flex items-center justify-center shrink-0">
+          <i class="pi pi-exclamation-triangle text-red-500"></i>
+        </div>
+        <p class="text-gray-700">ต้องการลบข้อมูลไปรษณีย์เข้า รอบ <strong>{{ formatThaiDate(recordToDelete?.recordMonth) }}</strong> หรือไม่?</p>
+      </div>
+      <template #footer>
+        <Button label="ยกเลิก" severity="secondary" text @click="deleteConfirmVisible = false" />
+        <Button label="ลบข้อมูล" icon="pi pi-trash" severity="danger" @click="deleteRecord" />
+      </template>
+    </Dialog>
   </div>
 </template>
 
