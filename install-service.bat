@@ -5,27 +5,20 @@ echo  (รัน script นี้บน Server ด้วย Admin)
 echo ========================================
 
 set API_PATH=C:\energy-app\api
-set FRONTEND_PATH=C:\energy-app\frontend
-set NGINX_PATH=C:\nginx
+set FRONTEND_PATH=C:\xampp\htdocs\energy-app
 
 echo.
-echo [1/4] สร้างโฟลเดอร์...
-if not exist "C:\energy-app\api" mkdir "C:\energy-app\api"
-if not exist "C:\energy-app\frontend" mkdir "C:\energy-app\frontend"
+echo [1/3] สร้างโฟลเดอร์...
+if not exist "%API_PATH%" mkdir "%API_PATH%"
+if not exist "%FRONTEND_PATH%" mkdir "%FRONTEND_PATH%"
 
 echo.
-echo [2/4] Run Database Migration...
-cd /d %API_PATH%
-set ASPNETCORE_ENVIRONMENT=Production
-dotnet EnergyApp.API.dll -- ef database update
-if %errorlevel% neq 0 (
-    echo Migration ล้มเหลว กรุณาตรวจสอบ connection string
-    pause
-    exit /b 1
-)
+echo [2/3] Run Database Migration...
+echo (Migration จะถูก apply อัตโนมัติเมื่อ API เริ่มทำงาน)
+echo (หรือรัน: dotnet ef database update จาก source code ก่อน deploy)
 
 echo.
-echo [3/4] ติดตั้ง API เป็น Windows Service...
+echo [3/3] ติดตั้ง API เป็น Windows Service...
 sc query EnergyAppAPI >nul 2>&1
 if %errorlevel% equ 0 (
     echo หยุด service เก่า...
@@ -38,22 +31,6 @@ sc create EnergyAppAPI binPath= "%API_PATH%\EnergyApp.API.exe --environment Prod
 sc description EnergyAppAPI "EnergyApp .NET 8 API Service"
 sc start EnergyAppAPI
 echo API Service ติดตั้งแล้ว
-
-echo.
-echo [4/4] ติดตั้ง nginx เป็น Windows Service...
-sc query nginx >nul 2>&1
-if %errorlevel% equ 0 (
-    sc stop nginx
-    sc delete nginx
-    timeout /t 3 >nul
-)
-
-%NGINX_PATH%\nginx.exe -s quit >nul 2>&1
-timeout /t 2 >nul
-
-sc create nginx binPath= "%NGINX_PATH%\nginx.exe" start= auto DisplayName= "nginx Web Server"
-sc start nginx
-echo nginx Service ติดตั้งแล้ว
 
 echo.
 echo ========================================
