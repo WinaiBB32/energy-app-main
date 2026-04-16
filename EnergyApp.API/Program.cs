@@ -72,7 +72,15 @@ using (var scope = app.Services.CreateScope())
 {
     var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
     var seeder = new VehicleRecordSeeder(dbContext);
-    seeder.SeedFromCsv(@"C:\Users\Winai.t\Downloads\บันทึกข้อมูลรถยนต์ - CarData.csv");
+    var csvPath = @"C:\Users\beeman\Downloads\บันทึกข้อมูลรถยนต์ - CarData.csv";
+    if (File.Exists(csvPath))
+    {
+        seeder.SeedFromCsv(csvPath);
+    }
+    else
+    {
+        Console.WriteLine($"[WARN] CSV file not found: {csvPath}. Skipping vehicle record seeding.");
+    }
 }
 
 app.UseSwagger();
