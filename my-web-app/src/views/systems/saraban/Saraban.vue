@@ -318,6 +318,266 @@ const yearOptions = computed(() => {
     })
   ]
 })
+
+// ─── CSV Upload ───────────────────────────────────────────────────────────────
+interface CsvRow {
+  recordMonth: string
+  bookType: string
+  bookName: string
+  receiverName: string
+  receivedCount: number
+  internalPaperCount: number
+  internalDigitalCount: number
+  externalPaperCount: number
+  externalDigitalCount: number
+  forwardedCount: number
+  departmentId?: string
+  _error?: string
+}
+
+const csvFile = ref<File | null>(null)
+const csvPreviewRows = ref<CsvRow[]>([])
+const csvParseError = ref('')
+const isImporting = ref(false)
+const importResult = ref<{ success: number; failed: number } | null>(null)
+
+const csvIsReportMode = ref(false)
+const reportMeta = ref({
+  recordMonth: null as Date | null,
+  departmentId: '',
+  bookType: '',
+  bookName: '',
+})
+const reportMetaError = ref('')
+
+const bookTypeMap: Record<string, string> = {
+  'ทะเบียนหนังสือรับ': 'received', 'received': 'received',
+  'ทะเบียนหนังสือส่ง': 'sent', 'sent': 'sent',
+  'ทะเบียนหนังสือเวียน': 'circular', 'circular': 'circular',
+  'ทะเบียนบันทึกข้อความ': 'memo', 'memo': 'memo',
+  'อื่นๆ': 'other', 'other': 'other',
+}
+
+// คอลัมน์ตรงกับรายงาน: รายชื่อ | รับเข้า | ภายนอก(กระดาษ) | ภายนอก(ดิจิทัล) | ส่งต่อ | ภายใน(กระดาษ) | ภายใน(ดิจิทัล)
+const downloadTemplate = () => {
+  const baseHeaders = [
+    'เดือน/ปี (MM/YYYY)',
+    'ประเภทเล่มทะเบียน',
+    'ชื่อเล่มทะเบียน',
+    'รายชื่อ',
+    'จำนวนเอกสารรับเข้า',
+    'จำนวนเอกสารลงรับภายนอก(กระดาษ)',
+    'จำนวนเอกสารลงรับภายนอก(ดิจิทัล)',
+    'จำนวนเอกสารส่งต่อ',
+    'จำนวนเอกสารลงรับภายใน(กระดาษ)',
+    'จำนวนเอกสารลงรับภายใน(ดิจิทัล)',
+  ]
+  const headers = isSuperAdmin.value ? [...baseHeaders, 'รหัสหน่วยงาน'] : baseHeaders
+
+  const baseExample = ['03/2026', 'ทะเบียนหนังสือรับ', 'ทะเบียนหนังสือรับ 2568', 'นายสมชาย ใจดี', '100', '30', '20', '10', '60', '40']
+  const example = isSuperAdmin.value ? [...baseExample, ''] : baseExample
+
+  const baseNote = ['#หมายเหตุ: ประเภทเล่มทะเบียน: ทะเบียนหนังสือรับ/ทะเบียนหนังสือส่ง/ทะเบียนหนังสือเวียน/ทะเบียนบันทึกข้อความ/อื่นๆ', ...Array(9).fill('')]
+  const note = isSuperAdmin.value ? [...baseNote, ''] : baseNote
+
+  const csv = [headers, example, note]
+    .map(row => row.map(c => `"${c}"`).join(','))
+    .join('\n')
+
+  const bom = '\uFEFF'
+  const blob = new Blob([bom + csv], { type: 'text/csv;charset=utf-8;' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = 'saraban_template.csv'
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
+const parseLine = (line: string): string[] => {
+  const result: string[] = []
+  let cur = '', inQ = false
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i]
+    if (ch === '"') { inQ = !inQ }
+    else if (ch === ',' && !inQ) { result.push(cur.trim()); cur = '' }
+    else { cur += ch }
+  }
+  result.push(cur.trim())
+  return result
+}
+
+const col = (cols: string[], idx: number) => cols[idx]?.replace(/"/g, '').trim() || ''
+const colInt = (cols: string[], idx: number) => parseInt(cols[idx]?.replace(/"/g, '') || '0') || 0
+
+const parseCsvFile = (file: File) => {
+  csvParseError.value = ''
+  csvPreviewRows.value = []
+  importResult.value = null
+  csvIsReportMode.value = false
+
+  const reader = new FileReader()
+  reader.onload = (e) => {
+    try {
+      let text = e.target?.result as string
+      if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1)
+
+      const lines = text.split(/\r?\n/).filter(l => l.trim() && !l.trim().startsWith('#'))
+      if (lines.length < 2) { csvParseError.value = 'ไฟล์ไม่มีข้อมูล'; return }
+
+      // ตรวจ format โดยดูจาก header แถวแรก
+      const headerCols = parseLine(lines[0]!)
+      const firstHeader = col(headerCols, 0)
+      // report format: คอลัมน์แรกคือ "รายชื่อ" (ไม่มีเดือน/ประเภท/ชื่อเล่ม)
+      const isReportFormat = firstHeader.includes('รายชื่อ') && !firstHeader.includes('เดือน')
+
+      csvIsReportMode.value = isReportFormat
+
+      const rows: CsvRow[] = []
+
+      if (isReportFormat) {
+        // report format (7 cols): รายชื่อ | รับเข้า | นอก(กระดาษ) | นอก(ดิจิทัล) | ส่งต่อ | ใน(กระดาษ) | ใน(ดิจิทัล)
+        for (let i = 1; i < lines.length; i++) {
+          const cols = parseLine(lines[i]!)
+          if (cols.length < 2) continue
+          const name = col(cols, 0)
+          if (!name || name.includes('รวมทั้งหมด') || name.includes('รวม')) continue
+
+          rows.push({
+            recordMonth: '',   // กรอกทีหลังจาก reportMeta
+            bookType: '',
+            bookName: '',
+            receiverName: name,
+            receivedCount:        colInt(cols, 1),
+            externalPaperCount:   colInt(cols, 2),
+            externalDigitalCount: colInt(cols, 3),
+            forwardedCount:       colInt(cols, 4),
+            internalPaperCount:   colInt(cols, 5),
+            internalDigitalCount: colInt(cols, 6),
+            _error: '',
+          })
+        }
+      } else {
+        // template format (10 cols): เดือน/ปี | ประเภท | ชื่อเล่ม | รายชื่อ | รับเข้า | นอก(กระดาษ) | นอก(ดิจิทัล) | ส่งต่อ | ใน(กระดาษ) | ใน(ดิจิทัล)
+        for (let i = 1; i < lines.length; i++) {
+          const cols = parseLine(lines[i]!)
+          if (cols.length < 10) continue
+          const firstCol = col(cols, 0)
+          if (firstCol.includes('รวมทั้งหมด') || firstCol.includes('รวม')) continue
+
+          const [mm, yyyy] = firstCol.split('/')
+          const month = parseInt(mm || '0')
+          const year = parseInt(yyyy || '0')
+          let _error = ''
+          if (!month || !year || month < 1 || month > 12)
+            _error = 'รูปแบบเดือน/ปีไม่ถูกต้อง (ควรเป็น MM/YYYY)'
+
+          const bookTypeRaw = col(cols, 1)
+          const bookType = bookTypeMap[bookTypeRaw] || ''
+          if (!bookType) _error = _error || `ประเภทเล่มทะเบียนไม่ถูกต้อง: "${bookTypeRaw}"`
+
+          rows.push({
+            recordMonth: year && month ? new Date(Date.UTC(year, month - 1, 1)).toISOString() : '',
+            bookType,
+            bookName: col(cols, 2),
+            receiverName: col(cols, 3),
+            receivedCount:        colInt(cols, 4),
+            externalPaperCount:   colInt(cols, 5),
+            externalDigitalCount: colInt(cols, 6),
+            forwardedCount:       colInt(cols, 7),
+            internalPaperCount:   colInt(cols, 8),
+            internalDigitalCount: colInt(cols, 9),
+            departmentId: col(cols, 10) || undefined,
+            _error,
+          })
+        }
+      }
+
+      if (rows.length === 0) { csvParseError.value = 'ไม่พบข้อมูลในไฟล์'; return }
+      csvPreviewRows.value = rows
+    } catch {
+      csvParseError.value = 'ไม่สามารถอ่านไฟล์ได้ กรุณาตรวจสอบรูปแบบไฟล์'
+    }
+  }
+  reader.readAsText(file, 'UTF-8')
+}
+
+const onCsvFileChange = (e: Event) => {
+  const file = (e.target as HTMLInputElement).files?.[0]
+  if (!file) return
+  csvFile.value = file
+  parseCsvFile(file)
+}
+
+const csvHasError = computed(() => csvPreviewRows.value.some(r => r._error))
+
+const validateReportMeta = (): boolean => {
+  reportMetaError.value = ''
+  if (!reportMeta.value.recordMonth) { reportMetaError.value = 'กรุณาเลือกเดือน/ปี'; return false }
+  if (!reportMeta.value.bookType) { reportMetaError.value = 'กรุณาเลือกประเภทเล่มทะเบียน'; return false }
+  if (!reportMeta.value.bookName.trim()) { reportMetaError.value = 'กรุณากรอกชื่อเล่มทะเบียน'; return false }
+  const deptId = isSuperAdmin.value ? reportMeta.value.departmentId : currentUserDepartment.value
+  if (!deptId) { reportMetaError.value = 'กรุณาเลือกหน่วยงาน'; return false }
+  return true
+}
+
+const importCsv = async () => {
+  if (!validateReportMeta()) return
+  if (csvPreviewRows.value.length === 0 || csvHasError.value) return
+
+  const meta = reportMeta.value
+  const metaMonth = meta.recordMonth
+    ? new Date(Date.UTC(meta.recordMonth.getFullYear(), meta.recordMonth.getMonth(), 1)).toISOString()
+    : ''
+  const metaDeptId = isSuperAdmin.value
+    ? (meta.departmentId || currentUserDepartment.value)
+    : currentUserDepartment.value
+
+  isImporting.value = true
+  importResult.value = null
+  let success = 0, failed = 0
+
+  for (const row of csvPreviewRows.value) {
+    try {
+      await api.post('/SarabanStat', {
+        departmentId: (csvIsReportMode.value ? metaDeptId : (row.departmentId || metaDeptId)) || null,
+        bookType: csvIsReportMode.value ? meta.bookType : row.bookType,
+        bookName: csvIsReportMode.value ? meta.bookName : row.bookName,
+        recordMonth: csvIsReportMode.value ? metaMonth : row.recordMonth,
+        receiverName: row.receiverName,
+        receivedCount: row.receivedCount,
+        internalPaperCount: row.internalPaperCount,
+        internalDigitalCount: row.internalDigitalCount,
+        externalPaperCount: row.externalPaperCount,
+        externalDigitalCount: row.externalDigitalCount,
+        forwardedCount: row.forwardedCount,
+        recordedBy: authStore.user?.uid || '',
+      })
+      success++
+    } catch {
+      failed++
+    }
+  }
+
+  isImporting.value = false
+  importResult.value = { success, failed }
+  if (success > 0) {
+    toast.success(`นำเข้าสำเร็จ ${success} รายการ${failed > 0 ? `, ล้มเหลว ${failed} รายการ` : ''}`)
+    handleFilterChange()
+  }
+  csvFile.value = null
+  csvPreviewRows.value = []
+  csvIsReportMode.value = false
+}
+
+const clearCsv = () => {
+  csvFile.value = null
+  csvPreviewRows.value = []
+  csvParseError.value = ''
+  importResult.value = null
+  csvIsReportMode.value = false
+}
+
 </script>
 
 <template>
@@ -341,6 +601,7 @@ const yearOptions = computed(() => {
             {{ historyRecords.length }}
           </span>
         </Tab>
+        <Tab value="2" v-if="canEdit"><i class="pi pi-upload mr-2"></i>นำเข้า CSV</Tab>
       </TabList>
 
       <TabPanels>
@@ -587,6 +848,161 @@ const yearOptions = computed(() => {
             </template>
           </Card>
         </TabPanel>
+        <!-- Tab 2: CSV Import -->
+        <TabPanel value="2" v-if="canEdit">
+          <Card class="shadow-sm border-none mt-2">
+            <template #content>
+              <div class="flex flex-col gap-6">
+
+                <!-- ── ข้อมูลหลัก (กรอกก่อนอัพโหลด) ── -->
+                <div>
+                  <p class="text-sm font-bold text-purple-700 mb-3 flex items-center gap-2">
+                    <i class="pi pi-pencil"></i>ข้อมูลเล่มทะเบียน
+                    <span class="text-xs font-normal text-gray-400">(ใช้กับทุกแถวในไฟล์)</span>
+                  </p>
+                  <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 p-4 bg-purple-50 rounded-xl border border-purple-100">
+                    <!-- เดือน/ปี -->
+                    <div class="flex flex-col gap-2">
+                      <label class="font-semibold text-sm text-gray-700">
+                        <i class="pi pi-calendar mr-1 text-purple-500"></i>เดือน/ปี
+                        <span class="text-red-500">*</span>
+                      </label>
+                      <DatePicker v-model="reportMeta.recordMonth" view="month" dateFormat="mm/yy"
+                        class="w-full" showIcon placeholder="เลือกเดือน/ปี" />
+                    </div>
+                    <!-- หน่วยงาน (superadmin เท่านั้น) -->
+                    <div v-if="isSuperAdmin" class="flex flex-col gap-2">
+                      <label class="font-semibold text-sm text-gray-700">
+                        <i class="pi pi-building mr-1 text-purple-500"></i>หน่วยงาน
+                        <span class="text-red-500">*</span>
+                      </label>
+                      <Select v-model="reportMeta.departmentId" :options="departments"
+                        optionLabel="name" optionValue="id" placeholder="-- เลือกหน่วยงาน --" class="w-full" />
+                    </div>
+                    <!-- ประเภทเล่มทะเบียน -->
+                    <div class="flex flex-col gap-2">
+                      <label class="font-semibold text-sm text-gray-700">
+                        <i class="pi pi-tag mr-1 text-purple-500"></i>ประเภทเล่มทะเบียน
+                        <span class="text-red-500">*</span>
+                      </label>
+                      <Select v-model="reportMeta.bookType" :options="bookTypeOptions"
+                        optionLabel="label" optionValue="value" placeholder="-- เลือกประเภท --" class="w-full" />
+                    </div>
+                    <!-- ชื่อเล่มทะเบียน -->
+                    <div class="flex flex-col gap-2">
+                      <label class="font-semibold text-sm text-gray-700">
+                        <i class="pi pi-book mr-1 text-purple-500"></i>ชื่อเล่มทะเบียน
+                        <span class="text-red-500">*</span>
+                      </label>
+                      <InputText v-model="reportMeta.bookName" placeholder="เช่น ทะเบียนหนังสือรับ 2568" class="w-full" />
+                    </div>
+                  </div>
+                  <Message v-if="reportMetaError" severity="error" class="mt-2">{{ reportMetaError }}</Message>
+                </div>
+
+                <!-- ── Download Template ── -->
+                <div class="flex items-center justify-between p-4 bg-gray-50 rounded-xl border border-gray-200">
+                  <div>
+                    <p class="font-semibold text-gray-700 text-sm">ดาวน์โหลด Template CSV</p>
+                    <p class="text-xs text-gray-400 mt-0.5">หรืออัพโหลดไฟล์ที่ export จากระบบสารบรรณได้โดยตรง</p>
+                  </div>
+                  <Button icon="pi pi-download" label="Template" severity="secondary" outlined size="small"
+                    @click="downloadTemplate" />
+                </div>
+
+                <!-- ── File Upload ── -->
+                <div>
+                  <p class="text-sm font-bold text-gray-700 mb-3 flex items-center gap-2">
+                    <i class="pi pi-file-excel text-green-600"></i>เลือกไฟล์ CSV
+                  </p>
+                  <label
+                    class="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-gray-300 rounded-xl cursor-pointer hover:border-purple-400 hover:bg-purple-50 transition-colors"
+                    :class="{ 'border-purple-500 bg-purple-50': csvFile }">
+                    <div v-if="!csvFile" class="flex flex-col items-center gap-2 text-gray-400">
+                      <i class="pi pi-cloud-upload text-4xl text-purple-300"></i>
+                      <span class="text-sm font-medium">คลิกหรือลากไฟล์มาวางที่นี่</span>
+                      <span class="text-xs">รองรับเฉพาะ .csv</span>
+                    </div>
+                    <div v-else class="flex flex-col items-center gap-2">
+                      <i class="pi pi-file text-3xl text-purple-500"></i>
+                      <span class="text-sm font-semibold text-purple-700">{{ csvFile.name }}</span>
+                      <span class="text-xs text-gray-500">{{ csvPreviewRows.length }} แถว</span>
+                    </div>
+                    <input type="file" accept=".csv" class="hidden" @change="onCsvFileChange" />
+                  </label>
+                </div>
+
+                <Message v-if="csvParseError" severity="error">{{ csvParseError }}</Message>
+
+                <Message v-if="importResult" :severity="importResult.failed === 0 ? 'success' : 'warn'">
+                  นำเข้าสำเร็จ {{ importResult.success }} รายการ
+                  <span v-if="importResult.failed > 0"> / ล้มเหลว {{ importResult.failed }} รายการ</span>
+                </Message>
+
+                <!-- ── Preview Table ── -->
+                <div v-if="csvPreviewRows.length > 0">
+                  <div class="flex items-center justify-between mb-3">
+                    <p class="text-sm font-bold text-gray-700">
+                      <i class="pi pi-table mr-2 text-purple-500"></i>
+                      ตัวอย่างข้อมูล ({{ csvPreviewRows.length }} รายการ)
+                      <span v-if="csvHasError" class="ml-2 text-red-500 text-xs font-normal">
+                        <i class="pi pi-exclamation-circle mr-1"></i>มีข้อมูลผิดพลาด
+                      </span>
+                    </p>
+                    <Button icon="pi pi-times" label="ล้าง" severity="secondary" text size="small" @click="clearCsv" />
+                  </div>
+
+                  <div class="overflow-x-auto rounded-xl border border-gray-200">
+                    <table class="w-full text-xs text-left">
+                      <thead class="bg-gray-50 text-gray-600 font-semibold">
+                        <tr>
+                          <th class="px-3 py-2">#</th>
+                          <th class="px-3 py-2">รายชื่อ</th>
+                          <th class="px-3 py-2 text-center">รับเข้า</th>
+                          <th class="px-3 py-2 text-center">นอก(กระดาษ)</th>
+                          <th class="px-3 py-2 text-center">นอก(ดิจิทัล)</th>
+                          <th class="px-3 py-2 text-center">ส่งต่อ</th>
+                          <th class="px-3 py-2 text-center">ใน(กระดาษ)</th>
+                          <th class="px-3 py-2 text-center">ใน(ดิจิทัล)</th>
+                          <th class="px-3 py-2">สถานะ</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr v-for="(row, idx) in csvPreviewRows" :key="idx"
+                          :class="row._error ? 'bg-red-50' : (idx % 2 === 0 ? 'bg-white' : 'bg-gray-50')">
+                          <td class="px-3 py-1.5 text-gray-400">{{ idx + 1 }}</td>
+                          <td class="px-3 py-1.5 font-medium text-gray-800">{{ row.receiverName }}</td>
+                          <td class="px-3 py-1.5 text-center text-purple-700 font-semibold">{{ row.receivedCount }}</td>
+                          <td class="px-3 py-1.5 text-center text-amber-600">{{ row.externalPaperCount }}</td>
+                          <td class="px-3 py-1.5 text-center text-teal-600">{{ row.externalDigitalCount }}</td>
+                          <td class="px-3 py-1.5 text-center text-emerald-600">{{ row.forwardedCount }}</td>
+                          <td class="px-3 py-1.5 text-center text-orange-600">{{ row.internalPaperCount }}</td>
+                          <td class="px-3 py-1.5 text-center text-blue-600">{{ row.internalDigitalCount }}</td>
+                          <td class="px-3 py-1.5">
+                            <span v-if="row._error" class="text-red-500 flex items-center gap-1">
+                              <i class="pi pi-times-circle text-xs"></i>{{ row._error }}
+                            </span>
+                            <span v-else class="text-green-600 flex items-center gap-1">
+                              <i class="pi pi-check-circle text-xs"></i>ถูกต้อง
+                            </span>
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+
+                  <div class="flex justify-end mt-4">
+                    <Button icon="pi pi-upload" label="นำเข้าข้อมูลทั้งหมด" severity="help"
+                      :loading="isImporting" :disabled="csvHasError || isImporting"
+                      @click="importCsv" />
+                  </div>
+                </div>
+
+              </div>
+            </template>
+          </Card>
+        </TabPanel>
+
       </TabPanels>
     </Tabs>
 

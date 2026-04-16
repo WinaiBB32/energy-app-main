@@ -131,6 +131,8 @@ const topPersonChartData = ref()
 const topPersonChartOptions = ref()
 const intExtChartData = ref()
 const intExtChartOptions = ref()
+const yoyChartData = ref()
+const yoyChartOptions = ref()
 
 watch(filteredRecords, buildCharts, { immediate: false })
 
@@ -163,7 +165,7 @@ function buildCharts() {
         return `${thaiMonthShort[parseInt(m ?? '1') - 1] ?? ''} ${y ?? ''}`
     })
 
-    // Trend chart (รับเข้า + กระดาษ + ดิจิทัล + ส่งต่อ)
+    // Trend chart: รับเข้า (line) + กระดาษรวม + ดิจิทัลรวม + ส่งต่อ
     trendChartData.value = {
         labels: monthLabels,
         datasets: [
@@ -179,31 +181,17 @@ function buildCharts() {
             },
             {
                 type: 'bar',
-                label: 'ภายนอก (ดิจิทัล)',
-                backgroundColor: '#3b82f6cc',
-                borderRadius: 4,
-                data: sortedKeys.map(k => monthly[k]?.extDigital ?? 0),
-            },
-            {
-                type: 'bar',
-                label: 'ภายนอก (กระดาษ)',
+                label: 'กระดาษ (รวม)',
                 backgroundColor: '#f97316cc',
                 borderRadius: 4,
-                data: sortedKeys.map(k => monthly[k]?.extPaper ?? 0),
+                data: sortedKeys.map(k => (monthly[k]?.intPaper ?? 0) + (monthly[k]?.extPaper ?? 0)),
             },
             {
                 type: 'bar',
-                label: 'ภายใน (ดิจิทัล)',
-                backgroundColor: '#06b6d4cc',
+                label: 'ดิจิทัล (รวม)',
+                backgroundColor: '#3b82f6cc',
                 borderRadius: 4,
-                data: sortedKeys.map(k => monthly[k]?.intDigital ?? 0),
-            },
-            {
-                type: 'bar',
-                label: 'ภายใน (กระดาษ)',
-                backgroundColor: '#f59e0bcc',
-                borderRadius: 4,
-                data: sortedKeys.map(k => monthly[k]?.intPaper ?? 0),
+                data: sortedKeys.map(k => (monthly[k]?.intDigital ?? 0) + (monthly[k]?.extDigital ?? 0)),
             },
             {
                 type: 'bar',
@@ -235,32 +223,20 @@ function buildCharts() {
     }
     ratioChartOptions.value = { plugins: { legend: { position: 'bottom' } }, cutout: '65%' }
 
-    // Internal vs External stacked bar
+    // กระดาษ vs ดิจิทัล stacked bar (รวม ภายใน+ภายนอก)
     intExtChartData.value = {
         labels: monthLabels,
         datasets: [
             {
-                label: 'ภายใน (กระดาษ)',
-                backgroundColor: '#f59e0b',
-                data: sortedKeys.map(k => monthly[k]?.intPaper ?? 0),
-                borderRadius: 4,
-            },
-            {
-                label: 'ภายใน (ดิจิทัล)',
-                backgroundColor: '#06b6d4',
-                data: sortedKeys.map(k => monthly[k]?.intDigital ?? 0),
-                borderRadius: 4,
-            },
-            {
-                label: 'ภายนอก (กระดาษ)',
+                label: 'กระดาษ (รวม)',
                 backgroundColor: '#f97316',
-                data: sortedKeys.map(k => monthly[k]?.extPaper ?? 0),
+                data: sortedKeys.map(k => (monthly[k]?.intPaper ?? 0) + (monthly[k]?.extPaper ?? 0)),
                 borderRadius: 4,
             },
             {
-                label: 'ภายนอก (ดิจิทัล)',
+                label: 'ดิจิทัล (รวม)',
                 backgroundColor: '#3b82f6',
-                data: sortedKeys.map(k => monthly[k]?.extDigital ?? 0),
+                data: sortedKeys.map(k => (monthly[k]?.intDigital ?? 0) + (monthly[k]?.extDigital ?? 0)),
                 borderRadius: 4,
             },
         ],
@@ -293,6 +269,69 @@ function buildCharts() {
         scales: {
             x: { grid: { color: '#f3f4f6' }, beginAtZero: true },
             y: { grid: { display: false }, ticks: { font: { size: 12 } } },
+        },
+    }
+
+    // YoY: เปรียบเทียบ กระดาษ vs ดิจิทัล แต่ละปี (ใช้ rawRecords ไม่กรองวันที่)
+    const yoyData: Record<number, Record<number, { paper: number; digital: number }>> = {}
+    rawRecords.value.forEach(r => {
+        if (!isAdmin && r.departmentId !== currentUserDepartment.value) return
+        if (selectedBookNames.value.length > 0 && !selectedBookNames.value.includes(r.bookName)) return
+        if (selectedPersonNames.value.length > 0 && !selectedPersonNames.value.includes(r.receiverName)) return
+
+        const utcStr = /Z|[+-]\d{2}:\d{2}$/.test(r.recordMonth) ? r.recordMonth : r.recordMonth + 'Z'
+        const d = new Date(utcStr)
+        const yr = d.getUTCFullYear()
+        const mo = d.getUTCMonth() + 1
+
+        if (!yoyData[yr]) yoyData[yr] = {}
+        if (!yoyData[yr][mo]) yoyData[yr][mo] = { paper: 0, digital: 0 }
+        yoyData[yr][mo].paper   += r.internalPaperCount + r.externalPaperCount
+        yoyData[yr][mo].digital += r.internalDigitalCount + r.externalDigitalCount
+    })
+
+    const years = Object.keys(yoyData).map(Number).sort()
+
+    // สีต่อปี: ปีล่าสุด = ทึบ, ปีก่อน = เส้นประ
+    const paperColors  = ['#f97316', '#fb923c', '#fdba74']
+    const digitalColors = ['#3b82f6', '#60a5fa', '#93c5fd']
+
+    const datasets: object[] = []
+    years.forEach((yr, i) => {
+        const isCurrent = i === years.length - 1
+        const dash = isCurrent ? [] : [5, 4]
+        const bw   = isCurrent ? 2.5 : 1.5
+        const pColor = paperColors[years.length - 1 - i] ?? '#f97316'
+        const dColor = digitalColors[years.length - 1 - i] ?? '#3b82f6'
+
+        datasets.push({
+            label: `กระดาษ ${yr + 543}`,
+            data: Array.from({ length: 12 }, (_, m) => yoyData[yr]?.[m + 1]?.paper ?? 0),
+            backgroundColor: pColor + (isCurrent ? 'dd' : '66'),
+            borderColor: pColor,
+            borderWidth: 1,
+            borderRadius: 3,
+        })
+        datasets.push({
+            label: `ดิจิทัล ${yr + 543}`,
+            data: Array.from({ length: 12 }, (_, m) => yoyData[yr]?.[m + 1]?.digital ?? 0),
+            backgroundColor: dColor + (isCurrent ? 'dd' : '66'),
+            borderColor: dColor,
+            borderWidth: 1,
+            borderRadius: 3,
+        })
+    })
+
+    yoyChartData.value = { labels: thaiMonthShort, datasets }
+    yoyChartOptions.value = {
+        maintainAspectRatio: false,
+        interaction: { mode: 'index', intersect: false },
+        plugins: {
+            legend: { position: 'bottom', labels: { boxWidth: 14, padding: 12 } },
+        },
+        scales: {
+            x: { grid: { display: false } },
+            y: { title: { display: true, text: 'จำนวน (ฉบับ)' }, beginAtZero: true },
         },
     }
 }
@@ -549,11 +588,11 @@ onMounted(() => { fetchData() })
             </Card>
         </div>
 
-        <!-- Charts row 2: ภายใน vs ภายนอก Stacked + Top 10 -->
+        <!-- Charts row 2: กระดาษ vs ดิจิทัล + Top 10 -->
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
             <Card class="shadow-sm border-none">
                 <template #title>
-                    <span class="text-base font-bold text-gray-700">เอกสารลงรับ ภายใน vs ภายนอก รายเดือน</span>
+                    <span class="text-base font-bold text-gray-700">เอกสารลงรับ กระดาษ vs ดิจิทัล รายเดือน</span>
                 </template>
                 <template #content>
                     <div v-if="isLoading" class="h-72 flex items-center justify-center">
@@ -581,6 +620,29 @@ onMounted(() => { fetchData() })
                     </div>
                     <div v-else class="h-72">
                         <Chart type="bar" :data="topPersonChartData" :options="topPersonChartOptions" class="h-full w-full" />
+                    </div>
+                </template>
+            </Card>
+        </div>
+
+        <!-- Charts row 3: YoY เปรียบเทียบปี -->
+        <div class="mb-6">
+            <Card class="shadow-sm border-none">
+                <template #title>
+                    <span class="text-base font-bold text-gray-700">
+                        <i class="pi pi-chart-line text-purple-500 mr-2"></i>
+                        แนวโน้มปริมาณเอกสารรายเดือน เปรียบเทียบปีก่อนหน้า
+                    </span>
+                </template>
+                <template #content>
+                    <div v-if="isLoading" class="h-80 flex items-center justify-center">
+                        <i class="pi pi-spin pi-spinner text-4xl text-purple-400"></i>
+                    </div>
+                    <div v-else-if="!yoyChartData?.datasets?.length" class="h-80 flex flex-col items-center justify-center text-gray-300">
+                        <i class="pi pi-chart-line text-4xl mb-2"></i><p>ไม่มีข้อมูลเพียงพอสำหรับเปรียบเทียบ</p>
+                    </div>
+                    <div v-else class="h-80">
+                        <Chart type="bar" :data="yoyChartData" :options="yoyChartOptions" class="h-full w-full" />
                     </div>
                 </template>
             </Card>

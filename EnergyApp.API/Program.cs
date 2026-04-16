@@ -68,6 +68,13 @@ builder.Services.AddSingleton<ISystemErrorLogStore, InMemorySystemErrorLogStore>
 
 var app = builder.Build();
 
+using (var scope = app.Services.CreateScope())
+{
+    var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    var seeder = new VehicleRecordSeeder(dbContext);
+    seeder.SeedFromCsv(@"C:\Users\Winai.t\Downloads\บันทึกข้อมูลรถยนต์ - CarData.csv");
+}
+
 app.UseSwagger();
 app.UseSwaggerUI();
 
