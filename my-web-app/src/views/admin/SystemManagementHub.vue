@@ -77,13 +77,19 @@ const systems: SystemAdminItem[] = [
     id: 'system6',
     name: 'ระบบ IP-Phone',
     permissionLabel: 'ตั้งสิทธิ์ system6',
-    dataLabel: 'จัดการข้อมูล IP-Phone',
-    dataPath: '/ipphone',
+    dataLabel: 'สถิติการโทรเข้า/ออกรายเดือน',
+    dataPath: '/ipphone/dashboard',
     extraPaths: [
-      { label: 'แดชบอร์ดระบบ', path: '/ipphone/dashboard' },
       { label: 'นำเข้าสถิติ CSV', path: '/ipphone/upload' },
       { label: 'ผูกผู้ใช้-เบอร์โทร', path: '/ipphone/mapping' },
     ],
+  },
+  {
+    id: 'system12',
+    name: 'สมุดโทรศัพท์องค์กร',
+    permissionLabel: 'ตั้งสิทธิ์ system12',
+    dataLabel: 'จัดการรายชื่อเบอร์โทรศัพท์ภายใน IP-Phone / Analog',
+    dataPath: '/directory',
   },
   {
     id: 'system7',
@@ -166,7 +172,7 @@ function openPath(path: string) {
   <div class="space-y-6">
     <div>
       <h1 class="text-2xl font-bold text-gray-900">Admin Tool (ระบบที่ 10)</h1>
-      <p class="text-sm text-gray-500 mt-1">เครื่องมือผู้ดูแลระบบสำหรับกำหนดสิทธิ์และเข้าจัดการข้อมูลของทั้ง 9 ระบบจากจุดเดียว</p>
+      <p class="text-sm text-gray-500 mt-1">เครื่องมือผู้ดูแลระบบสำหรับกำหนดสิทธิ์และเข้าจัดการข้อมูลทุกระบบจากจุดเดียว</p>
     </div>
 
     <Card>

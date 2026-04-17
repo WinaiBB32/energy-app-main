@@ -87,7 +87,7 @@ const systems = computed(() => [
     path: '/water/dashboard',
     label: 'ค่าน้ำประปา',
     desc: 'บันทึกเลขมิเตอร์ คำนวณหน่วยน้ำ และสรุปค่าใช้จ่าย',
-    icon: 'pi-tint',
+    icon: 'pi-gauge',
     color: 'cyan',
     show: hasAccess('system2'),
   },
@@ -122,10 +122,19 @@ const systems = computed(() => [
     id: 'system6',
     path: '/ipphone/dashboard',
     label: 'ระบบ IP-Phone',
-    desc: 'สมุดโทรศัพท์องค์กรและสถิติการโทรประจำเดือน',
+    desc: 'สถิติการโทรเข้า/ออก อัตราการรับสาย และวิเคราะห์ปริมาณสายรายเดือน',
     icon: 'pi-desktop',
     color: 'teal',
     show: hasAccess('system6'),
+  },
+  {
+    id: 'system12',
+    path: '/directory',
+    label: 'สมุดโทรศัพท์องค์กร',
+    desc: 'ค้นหาเบอร์โทรศัพท์ภายใน IP-Phone และ Analog ของบุคลากรในองค์กร',
+    icon: 'pi-address-book',
+    color: 'cyan',
+    show: hasAccess('system12'),
   },
   {
     id: 'system9',
@@ -301,7 +310,7 @@ const colorMap: Record<string, { icon: string; bg: string; hover: string }> = {
             </span>
           </div>
           <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            <div v-for="ext in myLinkedExtensions" :key="ext.id" @click="router.push(`/ipphone/directory/${ext.id}`)"
+            <div v-for="ext in myLinkedExtensions" :key="ext.id" @click="router.push(`/directory/${ext.id}`)"
               class="group bg-white rounded-2xl border border-teal-100 p-4 cursor-pointer hover:shadow-md hover:-translate-y-0.5 hover:border-teal-300 transition-all duration-200 flex items-center gap-4">
               <div
                 class="w-12 h-12 bg-teal-50 rounded-xl flex items-center justify-center shrink-0 group-hover:bg-teal-600 transition-colors">

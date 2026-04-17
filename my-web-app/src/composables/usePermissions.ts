@@ -9,6 +9,7 @@ const MODULE_TO_SYSTEM_ID: Record<string, string> = {
   telephone: 'system4',
   saraban: 'system5',
   ipphone: 'system6',
+  directory: 'system12',
   maintenance: 'system9',
   admintool: 'system10',
   postal: 'system7',

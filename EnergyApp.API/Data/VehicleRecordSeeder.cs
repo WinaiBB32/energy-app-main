@@ -48,24 +48,24 @@ namespace EnergyApp.API.Data
     public class VehicleRecordCsv
     {
         [CsvHelper.Configuration.Attributes.Name("User ID")]
-        public string UserId { get; set; }
+        public string UserId { get; set; } = string.Empty;
         [CsvHelper.Configuration.Attributes.Name("รหัสสแกนหน้า")]
-        public string FaceScanCode { get; set; }
+        public string FaceScanCode { get; set; } = string.Empty;
         [CsvHelper.Configuration.Attributes.Name("ชื่อ - นามสกุล")]
-        public string FullName { get; set; }
+        public string FullName { get; set; } = string.Empty;
         [CsvHelper.Configuration.Attributes.Name("ตำแหน่ง")]
-        public string Position { get; set; }
+        public string Position { get; set; } = string.Empty;
         [CsvHelper.Configuration.Attributes.Name("หน่วยงาน")]
-        public string Department { get; set; }
+        public string Department { get; set; } = string.Empty;
         [CsvHelper.Configuration.Attributes.Name("เบอร์ติดต่อ")]
-        public string ContactNumber { get; set; }
+        public string ContactNumber { get; set; } = string.Empty;
         [CsvHelper.Configuration.Attributes.Name("ทะเบียนรถยนต์")]
-        public string LicensePlate { get; set; }
+        public string LicensePlate { get; set; } = string.Empty;
         [CsvHelper.Configuration.Attributes.Name("ยี่ห้อ")]
-        public string Brand { get; set; }
+        public string Brand { get; set; } = string.Empty;
         [CsvHelper.Configuration.Attributes.Name("รุ่น")]
-        public string Model { get; set; }
+        public string Model { get; set; } = string.Empty;
         [CsvHelper.Configuration.Attributes.Name("จังหวัด")]
-        public string Province { get; set; }
+        public string Province { get; set; } = string.Empty;
     }
 }

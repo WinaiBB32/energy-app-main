@@ -8,15 +8,15 @@ namespace EnergyApp.API.Models.Office
     {
         [Key]
         public int Id { get; set; }
-        public string UserId { get; set; }
-        public string FaceScanCode { get; set; }
-        public string FullName { get; set; }
-        public string Position { get; set; }
-        public string Department { get; set; }
-        public string ContactNumber { get; set; }
-        public string LicensePlate { get; set; }
-        public string Brand { get; set; }
-        public string Model { get; set; }
-        public string Province { get; set; }
+        public string UserId { get; set; } = string.Empty;
+        public string FaceScanCode { get; set; } = string.Empty;
+        public string FullName { get; set; } = string.Empty;
+        public string Position { get; set; } = string.Empty;
+        public string Department { get; set; } = string.Empty;
+        public string ContactNumber { get; set; } = string.Empty;
+        public string LicensePlate { get; set; } = string.Empty;
+        public string Brand { get; set; } = string.Empty;
+        public string Model { get; set; } = string.Empty;
+        public string Province { get; set; } = string.Empty;
     }
 }
