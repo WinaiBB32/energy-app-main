@@ -2,6 +2,7 @@ using EnergyApp.API.Data;
 using EnergyApp.API.Models;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using System.Globalization;
 
 namespace EnergyApp.API.Controllers
 {
@@ -34,13 +35,13 @@ namespace EnergyApp.API.Controllers
         {
             var query = _context.TelephoneRecords.AsQueryable();
 
-            if (!string.IsNullOrEmpty(fromDate) && DateTime.TryParse(fromDate, out var fd))
+            if (!string.IsNullOrEmpty(fromDate) && DateTime.TryParse(fromDate, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var fd))
             {
                 var fdu = fd.ToUniversalTime();
                 query = query.Where(r => r.CreatedAt >= fdu);
             }
 
-            if (!string.IsNullOrEmpty(toDate) && DateTime.TryParse(toDate, out var td))
+            if (!string.IsNullOrEmpty(toDate) && DateTime.TryParse(toDate, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var td))
             {
                 var tdu = td.ToUniversalTime();
                 query = query.Where(r => r.CreatedAt <= tdu);

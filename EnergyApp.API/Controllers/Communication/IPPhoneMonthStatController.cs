@@ -49,7 +49,7 @@ namespace EnergyApp.API.Controllers
                 FileName = dto.FileName,
                 UploadedBy = dto.UploadedBy,
                 TotalRecords = dto.TotalRecords,
-                CreatedAt = DateTime.Now,
+                CreatedAt = DateTime.UtcNow,
             };
             _db.IPPhoneMonthStats.Add(stat);
 
@@ -58,7 +58,7 @@ namespace EnergyApp.API.Controllers
                 log.Id = Guid.NewGuid().ToString();
                 log.StatId = stat.Id;
                 log.ReportMonth = dto.ReportMonth;
-                log.CreatedAt = DateTime.Now;
+                log.CreatedAt = DateTime.UtcNow;
                 _db.IPPhoneCallLogs.Add(log);
             }
 

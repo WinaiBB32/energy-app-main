@@ -3,6 +3,7 @@ import { ref, computed, onMounted, watch } from 'vue'
 import api from '@/services/api'
 import { useAuthStore } from '@/stores/auth'
 import { useAppToast } from '@/composables/useAppToast'
+import { toUtcDateOnly, toUtcEndOfDay } from '@/utils/dateUtils'
 
 import Card from 'primevue/card'
 import InputNumber from 'primevue/inputnumber'
@@ -86,14 +87,10 @@ const fetchRecords = async (loadMore = false) => {
     }
 
     if (filterDateFrom.value) {
-      const from = new Date(filterDateFrom.value)
-      from.setHours(0, 0, 0, 0)
-      params.fromDate = from.toISOString()
+      params.fromDate = toUtcDateOnly(new Date(filterDateFrom.value))
     }
     if (filterDateTo.value) {
-      const to = new Date(filterDateTo.value)
-      to.setHours(23, 59, 59, 999)
-      params.toDate = to.toISOString()
+      params.toDate = toUtcEndOfDay(new Date(filterDateTo.value))
     }
 
     const response = await api.get('/FuelRecord', { params })
@@ -217,7 +214,7 @@ const saveEdit = async () => {
   try {
     const payload = {
       ...editForm.value,
-      refuelDate: editForm.value.refuelDate ? new Date(editForm.value.refuelDate).toISOString() : null,
+      refuelDate: editForm.value.refuelDate ? toUtcDateOnly(new Date(editForm.value.refuelDate)) : null,
     }
     await api.put(`/FuelRecord/${selectedRecord.value.id}`, payload)
 
@@ -304,7 +301,7 @@ const handleFileUpload = (event: Event) => {
         if (dateStr) {
           const dObj = new Date(dateStr)
           if (!isNaN(dObj.getTime())) {
-            refuelDate = dObj.toISOString()
+            refuelDate = toUtcDateOnly(dObj)
           }
         }
 

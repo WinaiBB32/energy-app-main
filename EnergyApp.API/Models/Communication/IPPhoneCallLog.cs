@@ -20,6 +20,6 @@ namespace EnergyApp.API.Models
         public int TotalOutbound { get; set; }
         public int TotalCalls { get; set; }
         public string TotalTalkDuration { get; set; } = string.Empty;
-        public DateTime CreatedAt { get; set; } = DateTime.Now;
+        public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     }
 }

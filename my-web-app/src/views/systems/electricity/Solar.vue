@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
+import { toUtcDateOnly, toUtcDateFromParts } from '@/utils/dateUtils'
 import api from '@/services/api'
 
 import { useAuthStore } from '@/stores/auth'
@@ -154,7 +155,7 @@ const submitManualForm = async (): Promise<void> => {
   try {
     await api.post('/SolarProduction', {
       buildingId: d.buildingId,
-      recordDate: d.recordDate.toISOString(),
+      recordDate: toUtcDateOnly(d.recordDate),
       solarUnitProduced: d.productionWh / 1000,
       productionWh: d.productionWh,
       toBatteryWh: d.toBatteryWh,
@@ -236,7 +237,7 @@ const submitForm = async (): Promise<void> => {
         const productionWh = Number((cols[1] || '').replace(/,/g, '')) || 0
         records.push({
           buildingId: formData.value.buildingId,
-          recordDate: new Date(yyyy, mm - 1, dd).toISOString(),
+          recordDate: toUtcDateFromParts(yyyy, mm, dd),
           solarUnitProduced: productionWh / 1000,
           productionWh,
           toBatteryWh: Number((cols[2] || '').replace(/,/g, '')) || 0,
@@ -401,7 +402,7 @@ const saveEdit = async () => {
           const productionWh = Number((cols[1] || '').replace(/,/g, '')) || 0
           await doSave({
             buildingId: editForm.value.buildingId,
-            recordDate: new Date(yyyy, mm - 1, dd).toISOString(),
+            recordDate: toUtcDateFromParts(yyyy, mm, dd),
             solarUnitProduced: productionWh / 1000,
             productionWh,
             toBatteryWh: Number((cols[2] || '').replace(/,/g, '')) || 0,
@@ -422,7 +423,7 @@ const saveEdit = async () => {
       reader.readAsText(editFile.value)
     } else {
       await doSave({
-        recordDate: editForm.value.recordDate ? editForm.value.recordDate.toISOString() : null,
+        recordDate: editForm.value.recordDate ? toUtcDateOnly(editForm.value.recordDate) : null,
       })
       isSaving.value = false
     }

@@ -4,6 +4,7 @@ import api from '@/services/api'
 import { useAuthStore } from '@/stores/auth'
 import { useAppToast } from '@/composables/useAppToast'
 import { usePermissions } from '@/composables/usePermissions'
+import { toUtcDateOnly, toUtcEndOfDay } from '@/utils/dateUtils'
 import type { FetchedReceipt } from '@/types'
 
 import Card from 'primevue/card'
@@ -76,8 +77,8 @@ const receiptDriverChartData = ref(); const receiptDriverChartOptions = ref()
 const fetchData = async (): Promise<void> => {
   isLoading.value = true
   try {
-    const fromDate = selectedDateRange.value?.[0]?.toISOString()
-    const toDate = selectedDateRange.value?.[1]?.toISOString()
+    const fromDate = selectedDateRange.value?.[0] ? toUtcDateOnly(selectedDateRange.value[0]) : undefined
+    const toDate = selectedDateRange.value?.[1] ? toUtcEndOfDay(selectedDateRange.value[1]) : undefined
 
     const params = new URLSearchParams()
     if (fromDate) params.append('fromDate', fromDate)

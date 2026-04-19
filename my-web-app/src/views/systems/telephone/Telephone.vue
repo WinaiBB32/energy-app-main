@@ -4,6 +4,7 @@ import api from '@/services/api'
 import { useAuthStore } from '@/stores/auth'
 import { useAppToast } from '@/composables/useAppToast'
 import { usePermissions } from '@/composables/usePermissions'
+import { toUtcDateOnly } from '@/utils/dateUtils'
 
 defineOptions({ name: 'TelephoneSystem' })
 
@@ -150,7 +151,7 @@ const submitForm = async (): Promise<void> => {
         const payload = {
             docReceiveNumber: formData.value.docReceiveNumber,
             docNumber: formData.value.docNumber,
-            billingCycle: formData.value.billingCycle.toISOString(),
+            billingCycle: toUtcDateOnly(formData.value.billingCycle),
             phoneNumber: formData.value.phoneNumber,
             providerName: formData.value.providerName,
             usageAmount: formData.value.usageAmount || 0,
@@ -222,7 +223,7 @@ const saveEdit = async () => {
         const payload = {
             docReceiveNumber: editForm.value.docReceiveNumber,
             docNumber: editForm.value.docNumber,
-            billingCycle: editForm.value.billingCycle ? editForm.value.billingCycle.toISOString() : null,
+            billingCycle: editForm.value.billingCycle ? toUtcDateOnly(editForm.value.billingCycle) : null,
             phoneNumber: editForm.value.phoneNumber,
             providerName: editForm.value.providerName,
             usageAmount: editForm.value.usageAmount || 0,

@@ -2,6 +2,7 @@ using EnergyApp.API.Data;
 using EnergyApp.API.Models;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using System.Globalization;
 
 namespace EnergyApp.API.Controllers
 {
@@ -33,7 +34,7 @@ namespace EnergyApp.API.Controllers
             if (roomId.HasValue)
                 query = query.Where(r => r.RoomId == roomId);
 
-            if (!string.IsNullOrEmpty(month) && DateTime.TryParse(month, out var monthDate))
+            if (!string.IsNullOrEmpty(month) && DateTime.TryParse(month, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var monthDate))
             {
                 query = query.Where(r =>
                     r.RecordMonth.Year == monthDate.Year &&

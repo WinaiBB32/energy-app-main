@@ -2,6 +2,7 @@
 import { ref, computed, onMounted, watch } from 'vue'
 import api from '@/services/api'
 import { useAppToast } from '@/composables/useAppToast'
+import { toUtcDateOnly, toUtcEndOfDay } from '@/utils/dateUtils'
 
 import Card from 'primevue/card'
 import Chart from 'primevue/chart'
@@ -81,8 +82,8 @@ const fetchBuildings = async () => {
 const fetchData = async (): Promise<void> => {
   isLoading.value = true
   try {
-    const fromDate = selectedDateRange.value?.[0]?.toISOString()
-    const toDate = selectedDateRange.value?.[1]?.toISOString()
+    const fromDate = selectedDateRange.value?.[0] ? toUtcDateOnly(selectedDateRange.value[0]) : undefined
+    const toDate = selectedDateRange.value?.[1] ? toUtcEndOfDay(selectedDateRange.value[1]) : undefined
 
     const params = new URLSearchParams()
     if (fromDate) params.append('fromDate', fromDate)

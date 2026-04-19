@@ -620,8 +620,8 @@ const formatCurrency = (val: number): string =>
       <TabPanels class="px-0 py-4">
         <!-- Tab: ภาพรวมทั้งหมด (Overview) -->
         <TabPanel value="0">
-          <!-- Row 1: KPI Cards (5 ใบ) -->
-          <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 mb-6">
+          <!-- Row 1: KPI Cards — ค่าใช้จ่าย & พลังงาน (4 cards) -->
+          <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
             <Card class="shadow-sm border-t-4 border-blue-500 bg-blue-50/20">
               <template #content>
                 <div class="flex justify-between items-start">
@@ -676,26 +676,6 @@ const formatCurrency = (val: number): string =>
               </template>
             </Card>
 
-            <Card class="shadow-sm border-t-4 border-violet-500 bg-violet-50/20">
-              <template #content>
-                <div class="flex justify-between items-start">
-                  <div>
-                    <p class="text-xs text-gray-500 font-semibold mb-1 uppercase">Consumption</p>
-                    <h3 class="text-xl font-bold text-gray-800">
-                      {{
-                        sumConsumptionKwh.toLocaleString(undefined, { maximumFractionDigits: 2 })
-                      }}
-                      <span class="text-sm font-normal text-gray-500">kWh</span>
-                    </h3>
-                    <p class="text-[10px] text-violet-600/80 mt-1">ปริมาณความต้องการไฟฟ้า</p>
-                  </div>
-                  <div class="w-9 h-9 bg-violet-100 rounded-full flex items-center justify-center text-violet-600">
-                    <i class="pi pi-home text-sm"></i>
-                  </div>
-                </div>
-              </template>
-            </Card>
-
             <Card class="shadow-sm border-t-4 border-green-500 bg-green-50/20">
               <template #content>
                 <div class="flex justify-between items-start">
@@ -712,6 +692,65 @@ const formatCurrency = (val: number): string =>
                   </div>
                   <div class="w-9 h-9 bg-green-100 rounded-full flex items-center justify-center text-green-600">
                     <i class="pi pi-check-circle text-sm"></i>
+                  </div>
+                </div>
+              </template>
+            </Card>
+          </div>
+
+          <!-- Row 2: Energy Flow Cards — Consumption / From Grid / From Solar (3 cards) -->
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+            <Card class="shadow-sm border-t-4 border-violet-500 bg-violet-50/20">
+              <template #content>
+                <div class="flex justify-between items-start">
+                  <div>
+                    <p class="text-xs text-gray-500 font-semibold mb-1 uppercase">ความต้องการไฟฟ้า</p>
+                    <h3 class="text-xl font-bold text-gray-800">
+                      {{
+                        sumConsumptionKwh.toLocaleString(undefined, { maximumFractionDigits: 2 })
+                      }}
+                      <span class="text-sm font-normal text-gray-500">kWh</span>
+                    </h3>
+                    <p class="text-[10px] text-violet-600/80 mt-1">ปริมาณการใช้พลังงานรวม</p>
+                  </div>
+                  <div class="w-9 h-9 bg-violet-100 rounded-full flex items-center justify-center text-violet-600">
+                    <i class="pi pi-home text-sm"></i>
+                  </div>
+                </div>
+              </template>
+            </Card>
+
+            <Card class="shadow-sm border-t-4 border-rose-500 bg-rose-50/20">
+              <template #content>
+                <div class="flex justify-between items-start">
+                  <div>
+                    <p class="text-xs text-gray-500 font-semibold mb-1 uppercase">ดึงจากสายส่ง</p>
+                    <h3 class="text-xl font-bold text-gray-800">
+                      {{ sumFromGridKwh.toLocaleString(undefined, { maximumFractionDigits: 0 }) }}
+                      <span class="text-sm font-normal text-gray-500">kWh</span>
+                    </h3>
+                    <p class="text-[10px] text-rose-600/80 mt-1">พลังงานจากสายส่ง กฟภ.</p>
+                  </div>
+                  <div class="w-9 h-9 bg-rose-100 rounded-full flex items-center justify-center text-rose-600">
+                    <i class="pi pi-bolt text-sm"></i>
+                  </div>
+                </div>
+              </template>
+            </Card>
+
+            <Card class="shadow-sm border-t-4 border-yellow-500 bg-yellow-50/20">
+              <template #content>
+                <div class="flex justify-between items-start">
+                  <div>
+                    <p class="text-xs text-gray-500 font-semibold mb-1 uppercase">ดึงจาก Solar</p>
+                    <h3 class="text-xl font-bold text-gray-800">
+                      {{ sumFromSolarKwh.toLocaleString(undefined, { maximumFractionDigits: 0 }) }}
+                      <span class="text-sm font-normal text-gray-500">kWh</span>
+                    </h3>
+                    <p class="text-[10px] text-yellow-600/80 mt-1">พลังงานแสงอาทิตย์ที่ใช้โดยตรง</p>
+                  </div>
+                  <div class="w-9 h-9 bg-yellow-100 rounded-full flex items-center justify-center text-yellow-600">
+                    <i class="pi pi-sun text-sm"></i>
                   </div>
                 </div>
               </template>
@@ -1063,18 +1102,20 @@ const formatCurrency = (val: number): string =>
 
         <!-- Tab: Solar -->
         <TabPanel value="2">
-          <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6 mt-2">
+          <!-- แถว 1: การผลิต / การใช้พลังงาน / ดึงจาก Solar (3 cards) -->
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4 mt-2">
             <Card class="shadow-sm border-t-4 border-emerald-500 bg-emerald-50/20">
               <template #content>
                 <div class="flex justify-between items-start">
                   <div>
                     <p class="text-xs text-gray-500 font-semibold mb-1 uppercase">
-                      การผลิตรวม (Production)
+                      การผลิตพลังงานรวม
                     </p>
                     <h3 class="text-2xl font-bold text-gray-800">
                       {{ totalSolarUnit.toLocaleString(undefined, { maximumFractionDigits: 0 }) }}
                       <span class="text-sm font-normal text-gray-500">kWh</span>
                     </h3>
+                    <p class="text-[10px] text-emerald-600/80 mt-1">พลังงานที่ผลิตได้จากแผงโซลาร์</p>
                   </div>
                   <div class="w-10 h-10 bg-emerald-100 rounded-full flex items-center justify-center text-emerald-600">
                     <i class="pi pi-sun"></i>
@@ -1088,7 +1129,7 @@ const formatCurrency = (val: number): string =>
                 <div class="flex justify-between items-start">
                   <div>
                     <p class="text-xs text-gray-500 font-semibold mb-1 uppercase">
-                      ใช้พลังงานรวม (Consumption)
+                      ความต้องการไฟฟ้ารวม
                     </p>
                     <h3 class="text-2xl font-bold text-gray-800">
                       {{
@@ -1096,6 +1137,7 @@ const formatCurrency = (val: number): string =>
                       }}
                       <span class="text-sm font-normal text-gray-500">kWh</span>
                     </h3>
+                    <p class="text-[10px] text-indigo-600/80 mt-1">ปริมาณการใช้พลังงานทั้งหมด</p>
                   </div>
                   <div class="w-10 h-10 bg-indigo-100 rounded-full flex items-center justify-center text-indigo-600">
                     <i class="pi pi-home"></i>
@@ -1104,17 +1146,41 @@ const formatCurrency = (val: number): string =>
               </template>
             </Card>
 
+            <Card class="shadow-sm border-t-4 border-green-500 bg-green-50/20">
+              <template #content>
+                <div class="flex justify-between items-start">
+                  <div>
+                    <p class="text-xs text-gray-500 font-semibold mb-1 uppercase">
+                      ดึงจาก Solar
+                    </p>
+                    <h3 class="text-2xl font-bold text-gray-800">
+                      {{ sumFromSolarKwh.toLocaleString(undefined, { maximumFractionDigits: 0 }) }}
+                      <span class="text-sm font-normal text-gray-500">kWh</span>
+                    </h3>
+                    <p class="text-[10px] text-green-600/80 mt-1">Solar ที่ใช้ในอาคารโดยตรง</p>
+                  </div>
+                  <div class="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center text-green-600">
+                    <i class="pi pi-sun text-sm"></i>
+                  </div>
+                </div>
+              </template>
+            </Card>
+          </div>
+
+          <!-- แถว 2: ดึงจากสายส่ง / พลังงานส่วนเกิน (2 cards) -->
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
             <Card class="shadow-sm border-t-4 border-rose-500 bg-rose-50/20">
               <template #content>
                 <div class="flex justify-between items-start">
                   <div>
                     <p class="text-xs text-gray-500 font-semibold mb-1 uppercase">
-                      ดึงจากสายส่ง (From Grid)
+                      ดึงจากสายส่ง กฟภ.
                     </p>
                     <h3 class="text-2xl font-bold text-gray-800">
                       {{ sumFromGridKwh.toLocaleString(undefined, { maximumFractionDigits: 0 }) }}
                       <span class="text-sm font-normal text-gray-500">kWh</span>
                     </h3>
+                    <p class="text-[10px] text-rose-600/80 mt-1">พลังงานที่ซื้อจากสายส่งไฟฟ้า</p>
                   </div>
                   <div class="w-10 h-10 bg-rose-100 rounded-full flex items-center justify-center text-rose-600">
                     <i class="pi pi-bolt"></i>
@@ -1128,7 +1194,7 @@ const formatCurrency = (val: number): string =>
                 <div class="flex justify-between items-start">
                   <div>
                     <p class="text-xs text-gray-500 font-semibold mb-1 uppercase">
-                      พลังงานส่วนเกิน (To Grid + Bat)
+                      พลังงานส่วนเกิน
                     </p>
                     <h3 class="text-2xl font-bold text-gray-800">
                       {{
@@ -1138,6 +1204,7 @@ const formatCurrency = (val: number): string =>
                       }}
                       <span class="text-sm font-normal text-gray-500">kWh</span>
                     </h3>
+                    <p class="text-[10px] text-amber-600/80 mt-1">จ่ายคืนสายส่ง + เก็บในแบตเตอรี่</p>
                   </div>
                   <div class="w-10 h-10 bg-amber-100 rounded-full flex items-center justify-center text-amber-600">
                     <i class="pi pi-upload"></i>

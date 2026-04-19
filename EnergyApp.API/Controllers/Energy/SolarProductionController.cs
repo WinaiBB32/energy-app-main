@@ -1,8 +1,11 @@
+
+
 using EnergyApp.API.Data;
 using EnergyApp.API.Models;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using System.Globalization;
 
 namespace EnergyApp.API.Controllers
 {
@@ -32,6 +35,28 @@ namespace EnergyApp.API.Controllers
             public string DepartmentId { get; set; } = string.Empty;
         }
 
+        /// <summary>
+        /// รวม Consumption (kWh) ตามช่วงเวลาที่เลือก
+        /// </summary>
+        [HttpGet("summary-consumption")]
+        public async Task<IActionResult> GetSummaryConsumption(
+            [FromQuery] Guid? buildingId,
+            [FromQuery] string? fromDate,
+            [FromQuery] string? toDate)
+        {
+            var query = _context.SolarProductions.AsQueryable();
+            if (buildingId.HasValue)
+                query = query.Where(r => r.BuildingId == buildingId);
+            if (!string.IsNullOrEmpty(fromDate) && DateTime.TryParse(fromDate, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var fd))
+                query = query.Where(r => r.RecordDate >= fd);
+            if (!string.IsNullOrEmpty(toDate) && DateTime.TryParse(toDate, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var td))
+                query = query.Where(r => r.RecordDate <= td);
+
+            var totalConsumptionWh = await query.SumAsync(r => r.ConsumptionWh);
+            var totalConsumptionKWh = totalConsumptionWh / 1000.0m;
+            return Ok(new { totalConsumptionKWh });
+        }
+
         [HttpGet]
         public async Task<IActionResult> Get(
             [FromQuery] Guid? buildingId,
@@ -45,10 +70,10 @@ namespace EnergyApp.API.Controllers
             if (buildingId.HasValue)
                 query = query.Where(r => r.BuildingId == buildingId);
 
-            if (!string.IsNullOrEmpty(fromDate) && DateTime.TryParse(fromDate, out var fd))
+            if (!string.IsNullOrEmpty(fromDate) && DateTime.TryParse(fromDate, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var fd))
                 query = query.Where(r => r.RecordDate >= fd);
 
-            if (!string.IsNullOrEmpty(toDate) && DateTime.TryParse(toDate, out var td))
+            if (!string.IsNullOrEmpty(toDate) && DateTime.TryParse(toDate, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var td))
                 query = query.Where(r => r.RecordDate <= td);
 
             var total = await query.CountAsync();
@@ -73,9 +98,9 @@ namespace EnergyApp.API.Controllers
             var query = _context.SolarProductions.AsQueryable();
             if (buildingId.HasValue)
                 query = query.Where(r => r.BuildingId == buildingId);
-            if (!string.IsNullOrEmpty(fromDate) && DateTime.TryParse(fromDate, out var fd))
+            if (!string.IsNullOrEmpty(fromDate) && DateTime.TryParse(fromDate, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var fd))
                 query = query.Where(r => r.RecordDate >= fd);
-            if (!string.IsNullOrEmpty(toDate) && DateTime.TryParse(toDate, out var td))
+            if (!string.IsNullOrEmpty(toDate) && DateTime.TryParse(toDate, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var td))
                 query = query.Where(r => r.RecordDate <= td);
 
             var result = await query

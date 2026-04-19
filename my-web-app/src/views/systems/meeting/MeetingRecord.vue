@@ -3,6 +3,7 @@ import { ref, onMounted, computed } from 'vue'
 import api from '@/services/api'
 import { useAuthStore } from '@/stores/auth'
 import { useAppToast } from '@/composables/useAppToast'
+import { toUtcMonthStart } from '@/utils/dateUtils'
 
 defineOptions({ name: 'MeetingRecordSystem' })
 
@@ -77,7 +78,7 @@ const submitForm = async (): Promise<void> => {
 
         const promises = filledEntries.map(entry => {
             const recordDto = {
-                recordMonth: targetDate.toISOString(),
+                recordMonth: toUtcMonthStart(targetDate),
                 roomId: entry.roomId,
                 usageCount: entry.usageCount,
                 recordedByName: authStore.userProfile?.displayName || authStore.user?.email || 'ไม่ระบุชื่อ',

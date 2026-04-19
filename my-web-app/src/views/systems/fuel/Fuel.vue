@@ -3,6 +3,7 @@ import { ref, computed, onMounted } from 'vue'
 import api from '@/services/api'
 import { useAuthStore } from '@/stores/auth'
 import { usePermissions } from '@/composables/usePermissions'
+import { toUtcDateOnly } from '@/utils/dateUtils'
 import { useAppToast } from '@/composables/useAppToast'
 
 import Card from 'primevue/card'
@@ -126,7 +127,7 @@ const submitForm = async () => {
 
     await api.post('/FuelRecord', {
       departmentId: saveDepartmentId,
-      refuelDate: formData.value.refuelDate ? new Date(formData.value.refuelDate).toISOString() : null,
+      refuelDate: formData.value.refuelDate ? toUtcDateOnly(new Date(formData.value.refuelDate)) : null,
       documentType: formData.value.documentType,
       documentNumber: formData.value.documentNumber,
       vehiclePlate: formData.value.vehiclePlate,

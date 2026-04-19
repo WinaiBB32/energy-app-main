@@ -4,6 +4,7 @@ import api from '@/services/api'
 
 import { useAuthStore } from '@/stores/auth'
 import { useAppToast } from '@/composables/useAppToast'
+import { toUtcDateOnly, toUtcEndOfDay } from '@/utils/dateUtils'
 
 defineOptions({ name: 'ElectricitySystem' })
 
@@ -123,14 +124,12 @@ const fetchHistory = async (loadMore = false): Promise<void> => {
     if (filterDateFrom.value) {
       const from = new Date(filterDateFrom.value)
       from.setDate(1)
-      from.setHours(0, 0, 0, 0)
-      params.fromDate = from.toISOString()
+      params.fromDate = toUtcDateOnly(from)
     }
     if (filterDateTo.value) {
       const to = new Date(filterDateTo.value)
       to.setMonth(to.getMonth() + 1, 0)
-      to.setHours(23, 59, 59, 999)
-      params.toDate = to.toISOString()
+      params.toDate = toUtcEndOfDay(to)
     }
 
     const response = await api.get('/ElectricityBill', { params })
@@ -191,7 +190,7 @@ const submitForm = async (): Promise<void> => {
       invoiceNumber: formData.value.invoiceNumber,
       meterCode: formData.value.meterCode,
       buildingId: formData.value.buildingId,
-      billingCycle: formData.value.billingCycle ? formData.value.billingCycle.toISOString() : null,
+      billingCycle: formData.value.billingCycle ? toUtcDateOnly(formData.value.billingCycle) : null,
       onPeakUnits: formData.value.onPeakUnits || 0,
       offPeakUnits: formData.value.offPeakUnits || 0,
       peaAmount: formData.value.peaAmount || 0,
@@ -300,7 +299,7 @@ const saveEdit = async () => {
       invoiceNumber: editForm.value.invoiceNumber,
       meterCode: editForm.value.meterCode,
       buildingId: editForm.value.buildingId,
-      billingCycle: editForm.value.billingCycle ? editForm.value.billingCycle.toISOString() : null,
+      billingCycle: editForm.value.billingCycle ? toUtcDateOnly(editForm.value.billingCycle) : null,
       onPeakUnits: editForm.value.onPeakUnits || 0,
       offPeakUnits: editForm.value.offPeakUnits || 0,
       peaAmount: editForm.value.peaAmount || 0,

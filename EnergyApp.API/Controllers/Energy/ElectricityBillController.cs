@@ -3,6 +3,7 @@ using EnergyApp.API.Models;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using System.Globalization;
 
 namespace EnergyApp.API.Controllers
 {
@@ -47,10 +48,10 @@ namespace EnergyApp.API.Controllers
             if (buildingId.HasValue)
                 query = query.Where(r => r.BuildingId == buildingId);
 
-            if (!string.IsNullOrEmpty(fromDate) && DateTime.TryParse(fromDate, out var fd))
+            if (!string.IsNullOrEmpty(fromDate) && DateTime.TryParse(fromDate, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var fd))
                 query = query.Where(r => r.BillingCycle >= fd);
 
-            if (!string.IsNullOrEmpty(toDate) && DateTime.TryParse(toDate, out var td))
+            if (!string.IsNullOrEmpty(toDate) && DateTime.TryParse(toDate, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var td))
                 query = query.Where(r => r.BillingCycle <= td);
 
             var total = await query.CountAsync();
@@ -151,9 +152,9 @@ namespace EnergyApp.API.Controllers
             var query = _context.ElectricityBills.AsQueryable();
             if (buildingId.HasValue)
                 query = query.Where(r => r.BuildingId == buildingId);
-            if (!string.IsNullOrEmpty(fromDate) && DateTime.TryParse(fromDate, out var fd))
+            if (!string.IsNullOrEmpty(fromDate) && DateTime.TryParse(fromDate, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var fd))
                 query = query.Where(r => r.BillingCycle >= fd);
-            if (!string.IsNullOrEmpty(toDate) && DateTime.TryParse(toDate, out var td))
+            if (!string.IsNullOrEmpty(toDate) && DateTime.TryParse(toDate, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var td))
                 query = query.Where(r => r.BillingCycle <= td);
 
             var result = await query

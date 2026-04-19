@@ -1,8 +1,11 @@
+
+
 using EnergyApp.API.Data;
 using EnergyApp.API.Models;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using System.Globalization;
 
 namespace EnergyApp.API.Controllers
 {
@@ -39,6 +42,51 @@ namespace EnergyApp.API.Controllers
             public string DepartmentId { get; set; } = string.Empty;
         }
 
+        /// <summary>
+        /// รวมหน่วยใช้ไฟฟ้า (kWh) ตามช่วงเวลาที่เลือก (ElectricityRecord)
+        /// </summary>
+        [HttpGet("summary-consumption")]
+        public async Task<IActionResult> GetSummaryConsumption(
+            [FromQuery] Guid? buildingId,
+            [FromQuery] string? type,
+            [FromQuery] string? fromDate,
+            [FromQuery] string? toDate)
+        {
+            var query = _context.ElectricityRecords.AsQueryable();
+            if (buildingId.HasValue)
+                query = query.Where(r => r.BuildingId == buildingId);
+            if (!string.IsNullOrEmpty(type))
+                query = query.Where(r => r.Type == type);
+            if (!string.IsNullOrEmpty(fromDate) && DateTime.TryParse(fromDate, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var fd))
+            {
+                if (!string.IsNullOrEmpty(type) && type == "SOLAR_PRODUCTION")
+                    query = query.Where(r => r.RecordDate >= fd);
+                else
+                    query = query.Where(r => r.BillingCycle >= fd);
+            }
+            if (!string.IsNullOrEmpty(toDate) && DateTime.TryParse(toDate, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var td))
+            {
+                if (!string.IsNullOrEmpty(type) && type == "SOLAR_PRODUCTION")
+                    query = query.Where(r => r.RecordDate <= td);
+                else
+                    query = query.Where(r => r.BillingCycle <= td);
+            }
+
+            // SOLAR_PRODUCTION: ConsumptionWh เก็บเป็น Wh → หาร 1000 เป็น kWh
+            // PEA_BILL: PeaUnitUsed เก็บเป็น Unit (kWh) อยู่แล้ว → ไม่ต้องหาร
+            if (!string.IsNullOrEmpty(type) && type == "SOLAR_PRODUCTION")
+            {
+                var totalConsumptionWh = await query.SumAsync(r => r.ConsumptionWh);
+                var totalConsumptionKWh = totalConsumptionWh / 1000.0m;
+                return Ok(new { totalConsumptionKWh });
+            }
+            else
+            {
+                var totalUnit = await query.SumAsync(r => r.PeaUnitUsed);
+                return Ok(new { totalUnit });
+            }
+        }
+
         [HttpGet]
         public async Task<IActionResult> Get(
             [FromQuery] Guid? buildingId,
@@ -56,7 +104,7 @@ namespace EnergyApp.API.Controllers
             if (!string.IsNullOrEmpty(type))
                 query = query.Where(r => r.Type == type);
 
-            if (!string.IsNullOrEmpty(fromDate) && DateTime.TryParse(fromDate, out var fd))
+            if (!string.IsNullOrEmpty(fromDate) && DateTime.TryParse(fromDate, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var fd))
             {
                 if (!string.IsNullOrEmpty(type) && type == "SOLAR_PRODUCTION")
                     query = query.Where(r => r.RecordDate >= fd);
@@ -64,7 +112,7 @@ namespace EnergyApp.API.Controllers
                     query = query.Where(r => r.BillingCycle >= fd);
             }
 
-            if (!string.IsNullOrEmpty(toDate) && DateTime.TryParse(toDate, out var td))
+            if (!string.IsNullOrEmpty(toDate) && DateTime.TryParse(toDate, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var td))
             {
                 if (!string.IsNullOrEmpty(type) && type == "SOLAR_PRODUCTION")
                     query = query.Where(r => r.RecordDate <= td);
