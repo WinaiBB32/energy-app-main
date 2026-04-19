@@ -7,7 +7,6 @@ import { SYSTEMS } from '@/config/systems'
 
 import DataTable from 'primevue/datatable'
 import Column from 'primevue/column'
-import Button from 'primevue/button'
 import Tag from 'primevue/tag'
 import IconField from 'primevue/iconfield'
 import InputIcon from 'primevue/inputicon'
@@ -187,8 +186,7 @@ const filterTabs = [
 
     <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
       <DataTable :value="filteredUsers" :loading="isLoading" paginator :rows="10"
-        @row-click="(e) => router.push(`/admin/users/${e.data.id}/permissions`)"
-        :rowClass="(data: AppUser) => [
+        @row-click="(e) => router.push(`/admin/users/${e.data.id}/permissions`)" :rowClass="(data: AppUser) => [
           'cursor-pointer transition-colors',
           data.status === 'pending' ? 'bg-amber-50/60 hover:bg-amber-50' : 'hover:bg-blue-50/40'
         ]" emptyMessage="ไม่พบข้อมูลผู้ใช้งาน">
