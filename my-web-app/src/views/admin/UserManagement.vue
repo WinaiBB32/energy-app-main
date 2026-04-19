@@ -3,6 +3,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAppToast } from '@/composables/useAppToast'
 import api from '@/services/api'
+import { SYSTEMS } from '@/config/systems'
 
 import DataTable from 'primevue/datatable'
 import Column from 'primevue/column'
@@ -29,19 +30,7 @@ const router = useRouter()
 interface Department { id: string; name: string }
 const departments = ref<Department[]>([])
 
-const systemModules: { id: string; shortLabel: string }[] = [
-  { id: 'system1', shortLabel: 'ไฟฟ้า & Solar' },
-  { id: 'system2', shortLabel: 'น้ำประปา' },
-  { id: 'system3', shortLabel: 'น้ำมันเชื้อเพลิง' },
-  { id: 'system4', shortLabel: 'ค่าโทรศัพท์' },
-  { id: 'system5', shortLabel: 'สารบรรณ' },
-  { id: 'system6', shortLabel: 'IP-Phone' },
-  { id: 'system7', shortLabel: 'ไปรษณีย์' },
-  { id: 'system8', shortLabel: 'ห้องประชุม' },
-  { id: 'system9', shortLabel: 'ซ่อมงานอาคาร' },
-  { id: 'system10', shortLabel: 'Admin Tool' },
-  { id: 'system11', shortLabel: 'รถยนต์สำนักงาน' },
-]
+const systemModules = SYSTEMS
 
 const users = ref<AppUser[]>([])
 const isLoading = ref(true)
@@ -53,10 +42,10 @@ const fetchData = async () => {
   isLoading.value = true
   try {
     const [usersRes, deptsRes] = await Promise.all([
-      api.get('/User'),
+      api.get('/User', { params: { pageSize: 200 } }),
       api.get('/Department/all')
     ])
-    users.value = usersRes.data
+    users.value = usersRes.data.items ?? usersRes.data
     departments.value = deptsRes.data
   } catch (error) {
     toast.fromError(error, 'โหลดข้อมูลไม่สำเร็จ')

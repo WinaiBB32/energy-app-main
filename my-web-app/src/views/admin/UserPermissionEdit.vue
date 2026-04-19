@@ -228,7 +228,8 @@ const fetchData = async () => {
         ])
 
         departments.value = deptsRes.data
-        const found = (usersRes.data as AppUser[]).find((u) => u.id === userId.value) || null
+        const allUsers = (usersRes.data.items ?? usersRes.data) as AppUser[]
+        const found = allUsers.find((u) => u.id === userId.value) || null
 
         if (!found) {
             errorMessage.value = 'ไม่พบผู้ใช้งานที่ต้องการแก้ไข'

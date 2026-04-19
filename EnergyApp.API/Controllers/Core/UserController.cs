@@ -28,28 +28,47 @@ namespace EnergyApp.API.Controllers
             public List<string> AdminSystems { get; set; } = new();
         }
 
-        // 1. ดึงรายชื่อ User ทั้งหมด (SuperAdmin เท่านั้น)
+        // 1. ดึงรายชื่อ User ทั้งหมด (SuperAdmin เท่านั้น) — รองรับ Pagination + Search
         [Authorize(Roles = "SuperAdmin")]
         [HttpGet]
-        public async Task<IActionResult> GetAllUsers()
+        public async Task<IActionResult> GetAllUsers(
+            [FromQuery] string? search = null,
+            [FromQuery] int page = 1,
+            [FromQuery] int pageSize = 50)
         {
-            var users = await _context.Users
+            pageSize = Math.Clamp(pageSize, 1, 200);
+            page = Math.Max(1, page);
+
+            var query = _context.Users.AsQueryable();
+
+            if (!string.IsNullOrWhiteSpace(search))
+            {
+                var s = search.Trim().ToLower();
+                query = query.Where(u =>
+                    u.Email.ToLower().Contains(s) ||
+                    (u.FirstName + " " + u.LastName).ToLower().Contains(s));
+            }
+
+            var total = await query.CountAsync();
+            var users = await query
+                .OrderBy(u => u.Status == UserStatus.Pending ? 0 : 1)
+                .ThenBy(u => u.Email)
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
                 .Select(u => new
                 {
                     id = u.Id,
                     email = u.Email,
-                    displayName = u.FirstName + " " + u.LastName, // รวมชื่อ-สกุลให้ตรงกับ Vue
+                    displayName = u.FirstName + " " + u.LastName,
                     departmentId = u.DepartmentId,
                     role = u.Role,
                     status = u.Status,
                     accessibleSystems = u.AccessibleSystems,
                     adminSystems = u.AdminSystems
                 })
-                .OrderBy(u => u.status == UserStatus.Pending ? 0 : 1) // ให้บัญชีรออนุมัติขึ้นก่อน
-                .ThenBy(u => u.email)
                 .ToListAsync();
 
-            return Ok(users);
+            return Ok(new { total, page, pageSize, items = users });
         }
 
         // 2. อัปเดตข้อมูลและสิทธิ์ของ User (SuperAdmin เท่านั้น)

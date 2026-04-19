@@ -2,9 +2,11 @@ using EnergyApp.API.Data;
 using EnergyApp.API.Hubs;
 using EnergyApp.API.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
+using System.Threading.RateLimiting;
 
 // ✅ แก้ปัญหา Npgsql ไม่ยอมรับ DateTime.Kind=Local
 AppContext.SetSwitch("Npgsql.EnableLegacyTimestampBehavior", true);
@@ -66,23 +68,56 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 builder.Services.AddSingleton<ISystemErrorLogStore, InMemorySystemErrorLogStore>();
 
+// --- Rate Limiting ---
+builder.Services.AddRateLimiter(options =>
+{
+    // Global: 300 req/min per IP สำหรับทุก endpoint
+    options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(context =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 300,
+                Window = TimeSpan.FromMinutes(1),
+                QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+                QueueLimit = 0
+            }));
+
+    // "auth" policy: จำกัด 10 req/min per IP สำหรับ /login และ /register
+    options.AddFixedWindowLimiter("auth", opt =>
+    {
+        opt.PermitLimit = 10;
+        opt.Window = TimeSpan.FromMinutes(1);
+        opt.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
+        opt.QueueLimit = 0;
+    });
+
+    options.OnRejected = async (context, token) =>
+    {
+        context.HttpContext.Response.StatusCode = 429;
+        context.HttpContext.Response.Headers.RetryAfter = "60";
+        await context.HttpContext.Response.WriteAsJsonAsync(new
+        {
+            message = "คำขอมากเกินไป กรุณาลองใหม่ในอีกสักครู่ (Too Many Requests)"
+        }, token);
+    };
+});
+
 var app = builder.Build();
 
-var csvPath = @"C:\Users\Winai.t\Downloads\บันทึกข้อมูลรถยนต์ - CarData.csv";
-if (File.Exists(csvPath))
+var vehicleCsvPath = app.Configuration["SeedSettings:VehicleCsvPath"];
+if (!string.IsNullOrWhiteSpace(vehicleCsvPath) && File.Exists(vehicleCsvPath))
 {
-    using (var scope = app.Services.CreateScope())
-    {
-        var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-        var seeder = new VehicleRecordSeeder(dbContext);
-        seeder.SeedFromCsv(csvPath);
-    }
+    using var scope = app.Services.CreateScope();
+    var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    new VehicleRecordSeeder(dbContext).SeedFromCsv(vehicleCsvPath);
 }
 
 app.UseSwagger();
 app.UseSwaggerUI();
 
 app.UseCors("AllowVueApp");
+app.UseRateLimiter();
 
 app.Use(async (context, next) =>
 {
@@ -144,27 +179,6 @@ using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
     db.Database.Migrate();
-
-    // Ensure SarabanStats table exists (manual migration fallback)
-    db.Database.ExecuteSqlRaw(@"
-        CREATE TABLE IF NOT EXISTS ""SarabanStats"" (
-            ""Id"" uuid NOT NULL,
-            ""DepartmentId"" uuid NULL,
-            ""BookType"" text NOT NULL DEFAULT '',
-            ""BookName"" text NOT NULL DEFAULT '',
-            ""RecordMonth"" timestamptz NOT NULL DEFAULT now(),
-            ""ReceiverName"" text NOT NULL DEFAULT '',
-            ""ReceivedCount"" integer NOT NULL DEFAULT 0,
-            ""InternalPaperCount"" integer NOT NULL DEFAULT 0,
-            ""InternalDigitalCount"" integer NOT NULL DEFAULT 0,
-            ""ExternalPaperCount"" integer NOT NULL DEFAULT 0,
-            ""ExternalDigitalCount"" integer NOT NULL DEFAULT 0,
-            ""ForwardedCount"" integer NOT NULL DEFAULT 0,
-            ""RecordedBy"" text NOT NULL DEFAULT '',
-            ""CreatedAt"" timestamptz NOT NULL DEFAULT now(),
-            CONSTRAINT ""PK_SarabanStats"" PRIMARY KEY (""Id"")
-        )
-    ");
 }
 
 app.Run("http://0.0.0.0:5008");

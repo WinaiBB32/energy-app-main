@@ -3,6 +3,7 @@ using EnergyApp.API.DTOs;
 using EnergyApp.API.Models;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using System.IdentityModel.Tokens.Jwt;
@@ -24,6 +25,7 @@ namespace EnergyApp.API.Controllers
             _config = config;
         }
 
+        [EnableRateLimiting("auth")]
         [HttpPost("register")]
         public async Task<IActionResult> Register([FromBody] RegisterDto request)
         {
@@ -56,6 +58,7 @@ namespace EnergyApp.API.Controllers
             return Ok(new { message = $"สมัครสมาชิกสำเร็จ! (สิทธิ์ของคุณคือ: {assignRole})" });
         }
 
+        [EnableRateLimiting("auth")]
         [HttpPost("login")]
         public async Task<IActionResult> Login([FromBody] LoginDto request)
         {
