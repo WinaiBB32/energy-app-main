@@ -147,7 +147,7 @@ const router = createRouter({
           meta: { system: 'system5', requiresAdmin: true },
         },
 
-        // --- ระบบ IP-Phone ---
+        // --- ระบบ IP-Phone (สถิติการโทร) ---
         {
           path: '/ipphone/dashboard',
           name: 'ipphone-dashboard',
@@ -156,9 +156,7 @@ const router = createRouter({
         },
         {
           path: '/ipphone',
-          name: 'ipphone-directory',
-          component: () => import('../views/systems/ipphone/IPPhone.vue'),
-          meta: { system: 'system6' },
+          redirect: '/ipphone/dashboard',
         },
         {
           path: '/ipphone/upload',
@@ -166,10 +164,23 @@ const router = createRouter({
           component: () => import('../views/systems/ipphone/Upload.vue'),
           meta: { system: 'system6', requiresSuperAdmin: true },
         },
+        // Legacy redirect: old detail path → new directory system
         {
           path: '/ipphone/directory/:id',
-          name: 'ipphone-detail',
-          component: () => import('../views/systems/ipphone/IPPhoneDetail.vue'),
+          redirect: (to) => `/directory/${to.params.id}`,
+        },
+
+        // --- สมุดโทรศัพท์องค์กร (Directory) ---
+        {
+          path: '/directory',
+          name: 'directory-list',
+          component: () => import('../views/systems/directory/Directory.vue'),
+          meta: { system: 'system12' },
+        },
+        {
+          path: '/directory/:id',
+          name: 'directory-detail',
+          component: () => import('../views/systems/directory/DirectoryDetail.vue'),
           meta: { requiresAuth: true },
         },
         // --- ระบบแจ้งซ่อมงานอาคาร ---
@@ -252,7 +263,6 @@ const router = createRouter({
         // Legacy aliases for old links
         { path: '/ipphone/service', redirect: '/maintenance/service' },
         { path: '/ipphone/spare-parts', redirect: '/maintenance/spare-parts' },
-        // (ลบ redirect external-timeline ออก)
         { path: '/ipphone/service/:id', redirect: '/maintenance/service/:id' },
         {
           path: '/ipphone/mapping',

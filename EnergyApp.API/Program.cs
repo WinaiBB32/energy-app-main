@@ -68,18 +68,14 @@ builder.Services.AddSingleton<ISystemErrorLogStore, InMemorySystemErrorLogStore>
 
 var app = builder.Build();
 
-using (var scope = app.Services.CreateScope())
+var csvPath = @"C:\Users\Winai.t\Downloads\บันทึกข้อมูลรถยนต์ - CarData.csv";
+if (File.Exists(csvPath))
 {
-    var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-    var seeder = new VehicleRecordSeeder(dbContext);
-    var csvPath = @"C:\Users\beeman\Downloads\บันทึกข้อมูลรถยนต์ - CarData.csv";
-    if (File.Exists(csvPath))
+    using (var scope = app.Services.CreateScope())
     {
+        var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var seeder = new VehicleRecordSeeder(dbContext);
         seeder.SeedFromCsv(csvPath);
-    }
-    else
-    {
-        Console.WriteLine($"[WARN] CSV file not found: {csvPath}. Skipping vehicle record seeding.");
     }
 }
 

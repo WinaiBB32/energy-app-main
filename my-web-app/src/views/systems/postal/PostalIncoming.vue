@@ -337,18 +337,6 @@ const deleteRecord = async () => {
                   </template>
                 </Column>
 
-                <Column header="ธรรมดา" class="text-center">
-                  <template #body="sp"><div>{{ sp.data.incomingNormalMail || 0 }} ชิ้น</div></template>
-                </Column>
-
-                <Column header="ลงทะเบียน" class="text-center">
-                  <template #body="sp"><div>{{ sp.data.incomingRegisteredMail || 0 }} ชิ้น</div></template>
-                </Column>
-
-                <Column header="EMS" class="text-center">
-                  <template #body="sp"><div class="text-rose-600 font-semibold">{{ sp.data.incomingEmsMail || 0 }} ชิ้น</div></template>
-                </Column>
-
                 <Column header="รวมทั้งหมด" class="text-center">
                   <template #body="sp"><div class="font-bold text-emerald-600 text-lg">{{ sp.data.incomingTotalMail || 0 }} ชิ้น</div></template>
                 </Column>

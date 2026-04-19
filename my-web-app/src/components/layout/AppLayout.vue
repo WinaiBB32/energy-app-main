@@ -128,6 +128,7 @@ const currentSystemName = computed(() => {
   if (route.path.startsWith('/telephone')) return 'ค่าโทรศัพท์'
   if (route.path.startsWith('/saraban')) return 'งานสารบรรณ'
   if (route.path.startsWith('/ipphone')) return 'IP-Phone'
+  if (route.path.startsWith('/directory')) return 'สมุดโทรศัพท์องค์กร'
   if (route.path.startsWith('/vehicle')) return 'ระบบรถยนต์สำนักงาน'
   if (route.path.startsWith('/maintenance')) return 'แจ้งซ่อมงานอาคาร'
   if (route.path.startsWith('/admin')) return 'ผู้ดูแลระบบ'
@@ -136,11 +137,12 @@ const currentSystemName = computed(() => {
 
 const systemIcon = computed(() => {
   if (route.path.startsWith('/electricity')) return 'pi-bolt'
-  if (route.path.startsWith('/water')) return 'pi-tint'
+  if (route.path.startsWith('/water')) return 'pi-gauge'
   if (route.path.startsWith('/fuel')) return 'pi-car'
   if (route.path.startsWith('/telephone')) return 'pi-phone'
   if (route.path.startsWith('/saraban')) return 'pi-folder-open'
   if (route.path.startsWith('/ipphone')) return 'pi-desktop'
+  if (route.path.startsWith('/directory')) return 'pi-address-book'
   if (route.path.startsWith('/vehicle')) return 'pi-car'
   if (route.path.startsWith('/maintenance')) return 'pi-wrench'
   if (route.path.startsWith('/admin')) return 'pi-shield'
@@ -195,14 +197,19 @@ const sidebarMenus = computed(() => {
   }
   if (route.path.startsWith('/ipphone')) {
     const menus = [
-      { name: 'ภาพรวม', icon: 'pi pi-chart-bar', path: '/ipphone/dashboard' },
-      { name: 'สมุดโทรศัพท์องค์กร (Directory)', icon: 'pi pi-address-book', path: '/ipphone' },
-      { name: 'แชทกับผู้รับผิดชอบ', icon: 'pi pi-comments', path: '/support' },
+      { name: 'ภาพรวมสถิติการโทร', icon: 'pi pi-chart-bar', path: '/ipphone/dashboard' },
     ]
-    if (isSystemAdmin('ipphone')) {
+    if (isSystemAdmin('ipphone') || isSuperAdmin.value) {
       menus.push({ name: 'นำเข้าสถิติ (CSV)', icon: 'pi pi-cloud-upload', path: '/ipphone/upload' })
       menus.push({ name: 'ผูกผู้ใช้ - เบอร์โทร', icon: 'pi pi-link', path: '/ipphone/mapping' })
     }
+    return menus
+  }
+  if (route.path.startsWith('/directory')) {
+    const menus = [
+      { name: 'สมุดโทรศัพท์องค์กร', icon: 'pi pi-address-book', path: '/directory' },
+      { name: 'แชทกับผู้รับผิดชอบ', icon: 'pi pi-comments', path: '/support' },
+    ]
     return menus
   }
   if (route.path.startsWith('/maintenance')) {

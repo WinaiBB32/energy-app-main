@@ -92,7 +92,11 @@ const PAGE_SIZE = 20
 
 const fetchHistory = async (loadMore = false): Promise<void> => {
   if (loadMore) isLoadingMore.value = true
-  else { isLoadingHistory.value = true; historyRecords.value = []; skip.value = 0 }
+  else {
+    isLoadingHistory.value = true
+    historyRecords.value = []
+    skip.value = 0
+  }
   try {
     const response = await api.get('/SolarProduction', {
       params: {
@@ -118,13 +122,15 @@ const fetchHistory = async (loadMore = false): Promise<void> => {
 onMounted(async () => {
   try {
     const response = await api.get('/Building')
-    buildings.value = response.data.map((b: { id: string; name: string }) => ({ id: b.id, name: b.name }))
+    buildings.value = response.data.map((b: { id: string; name: string }) => ({
+      id: b.id,
+      name: b.name,
+    }))
   } catch (e) {
     toast.fromError(e, 'ไม่สามารถโหลดข้อมูลอาคารได้')
   }
   fetchHistory()
 })
-
 
 const submitManualForm = async (): Promise<void> => {
   successMessage.value = ''
@@ -171,8 +177,17 @@ const submitManualForm = async (): Promise<void> => {
     })
     successMessage.value = 'บันทึกข้อมูล Solar สำเร็จ'
     manualForm.value = {
-      recordDate: null, buildingId: '', productionWh: null, toBatteryWh: null, toGridWh: null, toHomeWh: null,
-      consumptionWh: null, fromBatteryWh: null, fromGridWh: null, fromSolarWh: null, note: ''
+      recordDate: null,
+      buildingId: '',
+      productionWh: null,
+      toBatteryWh: null,
+      toGridWh: null,
+      toHomeWh: null,
+      consumptionWh: null,
+      fromBatteryWh: null,
+      fromGridWh: null,
+      fromSolarWh: null,
+      note: '',
     }
     fetchHistory()
   } catch (err: unknown) {
@@ -196,8 +211,10 @@ const parseCSVRow = (row: string): string[] => {
   let inQuotes = false
   for (const char of row) {
     if (char === '"') inQuotes = !inQuotes
-    else if (char === ',' && !inQuotes) { result.push(current); current = '' }
-    else current += char
+    else if (char === ',' && !inQuotes) {
+      result.push(current)
+      current = ''
+    } else current += char
   }
   result.push(current)
   return result
@@ -221,7 +238,10 @@ const submitForm = async (): Promise<void> => {
     try {
       const text = e.target?.result
       if (typeof text !== 'string') throw new Error('ไม่สามารถอ่านไฟล์ได้')
-      const rows = text.split('\n').map(r => r.trim()).filter(r => r.length > 0)
+      const rows = text
+        .split(/\r?\n/)
+        .map((r) => r.trim())
+        .filter((r) => r.length > 0)
       if (rows.length < 2) throw new Error('ไฟล์ไม่มีข้อมูล')
       const records: object[] = []
       for (const row of rows.slice(1)) {
@@ -235,6 +255,8 @@ const submitForm = async (): Promise<void> => {
         let yyyy = parseInt((parts[2] || '').split(' ')[0] || '2000', 10)
         if (yyyy < 2000) yyyy += 2000
         const productionWh = Number((cols[1] || '').replace(/,/g, '')) || 0
+        // สร้างวันที่ 00:00:00 ตามเวลาประเทศไทย (UTC+7)
+        const date = new Date(yyyy, mm - 1, dd, 7, 0, 0)
         records.push({
           buildingId: formData.value.buildingId,
           recordDate: toUtcDateFromParts(yyyy, mm, dd),
@@ -278,7 +300,8 @@ const submitForm = async (): Promise<void> => {
 }
 
 const downloadTemplate = (): void => {
-  const header = 'Date,Production(Wh),To Battery(Wh),To Grid(Wh),To Home(Wh),Consumption(Wh),From Battery(Wh),From Grid(Wh),From Solar(Wh)'
+  const header =
+    'Date,Production(Wh),To Battery(Wh),To Grid(Wh),To Home(Wh),Consumption(Wh),From Battery(Wh),From Grid(Wh),From Solar(Wh)'
   const example = '04/01/2026,12500,2000,3000,7500,9800,500,800,8500'
   const csv = `${header}\n${example}\n`
   const a = document.createElement('a')
@@ -290,7 +313,11 @@ const downloadTemplate = (): void => {
 const getBuildingName = (id: string): string => buildings.value.find((x) => x.id === id)?.name || id
 const formatThaiDate = (dateStr: string | null | undefined): string => {
   if (!dateStr) return '-'
-  return new Date(dateStr).toLocaleDateString('th-TH', { year: 'numeric', month: 'short', day: 'numeric' })
+  return new Date(dateStr).toLocaleDateString('th-TH', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+  })
 }
 
 // Detail / Edit dialog
@@ -315,9 +342,17 @@ interface SolarEditForm {
 }
 
 const editForm = ref<SolarEditForm>({
-  buildingId: '', recordDate: null, solarUnitProduced: null,
-  productionWh: 0, toBatteryWh: 0, toGridWh: 0, toHomeWh: 0,
-  consumptionWh: 0, fromBatteryWh: 0, fromGridWh: 0, fromSolarWh: 0,
+  buildingId: '',
+  recordDate: null,
+  solarUnitProduced: null,
+  productionWh: 0,
+  toBatteryWh: 0,
+  toGridWh: 0,
+  toHomeWh: 0,
+  consumptionWh: 0,
+  fromBatteryWh: 0,
+  fromGridWh: 0,
+  fromSolarWh: 0,
   note: '',
 })
 
@@ -358,7 +393,9 @@ const saveEdit = async () => {
   if (!selectedRecord.value) return
   isSaving.value = true
 
-  const doSave = async (data: Omit<Partial<SolarEditForm>, 'recordDate'> & { recordDate?: string | null }) => {
+  const doSave = async (
+    data: Omit<Partial<SolarEditForm>, 'recordDate'> & { recordDate?: string | null },
+  ) => {
     await api.put(`/SolarProduction/${selectedRecord.value!.id}`, {
       buildingId: data.buildingId ?? editForm.value.buildingId,
       recordDate: data.recordDate,
@@ -386,7 +423,10 @@ const saveEdit = async () => {
         try {
           const text = e.target?.result
           if (typeof text !== 'string') throw new Error('ไม่สามารถอ่านไฟล์ได้')
-          const rows = text.split('\n').map(r => r.trim()).filter(r => r.length > 0)
+          const rows = text
+            .split('\n')
+            .map((r) => r.trim())
+            .filter((r) => r.length > 0)
           if (rows.length < 2) throw new Error('ไฟล์ไม่มีข้อมูล')
           const cols = parseCSVRow(rows[1] || '')
           if (cols.length < 9) throw new Error('รูปแบบไฟล์ไม่ถูกต้อง (ต้องมีอย่างน้อย 9 คอลัมน์)')
@@ -438,7 +478,7 @@ const deleteRecord = async () => {
   if (!confirm('ยืนยันการลบข้อมูลนี้?')) return
   try {
     await api.delete(`/SolarProduction/${selectedRecord.value.id}`)
-    historyRecords.value = historyRecords.value.filter(r => r.id !== selectedRecord.value!.id)
+    historyRecords.value = historyRecords.value.filter((r) => r.id !== selectedRecord.value!.id)
     skip.value = historyRecords.value.length
     toast.success('ลบข้อมูลสำเร็จ')
     editVisible.value = false
@@ -475,11 +515,14 @@ const deleteRecord = async () => {
         <!-- Tab 0: บันทึกทีละรายการ -->
         <TabPanel value="0">
           <form @submit.prevent="submitManualForm" class="mt-2">
-            <Message v-if="successMessage" severity="success" :closable="true" class="mb-4">{{ successMessage }}</Message>
-            <Message v-if="errorMessage" severity="error" :closable="true" class="mb-4">{{ errorMessage }}</Message>
+            <Message v-if="successMessage" severity="success" :closable="true" class="mb-4">{{
+              successMessage
+            }}</Message>
+            <Message v-if="errorMessage" severity="error" :closable="true" class="mb-4">{{
+              errorMessage
+            }}</Message>
 
             <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-
               <!-- คอลัมน์ซ้าย: ข้อมูลทั่วไป -->
               <div class="flex flex-col gap-4">
                 <div class="bg-white rounded-xl border shadow-sm p-5">
@@ -491,30 +534,57 @@ const deleteRecord = async () => {
                   </div>
                   <div class="flex flex-col gap-4">
                     <div class="flex flex-col gap-1.5">
-                      <label class="font-semibold text-sm text-gray-600">อาคาร/จุดติดตั้ง <span class="text-red-500">*</span></label>
-                      <Select v-model="manualForm.buildingId" :options="buildings" optionLabel="name" optionValue="id"
-                        placeholder="-- กรุณาเลือกอาคาร --" class="w-full" />
+                      <label class="font-semibold text-sm text-gray-600"
+                        >อาคาร/จุดติดตั้ง <span class="text-red-500">*</span></label
+                      >
+                      <Select
+                        v-model="manualForm.buildingId"
+                        :options="buildings"
+                        optionLabel="name"
+                        optionValue="id"
+                        placeholder="-- กรุณาเลือกอาคาร --"
+                        class="w-full"
+                      />
                     </div>
                     <div class="flex flex-col gap-1.5">
-                      <label class="font-semibold text-sm text-gray-600">วันที่บันทึก <span class="text-red-500">*</span></label>
-                      <DatePicker v-model="manualForm.recordDate" dateFormat="dd/mm/yy" showIcon
-                        placeholder="-- เลือกวันที่ --" class="w-full" />
+                      <label class="font-semibold text-sm text-gray-600"
+                        >วันที่บันทึก <span class="text-red-500">*</span></label
+                      >
+                      <DatePicker
+                        v-model="manualForm.recordDate"
+                        dateFormat="dd/mm/yy"
+                        showIcon
+                        placeholder="-- เลือกวันที่ --"
+                        class="w-full"
+                      />
                     </div>
                     <div class="flex flex-col gap-1.5">
                       <label class="font-semibold text-sm text-gray-600">หมายเหตุ</label>
-                      <InputText v-model="manualForm.note" placeholder="หมายเหตุเพิ่มเติม..." class="w-full" />
+                      <InputText
+                        v-model="manualForm.note"
+                        placeholder="หมายเหตุเพิ่มเติม..."
+                        class="w-full"
+                      />
                     </div>
                   </div>
                 </div>
 
                 <!-- Production KPI -->
                 <div class="bg-emerald-600 rounded-xl p-5 text-white">
-                  <p class="text-emerald-200 text-xs font-semibold uppercase tracking-wider mb-1">Production รวม</p>
+                  <p class="text-emerald-200 text-xs font-semibold uppercase tracking-wider mb-1">
+                    Production รวม
+                  </p>
                   <p class="text-3xl font-bold">
-                    {{ manualForm.productionWh != null ? ((manualForm.productionWh) / 1000).toFixed(2) : '0.00' }}
+                    {{
+                      manualForm.productionWh != null
+                        ? (manualForm.productionWh / 1000).toFixed(2)
+                        : '0.00'
+                    }}
                     <span class="text-lg font-normal text-emerald-200">kWh</span>
                   </p>
-                  <p class="text-emerald-300 text-xs mt-2">= {{ (manualForm.productionWh || 0).toLocaleString() }} Wh</p>
+                  <p class="text-emerald-300 text-xs mt-2">
+                    = {{ (manualForm.productionWh || 0).toLocaleString() }} Wh
+                  </p>
                 </div>
               </div>
 
@@ -535,40 +605,65 @@ const deleteRecord = async () => {
                       <span class="inline-block w-2 h-2 rounded-full bg-emerald-500 mr-1.5"></span>
                       Production (Wh) <span class="text-red-500">*</span>
                     </label>
-                    <InputNumber v-model="manualForm.productionWh" :minFractionDigits="0" :maxFractionDigits="2"
-                      placeholder="0" class="w-full" />
+                    <InputNumber
+                      v-model="manualForm.productionWh"
+                      :minFractionDigits="0"
+                      :maxFractionDigits="2"
+                      placeholder="0"
+                      class="w-full"
+                    />
                   </div>
                   <div class="flex flex-col gap-1.5">
                     <label class="font-semibold text-sm text-gray-600">
                       <span class="inline-block w-2 h-2 rounded-full bg-blue-400 mr-1.5"></span>
                       To Battery (Wh) <span class="text-red-500">*</span>
                     </label>
-                    <InputNumber v-model="manualForm.toBatteryWh" :minFractionDigits="0" :maxFractionDigits="2"
-                      placeholder="0" class="w-full" />
+                    <InputNumber
+                      v-model="manualForm.toBatteryWh"
+                      :minFractionDigits="0"
+                      :maxFractionDigits="2"
+                      placeholder="0"
+                      class="w-full"
+                    />
                   </div>
                   <div class="flex flex-col gap-1.5">
                     <label class="font-semibold text-sm text-gray-600">
                       <span class="inline-block w-2 h-2 rounded-full bg-violet-400 mr-1.5"></span>
                       To Grid (Wh) <span class="text-red-500">*</span>
                     </label>
-                    <InputNumber v-model="manualForm.toGridWh" :minFractionDigits="0" :maxFractionDigits="2"
-                      placeholder="0" class="w-full" />
+                    <InputNumber
+                      v-model="manualForm.toGridWh"
+                      :minFractionDigits="0"
+                      :maxFractionDigits="2"
+                      placeholder="0"
+                      class="w-full"
+                    />
                   </div>
                   <div class="flex flex-col gap-1.5">
                     <label class="font-semibold text-sm text-gray-600">
                       <span class="inline-block w-2 h-2 rounded-full bg-teal-400 mr-1.5"></span>
                       To Home (Wh) <span class="text-red-500">*</span>
                     </label>
-                    <InputNumber v-model="manualForm.toHomeWh" :minFractionDigits="0" :maxFractionDigits="2"
-                      placeholder="0" class="w-full" />
+                    <InputNumber
+                      v-model="manualForm.toHomeWh"
+                      :minFractionDigits="0"
+                      :maxFractionDigits="2"
+                      placeholder="0"
+                      class="w-full"
+                    />
                   </div>
                   <div class="flex flex-col gap-1.5">
                     <label class="font-semibold text-sm text-gray-600">
                       <span class="inline-block w-2 h-2 rounded-full bg-gray-400 mr-1.5"></span>
                       Consumption (Wh) <span class="text-red-500">*</span>
                     </label>
-                    <InputNumber v-model="manualForm.consumptionWh" :minFractionDigits="0" :maxFractionDigits="2"
-                      placeholder="0" class="w-full" />
+                    <InputNumber
+                      v-model="manualForm.consumptionWh"
+                      :minFractionDigits="0"
+                      :maxFractionDigits="2"
+                      placeholder="0"
+                      class="w-full"
+                    />
                   </div>
                 </div>
               </div>
@@ -590,45 +685,75 @@ const deleteRecord = async () => {
                       <span class="inline-block w-2 h-2 rounded-full bg-blue-400 mr-1.5"></span>
                       From Battery (Wh) <span class="text-red-500">*</span>
                     </label>
-                    <InputNumber v-model="manualForm.fromBatteryWh" :minFractionDigits="0" :maxFractionDigits="2"
-                      placeholder="0" class="w-full" />
+                    <InputNumber
+                      v-model="manualForm.fromBatteryWh"
+                      :minFractionDigits="0"
+                      :maxFractionDigits="2"
+                      placeholder="0"
+                      class="w-full"
+                    />
                   </div>
                   <div class="flex flex-col gap-1.5">
                     <label class="font-semibold text-sm text-gray-600">
                       <span class="inline-block w-2 h-2 rounded-full bg-rose-400 mr-1.5"></span>
                       From Grid (Wh) <span class="text-red-500">*</span>
                     </label>
-                    <InputNumber v-model="manualForm.fromGridWh" :minFractionDigits="0" :maxFractionDigits="2"
-                      placeholder="0" class="w-full" />
+                    <InputNumber
+                      v-model="manualForm.fromGridWh"
+                      :minFractionDigits="0"
+                      :maxFractionDigits="2"
+                      placeholder="0"
+                      class="w-full"
+                    />
                   </div>
                   <div class="flex flex-col gap-1.5">
                     <label class="font-semibold text-sm text-gray-600">
                       <span class="inline-block w-2 h-2 rounded-full bg-emerald-400 mr-1.5"></span>
                       From Solar (Wh) <span class="text-red-500">*</span>
                     </label>
-                    <InputNumber v-model="manualForm.fromSolarWh" :minFractionDigits="0" :maxFractionDigits="2"
-                      placeholder="0" class="w-full" />
+                    <InputNumber
+                      v-model="manualForm.fromSolarWh"
+                      :minFractionDigits="0"
+                      :maxFractionDigits="2"
+                      placeholder="0"
+                      class="w-full"
+                    />
                   </div>
 
                   <!-- Summary box -->
                   <div class="mt-2 bg-gray-50 rounded-lg p-4 border text-sm">
-                    <p class="text-xs text-gray-400 font-semibold uppercase mb-2">สรุปพลังงานรับเข้า</p>
+                    <p class="text-xs text-gray-400 font-semibold uppercase mb-2">
+                      สรุปพลังงานรับเข้า
+                    </p>
                     <div class="flex justify-between text-gray-600 py-1">
                       <span>From Battery</span>
-                      <span class="font-medium">{{ (manualForm.fromBatteryWh || 0).toLocaleString() }} Wh</span>
+                      <span class="font-medium"
+                        >{{ (manualForm.fromBatteryWh || 0).toLocaleString() }} Wh</span
+                      >
                     </div>
                     <div class="flex justify-between text-gray-600 py-1">
                       <span>From Grid</span>
-                      <span class="font-medium">{{ (manualForm.fromGridWh || 0).toLocaleString() }} Wh</span>
+                      <span class="font-medium"
+                        >{{ (manualForm.fromGridWh || 0).toLocaleString() }} Wh</span
+                      >
                     </div>
                     <div class="flex justify-between text-gray-600 py-1">
                       <span>From Solar</span>
-                      <span class="font-medium">{{ (manualForm.fromSolarWh || 0).toLocaleString() }} Wh</span>
+                      <span class="font-medium"
+                        >{{ (manualForm.fromSolarWh || 0).toLocaleString() }} Wh</span
+                      >
                     </div>
                     <div class="flex justify-between font-bold text-gray-800 border-t pt-2 mt-1">
                       <span>รวม</span>
                       <span class="text-emerald-600">
-                        {{ ((manualForm.fromBatteryWh || 0) + (manualForm.fromGridWh || 0) + (manualForm.fromSolarWh || 0)).toLocaleString() }} Wh
+                        {{
+                          (
+                            (manualForm.fromBatteryWh || 0) +
+                            (manualForm.fromGridWh || 0) +
+                            (manualForm.fromSolarWh || 0)
+                          ).toLocaleString()
+                        }}
+                        Wh
                       </span>
                     </div>
                   </div>
@@ -638,8 +763,14 @@ const deleteRecord = async () => {
 
             <!-- Submit -->
             <div class="flex justify-end mt-6 pt-5 border-t">
-              <Button type="submit" label="บันทึกข้อมูล Solar" icon="pi pi-save"
-                severity="success" :loading="isSubmitting" class="px-10" />
+              <Button
+                type="submit"
+                label="บันทึกข้อมูล Solar"
+                icon="pi pi-save"
+                severity="success"
+                :loading="isSubmitting"
+                class="px-10"
+              />
             </div>
           </form>
         </TabPanel>
@@ -655,7 +786,9 @@ const deleteRecord = async () => {
                 >
                   <div>
                     <h3 class="font-bold text-lg text-gray-700">นำเข้าข้อมูล Solar จากไฟล์ CSV</h3>
-                    <p class="text-sm text-gray-400 mt-1">อัปโหลดไฟล์ CSV เพื่อนำเข้าข้อมูลหลายรายการพร้อมกัน</p>
+                    <p class="text-sm text-gray-400 mt-1">
+                      อัปโหลดไฟล์ CSV เพื่อนำเข้าข้อมูลหลายรายการพร้อมกัน
+                    </p>
                   </div>
                   <Message v-if="csvSuccessMessage" severity="success" :closable="true">{{
                     csvSuccessMessage
@@ -695,7 +828,10 @@ const deleteRecord = async () => {
                       class="border-2 border-dashed border-gray-300 rounded-xl p-6 text-center hover:bg-gray-50 transition-colors"
                     >
                       <i class="pi pi-cloud-upload text-4xl text-gray-400 mb-3"></i>
-                      <p class="text-xs text-gray-400 mb-3">Date, Production(Wh), To Battery, To Grid, To Home, Consumption, From Battery, From Grid, From Solar</p>
+                      <p class="text-xs text-gray-400 mb-3">
+                        Date, Production(Wh), To Battery, To Grid, To Home, Consumption, From
+                        Battery, From Grid, From Solar
+                      </p>
                       <input
                         type="file"
                         id="solarCsv"
