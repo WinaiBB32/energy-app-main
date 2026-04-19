@@ -139,6 +139,7 @@ const percentDoughnutOptions = ref()
 
 const onOffPeakChartData = ref()
 const onOffPeakChartOptions = ref()
+const onOffPeakDoughnutData = ref()
 
 // --- เพิ่มสำหรับ PEA Unit Trend ---
 const peaUnitTrendData = ref<any[]>([])
@@ -504,14 +505,29 @@ const setupCharts = (
     maintainAspectRatio: false,
     plugins: { legend: { position: 'bottom' as const } },
     scales: {
-      x: { stacked: true, ticks: { color: '#6b7280' }, grid: { display: false } },
+      x: { ticks: { color: '#6b7280' }, grid: { display: false } },
       y: {
-        stacked: true,
         title: { display: true, text: 'หน่วย (Unit)' },
         ticks: { color: '#6b7280' },
         grid: { color: '#f3f4f6' },
       },
     },
+  }
+
+  // Donut สัดส่วน On Peak / Off Peak รวม
+  const totalOnPeak = sortedKeys.reduce((s, k) => s + (monthlyData[k]?.onPeak ?? 0), 0)
+  const totalOffPeak = sortedKeys.reduce((s, k) => s + (monthlyData[k]?.offPeak ?? 0), 0)
+  onOffPeakDoughnutData.value = {
+    labels: ['On Peak', 'Off Peak'],
+    datasets: [
+      {
+        data: [totalOnPeak, totalOffPeak],
+        backgroundColor: ['#f97316', '#3b82f6'],
+        hoverBackgroundColor: ['#ea580c', '#2563eb'],
+        borderWidth: 2,
+        borderColor: '#ffffff',
+      },
+    ],
   }
 
   // Row 4 — % doughnut options
@@ -586,52 +602,28 @@ const formatCurrency = (val: number): string =>
       <div class="bg-white p-3 rounded-lg shadow-sm border border-gray-100 flex items-center gap-3">
         <div class="flex flex-col">
           <label class="text-xs font-semibold text-gray-500 mb-1">เลือกอาคาร/จุดติดตั้ง</label>
-          <Select
-            v-model="selectedBuildingFilter"
-            :options="buildingOptions"
-            optionLabel="name"
-            optionValue="id"
-            placeholder="ทุกอาคาร"
-            class="w-48"
-          />
+          <Select v-model="selectedBuildingFilter" :options="buildingOptions" optionLabel="name" optionValue="id"
+            placeholder="ทุกอาคาร" class="w-48" />
         </div>
         <div class="flex flex-col">
           <label class="text-xs font-semibold text-gray-500 mb-1">กรองตามช่วงเวลา</label>
-          <DatePicker
-            v-model="selectedDateRange"
-            selectionMode="range"
-            dateFormat="dd/mm/yy"
-            placeholder="ด/ว/ป - ด/ว/ป"
-            class="w-64"
-            :manualInput="false"
-            showIcon
-          />
+          <DatePicker v-model="selectedDateRange" selectionMode="range" dateFormat="dd/mm/yy"
+            placeholder="ด/ว/ป - ด/ว/ป" class="w-64" :manualInput="false" showIcon />
         </div>
-        <Button
-          v-if="(selectedDateRange && selectedDateRange.length > 0) || selectedBuildingFilter"
-          icon="pi pi-times"
-          severity="secondary"
-          text
-          rounded
-          @click="clearDateFilter"
-          class="mt-4"
-        />
+        <Button v-if="(selectedDateRange && selectedDateRange.length > 0) || selectedBuildingFilter" icon="pi pi-times"
+          severity="secondary" text rounded @click="clearDateFilter" class="mt-4" />
       </div>
     </div>
     <!-- ช่วงเวลาที่แสดงอยู่ -->
     <div class="flex items-center gap-2 mb-4">
       <i class="pi pi-filter text-blue-400 text-sm"></i>
       <span class="text-sm text-gray-500">กำลังแสดงข้อมูล: </span>
-      <span
-        class="text-sm font-bold text-blue-600 bg-blue-50 px-3 py-0.5 rounded-full border border-blue-200"
-        >{{ selectedBuildingFilter ? getBuildingName(selectedBuildingFilter) : 'ทุกอาคาร' }}</span
-      >
+      <span class="text-sm font-bold text-blue-600 bg-blue-50 px-3 py-0.5 rounded-full border border-blue-200">{{
+        selectedBuildingFilter ? getBuildingName(selectedBuildingFilter) : 'ทุกอาคาร' }}</span>
       <span class="text-sm text-gray-500 mx-1">|</span>
       <i class="pi pi-calendar-clock text-blue-400 text-sm ml-1"></i>
-      <span
-        class="text-sm font-bold text-blue-600 bg-blue-50 px-3 py-0.5 rounded-full border border-blue-200"
-        >{{ dateRangeLabel }}</span
-      >
+      <span class="text-sm font-bold text-blue-600 bg-blue-50 px-3 py-0.5 rounded-full border border-blue-200">{{
+        dateRangeLabel }}</span>
     </div>
 
     <Tabs value="0" lazy>
@@ -657,9 +649,7 @@ const formatCurrency = (val: number): string =>
                       {{ formatCurrency(totalExpense) }}
                     </h3>
                   </div>
-                  <div
-                    class="w-9 h-9 bg-blue-100 rounded-full flex items-center justify-center text-blue-600"
-                  >
+                  <div class="w-9 h-9 bg-blue-100 rounded-full flex items-center justify-center text-blue-600">
                     <i class="pi pi-money-bill text-sm"></i>
                   </div>
                 </div>
@@ -678,9 +668,7 @@ const formatCurrency = (val: number): string =>
                       <span class="text-sm font-normal text-gray-500">Unit</span>
                     </h3>
                   </div>
-                  <div
-                    class="w-9 h-9 bg-indigo-100 rounded-full flex items-center justify-center text-indigo-600"
-                  >
+                  <div class="w-9 h-9 bg-indigo-100 rounded-full flex items-center justify-center text-indigo-600">
                     <i class="pi pi-bolt text-sm"></i>
                   </div>
                 </div>
@@ -697,9 +685,7 @@ const formatCurrency = (val: number): string =>
                       <span class="text-sm font-normal text-gray-500">kWh</span>
                     </h3>
                   </div>
-                  <div
-                    class="w-9 h-9 bg-emerald-100 rounded-full flex items-center justify-center text-emerald-600"
-                  >
+                  <div class="w-9 h-9 bg-emerald-100 rounded-full flex items-center justify-center text-emerald-600">
                     <i class="pi pi-sun text-sm"></i>
                   </div>
                 </div>
@@ -720,9 +706,7 @@ const formatCurrency = (val: number): string =>
                       Solar × {{ avgCostPerUnit.toFixed(2) }} ฿/kWh
                     </p>
                   </div>
-                  <div
-                    class="w-9 h-9 bg-green-100 rounded-full flex items-center justify-center text-green-600"
-                  >
+                  <div class="w-9 h-9 bg-green-100 rounded-full flex items-center justify-center text-green-600">
                     <i class="pi pi-check-circle text-sm"></i>
                   </div>
                 </div>
@@ -798,20 +782,13 @@ const formatCurrency = (val: number): string =>
               <div v-if="isLoading" class="h-64 flex items-center justify-center">
                 <i class="pi pi-spin pi-spinner text-4xl text-blue-500"></i>
               </div>
-              <div
-                v-else-if="!expenseChartData?.labels?.length"
-                class="h-64 flex flex-col items-center justify-center text-gray-400"
-              >
+              <div v-else-if="!expenseChartData?.labels?.length"
+                class="h-64 flex flex-col items-center justify-center text-gray-400">
                 <i class="pi pi-box text-3xl mb-2"></i>
                 <p>ไม่มีข้อมูล</p>
               </div>
               <div v-else class="h-64 relative">
-                <Chart
-                  type="bar"
-                  :data="expenseChartData"
-                  :options="expenseChartOptions"
-                  class="h-full w-full"
-                />
+                <Chart type="bar" :data="expenseChartData" :options="expenseChartOptions" class="h-full w-full" />
               </div>
             </template>
           </Card>
@@ -829,20 +806,13 @@ const formatCurrency = (val: number): string =>
                 <div v-if="isLoading" class="h-52 flex items-center justify-center">
                   <i class="pi pi-spin pi-spinner text-3xl text-blue-400"></i>
                 </div>
-                <div
-                  v-else-if="!overviewChartData?.labels?.length"
-                  class="h-52 flex flex-col items-center justify-center text-gray-400"
-                >
+                <div v-else-if="!overviewChartData?.labels?.length"
+                  class="h-52 flex flex-col items-center justify-center text-gray-400">
                   <i class="pi pi-box text-2xl mb-2"></i>
                   <p>ไม่มีข้อมูล</p>
                 </div>
                 <div v-else class="h-52 relative">
-                  <Chart
-                    type="bar"
-                    :data="overviewChartData"
-                    :options="overviewChartOptions"
-                    class="h-full w-full"
-                  />
+                  <Chart type="bar" :data="overviewChartData" :options="overviewChartOptions" class="h-full w-full" />
                 </div>
               </template>
             </Card>
@@ -858,20 +828,13 @@ const formatCurrency = (val: number): string =>
                 <div v-if="isLoading" class="h-52 flex items-center justify-center">
                   <i class="pi pi-spin pi-spinner text-3xl text-emerald-400"></i>
                 </div>
-                <div
-                  v-else-if="!unitTrendChartData?.labels?.length"
-                  class="h-52 flex flex-col items-center justify-center text-gray-400"
-                >
+                <div v-else-if="!unitTrendChartData?.labels?.length"
+                  class="h-52 flex flex-col items-center justify-center text-gray-400">
                   <i class="pi pi-box text-2xl mb-2"></i>
                   <p>ไม่มีข้อมูล</p>
                 </div>
                 <div v-else class="h-52 relative">
-                  <Chart
-                    type="bar"
-                    :data="unitTrendChartData"
-                    :options="unitTrendChartOptions"
-                    class="h-full w-full"
-                  />
+                  <Chart type="bar" :data="unitTrendChartData" :options="unitTrendChartOptions" class="h-full w-full" />
                 </div>
               </template>
             </Card>
@@ -889,20 +852,14 @@ const formatCurrency = (val: number): string =>
                 </p>
               </template>
               <template #content>
-                <div
-                  v-if="sumConsumptionKwh === 0"
-                  class="h-56 flex flex-col items-center justify-center text-gray-400"
-                >
+                <div v-if="sumConsumptionKwh === 0"
+                  class="h-56 flex flex-col items-center justify-center text-gray-400">
                   <i class="pi pi-chart-pie text-3xl mb-2"></i>
                   <p>ไม่มีข้อมูล</p>
                 </div>
                 <div v-else class="h-56 relative flex items-center justify-center pb-4">
-                  <Chart
-                    type="doughnut"
-                    :data="solarUsageChartData"
-                    :options="percentDoughnutOptions"
-                    class="w-full h-52 max-w-56"
-                  />
+                  <Chart type="doughnut" :data="solarUsageChartData" :options="percentDoughnutOptions"
+                    class="w-full h-52 max-w-56" />
                 </div>
               </template>
             </Card>
@@ -917,20 +874,13 @@ const formatCurrency = (val: number): string =>
                 </p>
               </template>
               <template #content>
-                <div
-                  v-if="totalSolarUnit === 0"
-                  class="h-56 flex flex-col items-center justify-center text-gray-400"
-                >
+                <div v-if="totalSolarUnit === 0" class="h-56 flex flex-col items-center justify-center text-gray-400">
                   <i class="pi pi-chart-pie text-3xl mb-2"></i>
                   <p>ไม่มีข้อมูล</p>
                 </div>
                 <div v-else class="h-56 relative flex items-center justify-center pb-4">
-                  <Chart
-                    type="doughnut"
-                    :data="solarBreakdownChartData"
-                    :options="percentDoughnutOptions"
-                    class="w-full h-52 max-w-56"
-                  />
+                  <Chart type="doughnut" :data="solarBreakdownChartData" :options="percentDoughnutOptions"
+                    class="w-full h-52 max-w-56" />
                 </div>
               </template>
             </Card>
@@ -955,9 +905,7 @@ const formatCurrency = (val: number): string =>
                       {{ avgCostPerUnit.toFixed(2) }} บาท/หน่วย
                     </p>
                   </div>
-                  <div
-                    class="w-10 h-10 bg-blue-50 rounded-full flex items-center justify-center text-blue-500"
-                  >
+                  <div class="w-10 h-10 bg-blue-50 rounded-full flex items-center justify-center text-blue-500">
                     <i class="pi pi-money-bill"></i>
                   </div>
                 </div>
@@ -979,9 +927,7 @@ const formatCurrency = (val: number): string =>
                       <i class="pi pi-bolt mr-1"></i>นำเข้าจากสายส่ง
                     </p>
                   </div>
-                  <div
-                    class="w-10 h-10 bg-orange-50 rounded-full flex items-center justify-center text-orange-500"
-                  >
+                  <div class="w-10 h-10 bg-orange-50 rounded-full flex items-center justify-center text-orange-500">
                     <i class="pi pi-building"></i>
                   </div>
                 </div>
@@ -1000,9 +946,7 @@ const formatCurrency = (val: number): string =>
                     </h3>
                     <p class="text-xs text-teal-600 mt-1 font-medium">Monthly Service Fee</p>
                   </div>
-                  <div
-                    class="w-10 h-10 bg-teal-50 rounded-full flex items-center justify-center text-teal-500"
-                  >
+                  <div class="w-10 h-10 bg-teal-50 rounded-full flex items-center justify-center text-teal-500">
                     <i class="pi pi-receipt"></i>
                   </div>
                 </div>
@@ -1025,9 +969,7 @@ const formatCurrency = (val: number): string =>
                       (จันทร์ - ศุกร์ เวลา 09.00 - 22.00 น.)
                     </p>
                   </div>
-                  <div
-                    class="w-10 h-10 bg-rose-50 rounded-full flex items-center justify-center text-rose-500"
-                  >
+                  <div class="w-10 h-10 bg-rose-50 rounded-full flex items-center justify-center text-rose-500">
                     <i class="pi pi-bolt"></i>
                   </div>
                 </div>
@@ -1051,9 +993,7 @@ const formatCurrency = (val: number): string =>
                       (ไม่รวมวันหยุดชดเชย) ตลอด 24)
                     </p>
                   </div>
-                  <div
-                    class="w-10 h-10 bg-indigo-50 rounded-full flex items-center justify-center text-indigo-500"
-                  >
+                  <div class="w-10 h-10 bg-indigo-50 rounded-full flex items-center justify-center text-indigo-500">
                     <i class="pi pi-bolt"></i>
                   </div>
                 </div>
@@ -1070,9 +1010,7 @@ const formatCurrency = (val: number): string =>
                     </h3>
                     <p class="text-xs text-amber-600 mt-1 font-medium">ค่าไฟฟ้าผันแปร (Ft)</p>
                   </div>
-                  <div
-                    class="w-10 h-10 bg-amber-50 rounded-full flex items-center justify-center text-amber-500"
-                  >
+                  <div class="w-10 h-10 bg-amber-50 rounded-full flex items-center justify-center text-amber-500">
                     <i class="pi pi-chart-line"></i>
                   </div>
                 </div>
@@ -1092,20 +1030,14 @@ const formatCurrency = (val: number): string =>
                 <div v-if="isLoading" class="h-64 flex items-center justify-center">
                   <i class="pi pi-spin pi-spinner text-4xl text-blue-500"></i>
                 </div>
-                <div
-                  v-else-if="!peaUnitTrendChartData?.labels?.length"
-                  class="h-64 flex flex-col items-center justify-center text-gray-400"
-                >
+                <div v-else-if="!peaUnitTrendChartData?.labels?.length"
+                  class="h-64 flex flex-col items-center justify-center text-gray-400">
                   <i class="pi pi-box text-3xl mb-2"></i>
                   <p>ไม่มีข้อมูล</p>
                 </div>
                 <div v-else class="h-64 relative">
-                  <Chart
-                    type="bar"
-                    :data="peaUnitTrendChartData"
-                    :options="peaUnitTrendChartOptions"
-                    class="h-full w-full"
-                  />
+                  <Chart type="bar" :data="peaUnitTrendChartData" :options="peaUnitTrendChartOptions"
+                    class="h-full w-full" />
                 </div>
               </template>
             </Card>
@@ -1119,28 +1051,22 @@ const formatCurrency = (val: number): string =>
                 <div v-if="isLoading" class="h-64 flex items-center justify-center">
                   <i class="pi pi-spin pi-spinner text-4xl text-orange-500"></i>
                 </div>
-                <div
-                  v-else-if="!expenseChartData?.labels?.length"
-                  class="h-64 flex flex-col items-center justify-center text-gray-400"
-                >
+                <div v-else-if="!expenseChartData?.labels?.length"
+                  class="h-64 flex flex-col items-center justify-center text-gray-400">
                   <i class="pi pi-box text-3xl mb-2"></i>
                   <p>ไม่มีข้อมูล</p>
                 </div>
                 <div v-else class="h-64 relative">
-                  <Chart
-                    type="bar"
-                    :data="expenseChartData"
-                    :options="expenseChartOptions"
-                    class="h-full w-full"
-                  />
+                  <Chart type="bar" :data="expenseChartData" :options="expenseChartOptions" class="h-full w-full" />
                 </div>
               </template>
             </Card>
           </div>
 
           <!-- On/Off Peak Chart -->
-          <div class="grid grid-cols-1 gap-6 mb-6">
-            <Card class="shadow-sm border-none">
+          <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+            <!-- Stacked Bar รายเดือน -->
+            <Card class="shadow-sm border-none lg:col-span-2">
               <template #title>
                 <div class="text-lg font-bold text-gray-700">
                   หน่วยไฟฟ้า On Peak / Off Peak รายเดือน
@@ -1150,20 +1076,73 @@ const formatCurrency = (val: number): string =>
                 <div v-if="isLoading" class="h-64 flex items-center justify-center">
                   <i class="pi pi-spin pi-spinner text-4xl text-orange-400"></i>
                 </div>
-                <div
-                  v-else-if="!onOffPeakChartData?.labels?.length"
-                  class="h-64 flex flex-col items-center justify-center text-gray-400"
-                >
+                <div v-else-if="!onOffPeakChartData?.labels?.length"
+                  class="h-64 flex flex-col items-center justify-center text-gray-400">
                   <i class="pi pi-box text-3xl mb-2"></i>
                   <p>ไม่มีข้อมูล</p>
                 </div>
                 <div v-else class="h-64 relative">
-                  <Chart
-                    type="bar"
-                    :data="onOffPeakChartData"
-                    :options="onOffPeakChartOptions"
-                    class="h-full w-full"
-                  />
+                  <Chart type="bar" :data="onOffPeakChartData" :options="onOffPeakChartOptions" class="h-full w-full" />
+                </div>
+              </template>
+            </Card>
+
+            <!-- Donut สัดส่วนรวม -->
+            <Card class="shadow-sm border-none">
+              <template #title>
+                <div class="text-lg font-bold text-gray-700">สัดส่วน On / Off Peak</div>
+              </template>
+              <template #content>
+                <div v-if="isLoading" class="h-64 flex items-center justify-center">
+                  <i class="pi pi-spin pi-spinner text-4xl text-orange-400"></i>
+                </div>
+                <div v-else-if="!onOffPeakDoughnutData?.datasets?.[0]?.data?.some((v: number) => v > 0)"
+                  class="h-64 flex flex-col items-center justify-center text-gray-400">
+                  <i class="pi pi-box text-3xl mb-2"></i>
+                  <p>ไม่มีข้อมูล</p>
+                </div>
+                <div v-else class="relative">
+                  <div class="h-52 relative">
+                    <Chart type="doughnut" :data="onOffPeakDoughnutData" :options="percentDoughnutOptions"
+                      class="h-full w-full" />
+                  </div>
+                  <!-- ตัวเลขสรุปใต้ donut -->
+                  <div class="grid grid-cols-2 gap-2 mt-3 text-center text-sm">
+                    <div class="rounded-lg bg-orange-50 py-2">
+                      <p class="text-[11px] text-orange-600 font-semibold uppercase">On Peak</p>
+                      <p class="font-bold text-orange-700">
+                        {{ sumOnPeakUnits.toLocaleString(undefined, { maximumFractionDigits: 0 }) }}
+                        <span class="text-xs font-normal">Unit</span>
+                      </p>
+                      <p class="text-[11px] text-orange-500 font-semibold">
+                        {{
+                          sumOnPeakUnits + sumOffPeakUnits > 0
+                            ? (
+                              (sumOnPeakUnits / (sumOnPeakUnits + sumOffPeakUnits)) *
+                              100
+                            ).toFixed(1)
+                            : '0.0'
+                        }}%
+                      </p>
+                    </div>
+                    <div class="rounded-lg bg-blue-50 py-2">
+                      <p class="text-[11px] text-blue-600 font-semibold uppercase">Off Peak</p>
+                      <p class="font-bold text-blue-700">
+                        {{ sumOffPeakUnits.toLocaleString(undefined, { maximumFractionDigits: 0 }) }}
+                        <span class="text-xs font-normal">Unit</span>
+                      </p>
+                      <p class="text-[11px] text-blue-500 font-semibold">
+                        {{
+                          sumOnPeakUnits + sumOffPeakUnits > 0
+                            ? (
+                              (sumOffPeakUnits / (sumOnPeakUnits + sumOffPeakUnits)) *
+                              100
+                            ).toFixed(1)
+                            : '0.0'
+                        }}%
+                      </p>
+                    </div>
+                  </div>
                 </div>
               </template>
             </Card>
@@ -1180,20 +1159,13 @@ const formatCurrency = (val: number): string =>
                 <div v-if="isLoading" class="h-64 flex items-center justify-center">
                   <i class="pi pi-spin pi-spinner text-4xl text-orange-500"></i>
                 </div>
-                <div
-                  v-else-if="buildingChartData?.labels?.length === 0"
-                  class="h-64 flex flex-col items-center justify-center text-gray-400"
-                >
+                <div v-else-if="buildingChartData?.labels?.length === 0"
+                  class="h-64 flex flex-col items-center justify-center text-gray-400">
                   <i class="pi pi-align-left text-3xl mb-2"></i>
                   <p>ไม่มีข้อมูล</p>
                 </div>
                 <div v-else class="h-64 relative">
-                  <Chart
-                    type="bar"
-                    :data="buildingChartData"
-                    :options="buildingChartOptions"
-                    class="h-full w-full"
-                  />
+                  <Chart type="bar" :data="buildingChartData" :options="buildingChartOptions" class="h-full w-full" />
                 </div>
               </template>
             </Card>
@@ -1217,9 +1189,7 @@ const formatCurrency = (val: number): string =>
                     </h3>
                     <p class="text-[10px] text-emerald-600/80 mt-1">พลังงานที่ผลิตได้จากแผงโซลาร์</p>
                   </div>
-                  <div
-                    class="w-10 h-10 bg-emerald-100 rounded-full flex items-center justify-center text-emerald-600"
-                  >
+                  <div class="w-10 h-10 bg-emerald-100 rounded-full flex items-center justify-center text-emerald-600">
                     <i class="pi pi-sun"></i>
                   </div>
                 </div>
@@ -1241,15 +1211,38 @@ const formatCurrency = (val: number): string =>
                     </h3>
                     <p class="text-[10px] text-indigo-600/80 mt-1">ปริมาณการใช้พลังงานทั้งหมด</p>
                   </div>
-                  <div
-                    class="w-10 h-10 bg-indigo-100 rounded-full flex items-center justify-center text-indigo-600"
-                  >
+                  <div class="w-10 h-10 bg-indigo-100 rounded-full flex items-center justify-center text-indigo-600">
                     <i class="pi pi-home"></i>
                   </div>
                 </div>
               </template>
             </Card>
 
+            <Card class="shadow-sm border-t-4 border-rose-500 bg-rose-50/20">
+              <template #content>
+                <div class="flex justify-between items-start">
+                  <div>
+                    <p class="text-xs text-gray-500 font-semibold mb-1 uppercase">
+                      ดึงจากสายส่ง กฟภ.
+                    </p>
+                    <h3 class="text-2xl font-bold text-gray-800">
+                      {{ sumFromGridKwh.toLocaleString(undefined, { maximumFractionDigits: 0 }) }}
+                      <span class="text-sm font-normal text-gray-500">kWh</span>
+                    </h3>
+                    <p class="text-[10px] text-rose-600/80 mt-1">พลังงานที่ซื้อจากสายส่งไฟฟ้า</p>
+                  </div>
+                  <div class="w-10 h-10 bg-rose-100 rounded-full flex items-center justify-center text-rose-600">
+                    <i class="pi pi-bolt"></i>
+                  </div>
+                </div>
+              </template>
+            </Card>
+
+
+          </div>
+
+          <!-- แถว 2: ดึงจากสายส่ง / พลังงานส่วนเกิน (2 cards) -->
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
             <Card class="shadow-sm border-t-4 border-green-500 bg-green-50/20">
               <template #content>
                 <div class="flex justify-between items-start">
@@ -1265,31 +1258,6 @@ const formatCurrency = (val: number): string =>
                   </div>
                   <div class="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center text-green-600">
                     <i class="pi pi-sun text-sm"></i>
-                  </div>
-                </div>
-              </template>
-            </Card>
-          </div>
-
-          <!-- แถว 2: ดึงจากสายส่ง / พลังงานส่วนเกิน (2 cards) -->
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-            <Card class="shadow-sm border-t-4 border-rose-500 bg-rose-50/20">
-              <template #content>
-                <div class="flex justify-between items-start">
-                  <div>
-                    <p class="text-xs text-gray-500 font-semibold mb-1 uppercase">
-                      ดึงจากสายส่ง กฟภ.
-                    </p>
-                    <h3 class="text-2xl font-bold text-gray-800">
-                      {{ sumFromGridKwh.toLocaleString(undefined, { maximumFractionDigits: 0 }) }}
-                      <span class="text-sm font-normal text-gray-500">kWh</span>
-                    </h3>
-                    <p class="text-[10px] text-rose-600/80 mt-1">พลังงานที่ซื้อจากสายส่งไฟฟ้า</p>
-                  </div>
-                  <div
-                    class="w-10 h-10 bg-rose-100 rounded-full flex items-center justify-center text-rose-600"
-                  >
-                    <i class="pi pi-bolt"></i>
                   </div>
                 </div>
               </template>
@@ -1312,9 +1280,7 @@ const formatCurrency = (val: number): string =>
                     </h3>
                     <p class="text-[10px] text-amber-600/80 mt-1">จ่ายคืนสายส่ง + เก็บในแบตเตอรี่</p>
                   </div>
-                  <div
-                    class="w-10 h-10 bg-amber-100 rounded-full flex items-center justify-center text-amber-600"
-                  >
+                  <div class="w-10 h-10 bg-amber-100 rounded-full flex items-center justify-center text-amber-600">
                     <i class="pi pi-upload"></i>
                   </div>
                 </div>
@@ -1325,12 +1291,10 @@ const formatCurrency = (val: number): string =>
           <!-- ESG and Charts in 3 Columns -->
           <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
             <Card
-              class="shadow-sm border-none lg:col-span-1 border-t-4 border-teal-500 bg-teal-50/20 flex flex-col items-center justify-center relative overflow-hidden"
-            >
+              class="shadow-sm border-none lg:col-span-1 border-t-4 border-teal-500 bg-teal-50/20 flex flex-col items-center justify-center relative overflow-hidden">
               <template #content>
                 <i
-                  class="pi pi-globe absolute -bottom-10 -right-10 text-[10rem] text-teal-500/10 pointer-events-none"
-                ></i>
+                  class="pi pi-globe absolute -bottom-10 -right-10 text-[10rem] text-teal-500/10 pointer-events-none"></i>
                 <div class="text-center py-8">
                   <p class="text-sm text-teal-600 uppercase font-bold tracking-wider mb-2">
                     รักษ์โลก (ESG Impact)
@@ -1339,9 +1303,7 @@ const formatCurrency = (val: number): string =>
                     {{ carbonSaved.toLocaleString(undefined, { maximumFractionDigits: 0 }) }}
                     <span class="text-xl font-normal text-teal-700">kgCO₂e</span>
                   </h3>
-                  <p
-                    class="text-sm text-teal-600 bg-teal-100/50 inline-block px-3 py-1 rounded-full mb-4"
-                  >
+                  <p class="text-sm text-teal-600 bg-teal-100/50 inline-block px-3 py-1 rounded-full mb-4">
                     ลดการปล่อยก๊าซเรือนกระจก
                   </p>
                   <br />
@@ -1355,12 +1317,10 @@ const formatCurrency = (val: number): string =>
 
                   <p class="text-[10px] text-teal-600/70 mt-4 leading-tight text-center space-y-1">
                     <span>* การลดคาร์บอน: ผลิตจาก Solar (kWh) × 0.5 kgCO₂e/kWh</span><br />
-                    <span
-                      >* ประหยัดเงิน: ผลิตจาก Solar (kWh) × ค่าไฟเฉลี่ย กฟภ. ({{
-                        avgCostPerUnit.toFixed(2)
-                      }}
-                      ฿/kWh)</span
-                    >
+                    <span>* ประหยัดเงิน: ผลิตจาก Solar (kWh) × ค่าไฟเฉลี่ย กฟภ. ({{
+                      avgCostPerUnit.toFixed(2)
+                    }}
+                      ฿/kWh)</span>
                   </p>
                 </div>
               </template>
@@ -1373,20 +1333,14 @@ const formatCurrency = (val: number): string =>
                 </div>
               </template>
               <template #content>
-                <div
-                  v-if="sumConsumptionKwh === 0"
-                  class="h-64 flex flex-col items-center justify-center text-gray-400"
-                >
+                <div v-if="sumConsumptionKwh === 0"
+                  class="h-64 flex flex-col items-center justify-center text-gray-400">
                   <i class="pi pi-chart-pie text-3xl mb-2"></i>
                   <p>ไม่มีข้อมูล</p>
                 </div>
                 <div v-else class="h-64 relative flex items-center justify-center pb-4">
-                  <Chart
-                    type="doughnut"
-                    :data="solarUsageChartData"
-                    :options="mixChartOptions"
-                    class="w-full h-56 max-w-60"
-                  />
+                  <Chart type="doughnut" :data="solarUsageChartData" :options="mixChartOptions"
+                    class="w-full h-56 max-w-60" />
                 </div>
               </template>
             </Card>
@@ -1398,20 +1352,13 @@ const formatCurrency = (val: number): string =>
                 </div>
               </template>
               <template #content>
-                <div
-                  v-if="totalSolarUnit === 0"
-                  class="h-64 flex flex-col items-center justify-center text-gray-400"
-                >
+                <div v-if="totalSolarUnit === 0" class="h-64 flex flex-col items-center justify-center text-gray-400">
                   <i class="pi pi-chart-pie text-3xl mb-2"></i>
                   <p>ไม่มีข้อมูล</p>
                 </div>
                 <div v-else class="h-64 relative flex items-center justify-center pb-4">
-                  <Chart
-                    type="doughnut"
-                    :data="solarBreakdownChartData"
-                    :options="mixChartOptions"
-                    class="w-full h-56 max-w-60"
-                  />
+                  <Chart type="doughnut" :data="solarBreakdownChartData" :options="mixChartOptions"
+                    class="w-full h-56 max-w-60" />
                 </div>
               </template>
             </Card>
@@ -1425,20 +1372,13 @@ const formatCurrency = (val: number): string =>
               <div v-if="isLoading" class="h-64 flex items-center justify-center">
                 <i class="pi pi-spin pi-spinner text-green-500 text-4xl"></i>
               </div>
-              <div
-                v-else-if="solarChartData?.labels?.length === 0"
-                class="h-64 flex flex-col items-center justify-center text-gray-400"
-              >
+              <div v-else-if="solarChartData?.labels?.length === 0"
+                class="h-64 flex flex-col items-center justify-center text-gray-400">
                 <i class="pi pi-box text-3xl mb-2"></i>
                 <p>ไม่มีข้อมูล</p>
               </div>
               <div v-else class="h-64 relative">
-                <Chart
-                  type="line"
-                  :data="solarChartData"
-                  :options="solarChartOptions"
-                  class="h-full w-full"
-                />
+                <Chart type="line" :data="solarChartData" :options="solarChartOptions" class="h-full w-full" />
               </div>
             </template>
           </Card>

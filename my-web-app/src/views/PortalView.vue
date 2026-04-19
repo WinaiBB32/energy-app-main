@@ -7,6 +7,7 @@ import api from '@/services/api'
 
 
 import { usePermissions } from '@/composables/usePermissions'
+import { SYSTEMS } from '@/config/systems'
 import Button from 'primevue/button'
 import Tooltip from 'primevue/tooltip'
 
@@ -72,116 +73,15 @@ const navigateTo = (path: string) => {
   router.push(path)
 }
 
-const systems = computed(() => [
-  {
-    id: 'system1',
-    path: '/electricity/dashboard',
-    label: 'ค่าไฟฟ้า & Solar',
-    desc: 'บันทึกบิลค่าไฟ กฟภ./กฟน. และพลังงาน Solar Cell',
-    icon: 'pi-bolt',
-    color: 'amber',
-    show: hasAccess('system1'),
-  },
-  {
-    id: 'system2',
-    path: '/water/dashboard',
-    label: 'ค่าน้ำประปา',
-    desc: 'บันทึกเลขมิเตอร์ คำนวณหน่วยน้ำ และสรุปค่าใช้จ่าย',
-    icon: 'pi-gauge',
-    color: 'cyan',
-    show: hasAccess('system2'),
-  },
-  {
-    id: 'system3',
-    path: '/fuel/dashboard',
-    label: 'น้ำมันเชื้อเพลิง',
-    desc: 'บันทึกการเบิกจ่ายน้ำมัน เลขไมล์ และวิเคราะห์การใช้รถ',
-    icon: 'pi-car',
-    color: 'rose',
-    show: hasAccess('system3'),
-  },
-  {
-    id: 'system4',
-    path: '/telephone/dashboard',
-    label: 'ค่าโทรศัพท์',
-    desc: 'บันทึกและวิเคราะห์ค่าใช้จ่ายโทรศัพท์รายเดือน',
-    icon: 'pi-phone',
-    color: 'emerald',
-    show: hasAccess('system4'),
-  },
-  {
-    id: 'system5',
-    path: '/saraban/dashboard',
-    label: 'สถิติงานสารบรรณ',
-    desc: 'บันทึกและรายงานสถิติงานรับ-ส่งเอกสาร',
-    icon: 'pi-folder-open',
-    color: 'violet',
-    show: hasAccess('system5'),
-  },
-  {
-    id: 'system6',
-    path: '/ipphone/dashboard',
-    label: 'ระบบ IP-Phone',
-    desc: 'สถิติการโทรเข้า/ออก อัตราการรับสาย และวิเคราะห์ปริมาณสายรายเดือน',
-    icon: 'pi-desktop',
-    color: 'teal',
-    show: hasAccess('system6'),
-  },
-  {
-    id: 'system12',
-    path: '/directory',
-    label: 'สมุดโทรศัพท์องค์กร',
-    desc: 'ค้นหาเบอร์โทรศัพท์ภายใน IP-Phone และ Analog ของบุคลากรในองค์กร',
-    icon: 'pi-address-book',
-    color: 'cyan',
-    show: hasAccess('system12'),
-  },
-  {
-    id: 'system9',
-    path: '/maintenance/dashboard',
-    label: 'ระบบแจ้งซ่อมงานอาคาร',
-    desc: 'แจ้งซ่อม ติดตามงาน ซ่อมภายใน/ภายนอก และประวัติสินทรัพย์',
-    icon: 'pi-wrench',
-    color: 'orange',
-    show: hasMaintenanceAccess.value,
-  },
-  {
-    id: 'system7',
-    path: '/postal/dashboard',
-    label: 'ระบบไปรษณีย์',
-    desc: 'บันทึกสถิติการจัดส่งไปรษณีย์ ธรรมดา/ลงทะเบียน/EMS',
-    icon: 'pi-envelope',
-    color: 'blue',
-    show: hasAccess('system7'),
-  },
-  {
-    id: 'system8',
-    path: '/meeting/dashboard',
-    label: 'สถิติห้องประชุม',
-    desc: 'บันทึกและตรวจสอบสถิติการใช้งานห้องประชุมส่วนกลาง',
-    icon: 'pi-users',
-    color: 'teal',
-    show: hasAccess('system8'),
-  },
-  {
-    id: 'system11',
-    path: '/vehicle',
-    label: 'ระบบรถยนต์สำนักงาน',
-    desc: 'บันทึกและจัดการข้อมูลรถยนต์สำนักงาน ทะเบียน ยี่ห้อ และผู้ใช้งาน',
-    icon: 'pi-car',
-    color: 'teal',
-    show: hasAccess('system11'),
-  },
-  {
-    id: 'system10',
-    path: '/admin/system-management',
-    label: 'Admin Tool',
-    desc: 'ศูนย์รวมเครื่องมือผู้ดูแลระบบและการจัดการสิทธิ์ของทั้ง 9 ระบบ',
-    icon: 'pi-shield',
-    color: 'violet',
-    show: hasAdminToolAccess.value,
-  },
-])
+const resolveAccess = (s: (typeof SYSTEMS)[number]): boolean => {
+  if (s.accessRule === 'maintenance') return hasMaintenanceAccess.value
+  if (s.accessRule === 'adminTool') return hasAdminToolAccess.value
+  return hasAccess(s.id)
+}
+
+const systems = computed(() =>
+  SYSTEMS.map((s) => ({ ...s, show: resolveAccess(s) })),
+)
 
 const colorMap: Record<string, { icon: string; bg: string; hover: string }> = {
   amber: { icon: 'text-amber-500', bg: 'bg-amber-50 group-hover:bg-amber-500', hover: 'group-hover:text-amber-600' },

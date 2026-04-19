@@ -26,6 +26,7 @@ import {
     MAINTENANCE_TECHNICIAN_PERMISSION,
     hasMaintenancePermission,
 } from '@/config/maintenancePermissions'
+import { SYSTEMS } from '@/config/systems'
 
 interface AppUser {
     id: string
@@ -42,16 +43,6 @@ interface Department {
     id: string
     name: string
 }
-
-interface SystemModule {
-    id: string
-    name: string
-    shortLabel: string
-    description: string
-    icon: string
-    cardBorder: string
-}
-
 
 const route = useRoute()
 const router = useRouter()
@@ -73,20 +64,7 @@ const statuses = [
     { id: 'suspended', name: 'ระงับการใช้งาน' },
 ]
 
-const systemModules: SystemModule[] = [
-    { id: 'system1', name: 'ระบบไฟฟ้า & Solar', shortLabel: 'ไฟฟ้า & Solar', description: 'บิลค่าไฟ กฟภ./กฟน. และ Solar', icon: 'pi-bolt', cardBorder: 'border-l-amber-400' },
-    { id: 'system2', name: 'ระบบน้ำประปา', shortLabel: 'น้ำประปา', description: 'บันทึกมิเตอร์และค่าน้ำ', icon: 'pi-tint', cardBorder: 'border-l-cyan-400' },
-    { id: 'system3', name: 'ระบบน้ำมันเชื้อเพลิง', shortLabel: 'น้ำมันเชื้อเพลิง', description: 'การเติมน้ำมันและใบรับรอง', icon: 'pi-car', cardBorder: 'border-l-rose-400' },
-    { id: 'system4', name: 'ระบบโทรศัพท์', shortLabel: 'ค่าโทรศัพท์', description: 'บันทึกค่าใช้จ่ายโทรศัพท์', icon: 'pi-phone', cardBorder: 'border-l-emerald-400' },
-    { id: 'system5', name: 'ระบบสารบรรณ', shortLabel: 'สารบรรณ', description: 'สถิติงานรับ-ส่งเอกสาร', icon: 'pi-folder-open', cardBorder: 'border-l-violet-400' },
-    { id: 'system6', name: 'ระบบ IP-Phone', shortLabel: 'IP-Phone', description: 'สถิติการโทรเข้า/ออกรายเดือน', icon: 'pi-desktop', cardBorder: 'border-l-teal-400' },
-    { id: 'system12', name: 'สมุดโทรศัพท์องค์กร', shortLabel: 'สมุดโทรศัพท์', description: 'ค้นหาเบอร์โทรภายใน IP-Phone / Analog', icon: 'pi-address-book', cardBorder: 'border-l-cyan-400' },
-    { id: 'system9', name: 'ระบบแจ้งซ่อมงานอาคาร', shortLabel: 'ซ่อมงานอาคาร', description: 'ใบงานซ่อม คลังอะไหล่ และช่างภายนอก', icon: 'pi-wrench', cardBorder: 'border-l-orange-400' },
-    { id: 'system10', name: 'Admin Tool', shortLabel: 'Admin Tool', description: 'เครื่องมือผู้ดูแลระบบและการกำหนดสิทธิ์', icon: 'pi-shield', cardBorder: 'border-l-slate-400' },
-    { id: 'system7', name: 'ระบบไปรษณีย์', shortLabel: 'ไปรษณีย์', description: 'สถิติจัดส่ง ธรรมดา/ลงทะเบียน/EMS', icon: 'pi-envelope', cardBorder: 'border-l-blue-400' },
-    { id: 'system8', name: 'สถิติห้องประชุมส่วนกลาง', shortLabel: 'ห้องประชุม', description: 'สถิติการใช้ห้องประชุม', icon: 'pi-users', cardBorder: 'border-l-indigo-400' },
-    { id: 'system11', name: 'ระบบรถยนต์สำนักงาน', shortLabel: 'รถยนต์สำนักงาน', description: 'บันทึกรถยนต์ Officer = เพิ่ม/แก้ไข/ลบ', icon: 'pi-car', cardBorder: 'border-l-teal-400' },
-]
+const systemModules = SYSTEMS
 
 
 const ensureSystemAccess = (systemId: string) => {
@@ -502,8 +480,8 @@ const saveUser = async () => {
                                             <i :class="['pi text-base text-gray-500', sys.icon]"></i>
                                         </div>
                                         <div class="min-w-0">
-                                            <p class="font-bold text-gray-800 text-sm leading-tight truncate">{{ sys.shortLabel }}</p>
-                                            <p class="text-[11px] text-gray-400 leading-snug line-clamp-1">{{ sys.description }}</p>
+                                            <p class="font-bold text-gray-800 text-sm leading-tight truncate">{{ sys.shortLabel ?? sys.label }}</p>
+                                            <p class="text-[11px] text-gray-400 leading-snug line-clamp-1">{{ sys.adminDesc ?? sys.desc }}</p>
                                         </div>
                                     </div>
 
