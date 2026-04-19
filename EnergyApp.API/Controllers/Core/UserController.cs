@@ -1,9 +1,11 @@
 ﻿using EnergyApp.API.Data;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
 namespace EnergyApp.API.Controllers
 {
+    [Authorize]
     [ApiController]
     [Route("api/v1/[controller]")]
     public class UserController : ControllerBase
@@ -26,7 +28,8 @@ namespace EnergyApp.API.Controllers
             public List<string> AdminSystems { get; set; } = new();
         }
 
-        // 1. ดึงรายชื่อ User ทั้งหมด
+        // 1. ดึงรายชื่อ User ทั้งหมด (SuperAdmin เท่านั้น)
+        [Authorize(Roles = "SuperAdmin")]
         [HttpGet]
         public async Task<IActionResult> GetAllUsers()
         {
@@ -49,7 +52,8 @@ namespace EnergyApp.API.Controllers
             return Ok(users);
         }
 
-        // 2. อัปเดตข้อมูลและสิทธิ์ของ User
+        // 2. อัปเดตข้อมูลและสิทธิ์ของ User (SuperAdmin เท่านั้น)
+        [Authorize(Roles = "SuperAdmin")]
         [HttpPut("{id}")]
         public async Task<IActionResult> UpdateUser(Guid id, [FromBody] UpdateUserDto request)
         {
@@ -80,6 +84,7 @@ namespace EnergyApp.API.Controllers
             public string NewPassword { get; set; } = string.Empty;
         }
 
+        [Authorize(Roles = "SuperAdmin")]
         [HttpPost("{id}/reset-password")]
         public async Task<IActionResult> ResetPassword(Guid id, [FromBody] ResetPasswordDto req)
         {
@@ -95,7 +100,8 @@ namespace EnergyApp.API.Controllers
             return Ok(new { message = "รีเซ็ตรหัสผ่านสำเร็จ" });
         }
 
-        // 4. ลบ User
+        // 4. ลบ User (SuperAdmin เท่านั้น)
+        [Authorize(Roles = "SuperAdmin")]
         [HttpDelete("{id}")]
         public async Task<IActionResult> DeleteUser(Guid id)
         {

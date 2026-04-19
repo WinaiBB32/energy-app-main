@@ -48,13 +48,13 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     });
 
 // --- CORS ---
-var allowedOrigins = builder.Configuration["AllowedOrigins"]?.Split(",") ?? ["http://localhost:5173,http://192.168.118.106:5173"];
+var allowedOrigins = builder.Configuration["AllowedOrigins"]?.Split(",", StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
+    ?? ["http://localhost:5173"];
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowVueApp", policy =>
     {
         policy.WithOrigins(allowedOrigins)
-              .SetIsOriginAllowed(_ => true) // Allow all origins for testing
               .AllowAnyHeader()
               .AllowAnyMethod()
               .AllowCredentials();
