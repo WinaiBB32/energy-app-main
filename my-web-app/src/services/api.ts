@@ -1,19 +1,20 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5008/api/v1'
 const TIMEOUT_MS = 10000
 
-export interface ApiResponse<T = unknown> {
+export interface ApiResponse<T = any> {
   data: T
   status: number
 }
 
 interface RequestConfig {
   headers?: HeadersInit
-  params?: Record<string, unknown> | URLSearchParams
+  params?: Record<string, any> | URLSearchParams
 }
 
 // Error ที่มี .response.status/.response.data เหมือน AxiosError
 export class ApiError extends Error {
-  response: { status: number; data: unknown }
+  response: { status: number; data: any }
   constructor(status: number, data: unknown) {
     super(`HTTP ${status}`)
     this.name = 'ApiError'
@@ -47,7 +48,7 @@ function buildHeaders(url: string, extra?: HeadersInit): Headers {
   return headers
 }
 
-async function request<T = unknown>(
+async function request<T = any>(
   method: string,
   url: string,
   body?: unknown,
@@ -62,7 +63,7 @@ async function request<T = unknown>(
         ? config.params
         : (() => {
             const sp = new URLSearchParams()
-            for (const [key, value] of Object.entries(config.params as Record<string, unknown>)) {
+            for (const [key, value] of Object.entries(config.params as Record<string, any>)) {
               if (value !== undefined && value !== null) {
                 sp.append(key, String(value))
               }
@@ -103,19 +104,19 @@ async function request<T = unknown>(
 }
 
 const api = {
-  get: <T = unknown>(url: string, config?: RequestConfig) =>
+  get: <T = any>(url: string, config?: RequestConfig) =>
     request<T>('GET', url, undefined, config),
 
-  post: <T = unknown>(url: string, data?: unknown, config?: RequestConfig) =>
+  post: <T = any>(url: string, data?: unknown, config?: RequestConfig) =>
     request<T>('POST', url, data, config),
 
-  put: <T = unknown>(url: string, data?: unknown, config?: RequestConfig) =>
+  put: <T = any>(url: string, data?: unknown, config?: RequestConfig) =>
     request<T>('PUT', url, data, config),
 
-  patch: <T = unknown>(url: string, data?: unknown, config?: RequestConfig) =>
+  patch: <T = any>(url: string, data?: unknown, config?: RequestConfig) =>
     request<T>('PATCH', url, data, config),
 
-  delete: <T = unknown>(url: string, config?: RequestConfig) =>
+  delete: <T = any>(url: string, config?: RequestConfig) =>
     request<T>('DELETE', url, undefined, config),
 }
 
