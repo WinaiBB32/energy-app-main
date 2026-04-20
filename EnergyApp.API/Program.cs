@@ -65,7 +65,14 @@ builder.Services.AddCors(options =>
 
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen();
+builder.Services.AddSwaggerGen(c =>
+{
+    c.MapType<IFormFile>(() => new Microsoft.OpenApi.Models.OpenApiSchema
+    {
+        Type = "string",
+        Format = "binary"
+    });
+});
 builder.Services.AddSingleton<ISystemErrorLogStore, InMemorySystemErrorLogStore>();
 
 // --- Rate Limiting ---
@@ -178,6 +185,62 @@ app.MapControllers();
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+    // Fix migrations out-of-sync: insert missing records into __EFMigrationsHistory
+    var connStr = db.Database.GetConnectionString()!;
+    using (var conn = new Npgsql.NpgsqlConnection(connStr))
+    {
+        conn.Open();
+
+        // สร้าง __EFMigrationsHistory ถ้ายังไม่มี
+        using (var cmd = conn.CreateCommand())
+        {
+            cmd.CommandText = @"
+                CREATE TABLE IF NOT EXISTS ""__EFMigrationsHistory"" (
+                    ""MigrationId"" character varying(150) NOT NULL,
+                    ""ProductVersion"" character varying(32) NOT NULL,
+                    CONSTRAINT ""PK___EFMigrationsHistory"" PRIMARY KEY (""MigrationId"")
+                )";
+            cmd.ExecuteNonQuery();
+        }
+
+        var staleMigrations = new[] {
+            ("20260415100000_AddVehicleMasterTables", "VehicleDepartments"),
+            ("20260416000000_AddSarabanStatTable", "SarabanStats"),
+        };
+
+        foreach (var (migId, table) in staleMigrations)
+        {
+            // เช็คว่าตารางมีอยู่ใน DB
+            bool tableExists;
+            using (var cmd = conn.CreateCommand())
+            {
+                cmd.CommandText = "SELECT COUNT(*) FROM pg_tables WHERE schemaname='public' AND tablename=@t";
+                cmd.Parameters.AddWithValue("t", table);
+                tableExists = (long)(cmd.ExecuteScalar() ?? 0L) > 0;
+            }
+
+            if (tableExists)
+            {
+                using var cmd = conn.CreateCommand();
+                cmd.CommandText = @"
+                    INSERT INTO ""__EFMigrationsHistory"" (""MigrationId"", ""ProductVersion"")
+                    SELECT @id, '8.0.0'
+                    WHERE NOT EXISTS (
+                        SELECT 1 FROM ""__EFMigrationsHistory"" WHERE ""MigrationId"" = @id
+                    )";
+                cmd.Parameters.AddWithValue("id", migId);
+                var rows = cmd.ExecuteNonQuery();
+                Console.WriteLine($"[MigrationFix] {migId}: inserted={rows > 0}");
+            }
+        }
+    }
+
+    // แสดง pending migrations ก่อนรัน
+    var pending = db.Database.GetPendingMigrations().ToList();
+    Console.WriteLine($"[Pending migrations: {pending.Count}]");
+    foreach (var m in pending) Console.WriteLine($"  - {m}");
+
     db.Database.Migrate();
 }
 

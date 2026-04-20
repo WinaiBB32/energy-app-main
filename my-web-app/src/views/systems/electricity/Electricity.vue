@@ -133,7 +133,7 @@ const fetchHistory = async (loadMore = false): Promise<void> => {
     }
 
     const response = await api.get('/ElectricityBill', { params })
-    const data = response.data
+    const data = response.data as { items: FetchedElectricityRecord[]; total: number } | FetchedElectricityRecord[]
     const newRecords: FetchedElectricityRecord[] = Array.isArray(data) ? data : (data.items ?? [])
     const total: number = Array.isArray(data) ? newRecords.length : (data.total ?? newRecords.length)
 
@@ -166,7 +166,7 @@ onMounted(async () => {
   handleFilterChange()
   try {
     const response = await api.get('/Building')
-    buildings.value = response.data.map((b: { id: string; name: string }) => ({ id: b.id, name: b.name }))
+    buildings.value = (response.data as Building[]).map((b) => ({ id: b.id, name: b.name }))
   } catch (e) {
     toast.fromError(e, 'ไม่สามารถโหลดข้อมูลอาคารได้')
   }

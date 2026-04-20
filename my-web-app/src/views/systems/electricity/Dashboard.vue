@@ -190,14 +190,17 @@ const fetchData = async (): Promise<void> => {
       api.get('/ElectricityBill/monthly-unit-trend', { params: trendParams }),
     ])
 
-    buildings.value = Array.isArray(buildingsRes.data)
-      ? buildingsRes.data
-      : buildingsRes.data.items || []
-    const peaRecords = (peaRes.data.items || []).map((r: FetchedRecord) => ({
+    const buildingData = buildingsRes.data as Building[] | { items: Building[] }
+    buildings.value = Array.isArray(buildingData)
+      ? buildingData
+      : (buildingData as { items: Building[] }).items || []
+    const peaData = peaRes.data as { items: FetchedRecord[] }
+    const solarData = solarRes.data as { items: FetchedRecord[] }
+    const peaRecords = (peaData.items || []).map((r) => ({
       ...r,
       type: 'PEA_BILL' as const,
     }))
-    const solarRecords = (solarRes.data.items || []).map((r: FetchedRecord) => ({
+    const solarRecords = (solarData.items || []).map((r) => ({
       ...r,
       type: 'SOLAR_PRODUCTION' as const,
     }))
