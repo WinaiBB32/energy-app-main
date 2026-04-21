@@ -14,7 +14,7 @@ namespace EnergyApp.API.Data
         public DbSet<AuditLog> AuditLogs { get; set; }
         public DbSet<FuelType> FuelTypes { get; set; }
         public DbSet<MeetingRoom> MeetingRooms { get; set; }
-        public DbSet<ElectricityRecord> ElectricityRecords { get; set; }
+        public DbSet<ElectricityRecord> ElectricityRecord { get; set; }
         public DbSet<ElectricityBill> ElectricityBills { get; set; }
         public DbSet<SolarProduction> SolarProductions { get; set; }
         public DbSet<WaterRecord> WaterRecords { get; set; }
@@ -37,5 +37,7 @@ namespace EnergyApp.API.Data
         public DbSet<VehicleDepartment> VehicleDepartments { get; set; }
         public DbSet<VehicleProvince> VehicleProvinces { get; set; }
         public DbSet<SarabanStat> SarabanStats { get; set; }
+        public DbSet<TvDashboard> TvDashboards { get; set; }
+        public DbSet<TvDashboardWidget> TvDashboardWidgets { get; set; }
     }
 }
