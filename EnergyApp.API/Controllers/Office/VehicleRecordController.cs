@@ -4,6 +4,8 @@ using EnergyApp.API.Models.Office;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using System.Globalization;
+using System.Text;
 
 namespace EnergyApp.API.Controllers.Office
 {
@@ -30,19 +32,26 @@ namespace EnergyApp.API.Controllers.Office
             return Ok(records);
         }
 
+        private static string ResolveId(string? id) =>
+            string.IsNullOrWhiteSpace(id) ? $"EXT-{Guid.NewGuid().ToString("N")[..8].ToUpper()}" : id;
+
         [HttpPost]
         public async Task<ActionResult<VehicleRecord>> Create([FromBody] VehicleRecordDto dto)
         {
-            // ตรวจสอบไม่เกิน 5 คันต่อคน (FaceScanId)
-            var count = await _context.VehicleRecords
-                .CountAsync(v => v.FaceScanId == dto.FaceScanId);
+            var faceScanId = ResolveId(dto.FaceScanId);
 
-            if (count >= MaxVehiclesPerPerson)
-                return BadRequest(new { message = $"ไม่สามารถเพิ่มได้ เนื่องจากผู้ใช้นี้มีรถยนต์ครบ {MaxVehiclesPerPerson} คันแล้ว" });
+            // ตรวจสอบไม่เกิน 5 คันต่อคน (FaceScanId) เฉพาะรหัสที่ระบุ (ไม่ใช่ EXT-)
+            if (!faceScanId.StartsWith("EXT-"))
+            {
+                var count = await _context.VehicleRecords
+                    .CountAsync(v => v.FaceScanId == faceScanId);
+                if (count >= MaxVehiclesPerPerson)
+                    return BadRequest(new { message = $"ไม่สามารถเพิ่มได้ เนื่องจากผู้ใช้นี้มีรถยนต์ครบ {MaxVehiclesPerPerson} คันแล้ว" });
+            }
 
             var vehicle = new VehicleRecord
             {
-                FaceScanId = dto.FaceScanId,
+                FaceScanId = faceScanId,
                 FullName = dto.FullName,
                 Position = dto.Position,
                 Department = dto.Department,
@@ -90,6 +99,91 @@ namespace EnergyApp.API.Controllers.Office
             await _context.SaveChangesAsync();
 
             return NoContent();
+        }
+
+        [HttpPost("import-csv")]
+        [RequestSizeLimit(5 * 1024 * 1024)]
+        [Consumes("multipart/form-data")]
+        public async Task<IActionResult> ImportCsv(IFormFile file)
+        {
+            if (file == null || file.Length == 0)
+                return BadRequest(new { message = "ไม่พบไฟล์" });
+
+            var ext = Path.GetExtension(file.FileName).ToLowerInvariant();
+            if (ext != ".csv")
+                return BadRequest(new { message = "รองรับเฉพาะไฟล์ .csv" });
+
+            var imported = 0;
+            var skipped = 0;
+            var errors = new List<string>();
+
+            using var reader = new StreamReader(file.OpenReadStream(), Encoding.UTF8);
+            var lineNum = 0;
+
+            while (!reader.EndOfStream)
+            {
+                var line = await reader.ReadLineAsync();
+                lineNum++;
+                if (lineNum == 1) continue; // skip header
+
+                if (string.IsNullOrWhiteSpace(line)) continue;
+
+                var cols = line.Split(',');
+                if (cols.Length < 9)
+                {
+                    errors.Add($"แถว {lineNum}: คอลัมน์ไม่ครบ (ต้องการ 9 คอลัมน์)");
+                    skipped++;
+                    continue;
+                }
+
+                static string Trim(string s, int max) => s.Length > max ? s[..max] : s;
+
+                var faceScanId = Trim(cols[0].Trim().Trim('"'), 50);
+                var fullName   = Trim(cols[1].Trim().Trim('"'), 150);
+                var position   = Trim(cols[2].Trim().Trim('"'), 100);
+                var department = Trim(cols[3].Trim().Trim('"'), 100);
+                var phone      = Trim(cols[4].Trim().Trim('"'), 20);
+                var plate      = Trim(cols[5].Trim().Trim('"'), 20);
+                var brand      = Trim(cols[6].Trim().Trim('"'), 50);
+                var model      = Trim(cols[7].Trim().Trim('"'), 50);
+                var province   = Trim(cols[8].Trim().Trim('"'), 100);
+
+                if (string.IsNullOrEmpty(fullName) || string.IsNullOrEmpty(plate))
+                {
+                    errors.Add($"แถว {lineNum}: ข้อมูลไม่ครบ (ชื่อ/ทะเบียน)");
+                    skipped++;
+                    continue;
+                }
+
+                faceScanId = ResolveId(faceScanId);
+
+                var count = !faceScanId.StartsWith("EXT-")
+                    ? await _context.VehicleRecords.CountAsync(v => v.FaceScanId == faceScanId)
+                    : 0;
+                if (count >= MaxVehiclesPerPerson)
+                {
+                    errors.Add($"แถว {lineNum}: {fullName} ({faceScanId}) มีรถครบ {MaxVehiclesPerPerson} คันแล้ว");
+                    skipped++;
+                    continue;
+                }
+
+                _context.VehicleRecords.Add(new VehicleRecord
+                {
+                    FaceScanId   = faceScanId,
+                    FullName     = fullName,
+                    Position     = position,
+                    Department   = department,
+                    PhoneNumber  = phone,
+                    LicensePlate = plate,
+                    Brand        = brand,
+                    Model        = model,
+                    Province     = province,
+                });
+                imported++;
+            }
+
+            await _context.SaveChangesAsync();
+            return Ok(new { imported, skipped, errors });
         }
     }
 }

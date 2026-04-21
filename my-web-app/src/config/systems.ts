@@ -63,7 +63,7 @@ export const SYSTEMS: SystemConfig[] = [
     shortLabel: 'น้ำประปา',
     desc: 'บันทึกเลขมิเตอร์ คำนวณหน่วยน้ำ และสรุปค่าใช้จ่าย',
     adminDesc: 'บันทึกมิเตอร์และค่าน้ำ',
-    icon: 'pi-tint',
+    icon: 'pi-wave-pulse',
     color: 'cyan',
     cardBorder: 'border-l-cyan-400',
     path: '/water/dashboard',

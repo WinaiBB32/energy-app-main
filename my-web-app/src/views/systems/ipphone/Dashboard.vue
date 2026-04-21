@@ -2,6 +2,8 @@
 import { ref, onMounted, watch, computed } from 'vue'
 import { useAuthStore } from '@/stores/auth'
 import { useAppToast } from '@/composables/useAppToast'
+import api from '@/services/api'
+import { toUtcDateOnly, toUtcEndOfDay } from '@/utils/dateUtils'
 
 defineOptions({ name: 'IPPhoneDashboard' })
 const toast = useAppToast()
@@ -156,18 +158,29 @@ const fetchData = async (): Promise<void> => {
   isLoading.value = true
   try {
     const startDate = selectedDateRange.value?.[0] || null
-    let endDate = selectedDateRange.value?.[1] ? new Date(selectedDateRange.value[1]) : null
-    if (endDate) endDate = new Date(endDate.getFullYear(), endDate.getMonth() + 1, 0, 23, 59, 59, 999)
+    const endDate = selectedDateRange.value?.[1] || null
 
-    // TODO: เรียก API .NET จริง
-    // ตัวอย่าง: const { data } = await api.get('/ipphone/dashboard', { params: { startDate, endDate } })
-    deptList.value = []
-    directoryMap.value = {}
-    rawLogs.value = []
+    const params: Record<string, string> = {}
+    if (startDate) params.fromDate = toUtcDateOnly(startDate)
+    if (endDate) params.toDate = toUtcEndOfDay(endDate)
+
+    const [logsRes, dirRes] = await Promise.all([
+      api.get('/IPPhoneMonthStat/logs', { params }),
+      api.get('/IPPhoneDirectory', { params: { take: '2000' } }),
+    ])
+
+    const logs = Array.isArray(logsRes.data) ? logsRes.data : (logsRes.data.items ?? [])
+    rawLogs.value = logs
+
+    const dirItems = Array.isArray(dirRes.data) ? dirRes.data : (dirRes.data.items ?? [])
+    const map: Record<string, DirectoryInfo> = {}
+    for (const d of dirItems) {
+      if (d.ipPhoneNumber) map[d.ipPhoneNumber] = { ownerName: d.ownerName ?? d.ipPhoneNumber, departmentId: d.departmentId ?? '' }
+    }
+    directoryMap.value = map
 
     processData()
     buildPinnedCharts()
-
   } catch (error: unknown) {
     toast.fromError(error, 'ไม่สามารถโหลดข้อมูลสถิติ IP-Phone ได้')
   } finally {

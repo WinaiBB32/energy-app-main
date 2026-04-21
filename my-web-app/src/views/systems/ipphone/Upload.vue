@@ -5,6 +5,7 @@ defineOptions({ name: 'FileUpload' })
 import api from '@/services/api'
 import { useAuthStore } from '@/stores/auth'
 import { logAudit } from '@/utils/auditLogger'
+import { toUtcDateOnly } from '@/utils/dateUtils'
 
 import Card from 'primevue/card'
 import DatePicker from 'primevue/datepicker'
@@ -294,7 +295,7 @@ const handleUploadExcel = async (): Promise<void> => {
 
     const parsedData = previewData.value
     await api.post('/IPPhoneMonthStat', {
-      reportMonth: selectedDate.toISOString(),
+      reportMonth: toUtcDateOnly(selectedDate),
       fileName: selectedFile.value?.name ?? 'ไม่ระบุ',
       uploadedBy: currentUserName.value,
       totalRecords: parsedData.length,

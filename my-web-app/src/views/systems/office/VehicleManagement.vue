@@ -6,7 +6,10 @@
         <h2 class="text-xl font-bold text-gray-800">ระบบบันทึกข้อมูลรถยนต์สำนักงานฯ</h2>
         <p class="text-sm text-gray-500 mt-0.5">1 ท่าน สามารถลงทะเบียนรถยนต์ได้สูงสุด 5 คัน</p>
       </div>
-      <Button v-if="isOfficer" label="เพิ่มรายการ" icon="pi pi-plus" @click="openAdd" />
+      <div v-if="isOfficer" class="flex gap-2">
+        <Button label="นำเข้า CSV" icon="pi pi-upload" severity="secondary" @click="csvDialogVisible = true" />
+        <Button label="เพิ่มรายการ" icon="pi pi-plus" @click="openAdd" />
+      </div>
     </div>
 
     <!-- Search -->
@@ -83,8 +86,8 @@
     >
       <div class="grid grid-cols-2 gap-4 pt-2">
         <div class="flex flex-col gap-1">
-          <label class="text-sm font-medium">รหัสสแกนหน้า *</label>
-          <InputText v-model="form.faceScanId" placeholder="เช่น EMP001" />
+          <label class="text-sm font-medium">รหัสสแกนหน้า</label>
+          <InputText v-model="form.faceScanId" placeholder="เช่น EMP001 (ว่างได้สำหรับบุคคลภายนอก)" />
         </div>
         <div class="flex flex-col gap-1">
           <label class="text-sm font-medium">ชื่อ - นามสกุล *</label>
@@ -151,6 +154,42 @@
       </template>
     </Dialog>
 
+    <!-- CSV Import Dialog -->
+    <Dialog v-model:visible="csvDialogVisible" header="นำเข้าข้อมูลจากไฟล์ CSV" :style="{ width: '520px' }" modal>
+      <div class="space-y-4 pt-2">
+        <div class="bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm text-blue-800">
+          <div class="flex justify-between items-start gap-2">
+            <div>
+              <p class="font-semibold mb-1">รูปแบบไฟล์ CSV (แถวแรกเป็น Header)</p>
+              <p class="font-mono text-xs break-all">FaceScanId,FullName,Position,Department,PhoneNumber,LicensePlate,Brand,Model,Province</p>
+            </div>
+            <Button label="Template" icon="pi pi-download" size="small" severity="secondary" outlined @click="downloadTemplate" />
+          </div>
+        </div>
+        <div class="flex flex-col gap-1">
+          <label class="text-sm font-medium">เลือกไฟล์ CSV</label>
+          <input
+            ref="csvFileInput"
+            type="file"
+            accept=".csv"
+            class="block w-full text-sm text-gray-500 file:mr-3 file:py-1.5 file:px-3 file:rounded file:border-0 file:text-sm file:font-medium file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100"
+            @change="onCsvFileChange"
+          />
+        </div>
+        <div v-if="csvResult" class="text-sm space-y-1">
+          <p class="text-green-700 font-semibold">นำเข้าสำเร็จ {{ csvResult.imported }} รายการ</p>
+          <p v-if="csvResult.skipped > 0" class="text-orange-600">ข้าม {{ csvResult.skipped }} รายการ</p>
+          <ul v-if="csvResult.errors?.length" class="text-red-600 list-disc list-inside max-h-32 overflow-y-auto">
+            <li v-for="(e, i) in csvResult.errors" :key="i">{{ e }}</li>
+          </ul>
+        </div>
+      </div>
+      <template #footer>
+        <Button label="ปิด" text @click="closeCsvDialog" />
+        <Button label="นำเข้า" icon="pi pi-upload" :loading="csvLoading" :disabled="!csvFile" @click="submitCsv" />
+      </template>
+    </Dialog>
+
     <!-- Confirm Delete -->
     <ConfirmDialog />
   </div>
@@ -165,6 +204,7 @@ import { useVehicleMasterStore } from '@/stores/vehicleMasterStore'
 import { usePermissions } from '@/composables/usePermissions'
 import { useAppToast } from '@/composables/useAppToast'
 import type { VehicleRecord, VehicleRecordCreatePayload } from '@/types/vehicle'
+import api from '@/services/api'
 import DataTable from 'primevue/datatable'
 import Column from 'primevue/column'
 import Button from 'primevue/button'
@@ -233,8 +273,8 @@ function openEdit(record: VehicleRecord) {
 }
 
 async function submitForm() {
-  if (!form.value.faceScanId || !form.value.fullName || !form.value.licensePlate) {
-    store.error = 'กรุณากรอกข้อมูลที่จำเป็น: รหัสสแกนหน้า, ชื่อ-นามสกุล, ทะเบียนรถ'
+  if (!form.value.fullName || !form.value.licensePlate) {
+    store.error = 'กรุณากรอกข้อมูลที่จำเป็น: ชื่อ-นามสกุล, ทะเบียนรถ'
     return
   }
   const ok = editTarget.value
@@ -263,6 +303,58 @@ function confirmDelete(record: VehicleRecord) {
       else showError(store.error ?? 'เกิดข้อผิดพลาด')
     },
   })
+}
+
+// CSV import
+const csvDialogVisible = ref(false)
+const csvFile = ref<File | null>(null)
+const csvFileInput = ref<HTMLInputElement | null>(null)
+const csvLoading = ref(false)
+const csvResult = ref<{ imported: number; skipped: number; errors: string[] } | null>(null)
+
+function downloadTemplate() {
+  const header = 'FaceScanId,FullName,Position,Department,PhoneNumber,LicensePlate,Brand,Model,Province'
+  const example = 'EMP001,สมชาย ใจดี,นักวิชาการ,กองพัสดุ,0812345678,กข 1234,Toyota,Fortuner,กรุงเทพมหานคร'
+  const blob = new Blob(['\ufeff' + header + '\n' + example], { type: 'text/csv;charset=utf-8;' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = 'vehicle_template.csv'
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
+function onCsvFileChange(e: Event) {
+  const target = e.target as HTMLInputElement
+  csvFile.value = target.files?.[0] ?? null
+  csvResult.value = null
+}
+
+function closeCsvDialog() {
+  csvDialogVisible.value = false
+  csvFile.value = null
+  csvResult.value = null
+  if (csvFileInput.value) csvFileInput.value.value = ''
+}
+
+async function submitCsv() {
+  if (!csvFile.value) return
+  csvLoading.value = true
+  csvResult.value = null
+  try {
+    const fd = new FormData()
+    fd.append('file', csvFile.value)
+    const res = await api.post('/office/vehicles/import-csv', fd)
+    csvResult.value = res.data
+    if (res.data.imported > 0) {
+      showSuccess(`นำเข้าสำเร็จ ${res.data.imported} รายการ`)
+      await store.fetchRecords()
+    }
+  } catch (err: any) {
+    showError(err?.response?.data?.message ?? 'นำเข้าไม่สำเร็จ')
+  } finally {
+    csvLoading.value = false
+  }
 }
 
 onMounted(() => {

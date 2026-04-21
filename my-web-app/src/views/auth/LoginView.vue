@@ -147,7 +147,7 @@ const handleEmailAuth = async (): Promise<void> => {
           <div
             v-for="feature in [
               { icon: 'pi-bolt', text: 'ระบบค่าไฟฟ้าและพลังงาน Solar Cell' },
-              { icon: 'pi-tint', text: 'ระบบบริหารน้ำประปาและน้ำมันเชื้อเพลิง' },
+              { icon: 'pi-wave-pulse', text: 'ระบบบริหารน้ำประปาและน้ำมันเชื้อเพลิง' },
               { icon: 'pi-chart-bar', text: 'Dashboard และรายงานสถิติเชิงลึก' },
               { icon: 'pi-desktop', text: 'สมุดโทรศัพท์และสถิติ IP-Phone' },
             ]"

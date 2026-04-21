@@ -89,13 +89,13 @@ const sumOffPeakUnits = ref<number>(0)
 const sumFtAmountTotal = ref<number>(0)
 const sumMonthlyFeeTotal = ref<number>(0)
 
-const getYearToDateRange = (): Date[] => {
+const getLastMonthRange = (): Date[] => {
   const now = new Date()
-  const first = new Date(now.getFullYear(), 0, 1) // 1 January of current year
-  const last = new Date(now.getFullYear(), now.getMonth(), now.getDate()) // today
+  const first = new Date(now.getFullYear(), now.getMonth() - 1, 1)
+  const last = new Date(now.getFullYear(), now.getMonth(), 0)
   return [first, last]
 }
-const selectedDateRange = ref<Date[] | null>(getYearToDateRange())
+const selectedDateRange = ref<Date[] | null>(getLastMonthRange())
 const selectedBuildingFilter = ref<string | null>(null)
 
 const thaiMonthShort = [
@@ -221,12 +221,9 @@ const fetchData = async (): Promise<void> => {
 
 function setupPeaUnitTrendChart() {
   // peaUnitTrendData.value: [{ year, month, label, totalUnit, totalAmount }]
-  console.log('peaUnitTrendData', JSON.stringify(peaUnitTrendData.value, null, 2))
   const labels = peaUnitTrendData.value.map((x: any) => x.label)
   const dataUnit = peaUnitTrendData.value.map((x: any) => Number(x.totalUnit) || 0)
   const dataAmount = peaUnitTrendData.value.map((x: any) => parseFloat(x.totalAmount) || 0)
-  console.log('dataUnit', dataUnit)
-  console.log('dataAmount', dataAmount)
   peaUnitTrendChartData.value = {
     labels,
     datasets: [
@@ -262,7 +259,7 @@ watch([selectedDateRange], () => fetchData())
 watch([selectedBuildingFilter], () => processDashboardData())
 
 const clearDateFilter = (): void => {
-  selectedDateRange.value = getYearToDateRange()
+  selectedDateRange.value = getLastMonthRange()
   selectedBuildingFilter.value = null
 }
 

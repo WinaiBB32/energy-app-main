@@ -52,8 +52,8 @@ const sumTotalCost = ref<number>(0)
 
 const getDefaultDateRange = (): Date[] => {
     const now = new Date()
-    const first = new Date(now.getFullYear(), now.getMonth() - 5, 1)
-    const last = new Date(now.getFullYear(), now.getMonth() + 1, 0)
+    const first = new Date(now.getFullYear(), now.getMonth() - 1, 1)
+    const last = new Date(now.getFullYear(), now.getMonth(), 0)
     return [first, last]
 }
 const selectedDateRange = ref<Date[] | null>(getDefaultDateRange())

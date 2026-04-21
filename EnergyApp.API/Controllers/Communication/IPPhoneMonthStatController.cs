@@ -2,6 +2,7 @@ using EnergyApp.API.Data;
 using EnergyApp.API.Models;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using System.Globalization;
 
 namespace EnergyApp.API.Controllers
 {
@@ -28,6 +29,23 @@ namespace EnergyApp.API.Controllers
                 .Where(l => l.StatId == id)
                 .OrderBy(l => l.Extension)
                 .ToListAsync();
+            return Ok(logs);
+        }
+
+        [HttpGet("logs")]
+        public async Task<IActionResult> GetLogsByDateRange(
+            [FromQuery] string? fromDate,
+            [FromQuery] string? toDate)
+        {
+            var query = _db.IPPhoneCallLogs.AsQueryable();
+
+            if (!string.IsNullOrEmpty(fromDate) && DateTime.TryParse(fromDate, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var fd))
+                query = query.Where(l => l.ReportMonth >= fd.ToUniversalTime());
+
+            if (!string.IsNullOrEmpty(toDate) && DateTime.TryParse(toDate, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var td))
+                query = query.Where(l => l.ReportMonth <= td.ToUniversalTime());
+
+            var logs = await query.OrderBy(l => l.ReportMonth).ThenBy(l => l.Extension).ToListAsync();
             return Ok(logs);
         }
 

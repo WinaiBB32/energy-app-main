@@ -4,6 +4,7 @@ import api from '@/services/api'
 import { useAuthStore } from '@/stores/auth'
 import { useAppToast } from '@/composables/useAppToast'
 import { usePermissions } from '@/composables/usePermissions'
+import { toUtcDateOnly } from '@/utils/dateUtils'
 
 import Card from 'primevue/card'
 import InputNumber from 'primevue/inputnumber'
@@ -153,6 +154,8 @@ const submitForm = async (): Promise<void> => {
     isSubmitting.value = true
     const docData = {
       ...formData.value,
+      billingCycle: formData.value.billingCycle ? toUtcDateOnly(formData.value.billingCycle) : null,
+      readingDate: formData.value.readingDate ? toUtcDateOnly(formData.value.readingDate) : null,
       totalAmount: computedTotalAmount.value,
       recordedBy: authStore.user?.uid || 'unknown',
     }
@@ -264,6 +267,8 @@ const saveEdit = async () => {
   try {
     const editData = {
       ...editForm.value,
+      billingCycle: editForm.value.billingCycle ? toUtcDateOnly(editForm.value.billingCycle) : null,
+      readingDate: editForm.value.readingDate ? toUtcDateOnly(editForm.value.readingDate) : null,
       totalAmount: editTotal.value,
     }
     await api.put(`/WaterRecord/${selectedRecord.value.id}`, editData)
@@ -295,7 +300,7 @@ const deleteRecord = async () => {
   <div class="max-w-6xl mx-auto pb-10">
     <div class="mb-6">
       <h2 class="text-2xl font-bold text-blue-600">
-        <i class="pi pi-tint mr-2"></i>บันทึกค่าน้ำประปา
+        <i class="pi pi-wave-pulse mr-2"></i>บันทึกค่าน้ำประปา
       </h2>
       <p class="text-gray-500 mt-1">บันทึกรายละเอียดใบแจ้งค่าน้ำประปา (กปภ./กปน.)</p>
     </div>
