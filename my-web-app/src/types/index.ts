@@ -176,6 +176,7 @@ export interface OmitReceiptEntry {
   bookNo: string
   amount: number | null
   driverName: string
+  branch?: string
 }
 
 export interface ReceiptEntry extends OmitReceiptEntry {

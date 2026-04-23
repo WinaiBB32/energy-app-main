@@ -93,7 +93,10 @@ onMounted(fetchDashboard)
 const moveUp = (index: number) => {
   if (index === 0) return
   const arr = [...widgets.value]
-  ;[arr[index - 1], arr[index]] = [arr[index], arr[index - 1]]
+  const a = arr[index] as WidgetItem
+  const b = arr[index - 1] as WidgetItem
+  arr[index - 1] = a
+  arr[index] = b
   arr.forEach((w, i) => (w.sortOrder = i))
   widgets.value = arr
 }
@@ -101,7 +104,10 @@ const moveUp = (index: number) => {
 const moveDown = (index: number) => {
   if (index >= widgets.value.length - 1) return
   const arr = [...widgets.value]
-  ;[arr[index], arr[index + 1]] = [arr[index + 1], arr[index]]
+  const a = arr[index] as WidgetItem
+  const b = arr[index + 1] as WidgetItem
+  arr[index] = b
+  arr[index + 1] = a
   arr.forEach((w, i) => (w.sortOrder = i))
   widgets.value = arr
 }
