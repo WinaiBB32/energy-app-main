@@ -106,5 +106,48 @@ namespace EnergyApp.API.Controllers
             await _db.SaveChangesAsync();
             return NoContent();
         }
+
+        public class UpdateLogDto
+        {
+            public int AnsweredInbound { get; set; }
+            public int NoAnswerInbound { get; set; }
+            public int BusyInbound { get; set; }
+            public int FailedInbound { get; set; }
+            public int VoicemailInbound { get; set; }
+            public int TotalInbound { get; set; }
+            public int AnsweredOutbound { get; set; }
+            public int NoAnswerOutbound { get; set; }
+            public int BusyOutbound { get; set; }
+            public int FailedOutbound { get; set; }
+            public int VoicemailOutbound { get; set; }
+            public int TotalOutbound { get; set; }
+            public int TotalCalls { get; set; }
+            public string TotalTalkDuration { get; set; } = string.Empty;
+        }
+
+        [HttpPut("logs/{logId}")]
+        public async Task<IActionResult> UpdateLog(string logId, [FromBody] UpdateLogDto dto)
+        {
+            var log = await _db.IPPhoneCallLogs.FindAsync(logId);
+            if (log == null) return NotFound();
+
+            log.AnsweredInbound = dto.AnsweredInbound;
+            log.NoAnswerInbound = dto.NoAnswerInbound;
+            log.BusyInbound = dto.BusyInbound;
+            log.FailedInbound = dto.FailedInbound;
+            log.VoicemailInbound = dto.VoicemailInbound;
+            log.TotalInbound = dto.TotalInbound;
+            log.AnsweredOutbound = dto.AnsweredOutbound;
+            log.NoAnswerOutbound = dto.NoAnswerOutbound;
+            log.BusyOutbound = dto.BusyOutbound;
+            log.FailedOutbound = dto.FailedOutbound;
+            log.VoicemailOutbound = dto.VoicemailOutbound;
+            log.TotalOutbound = dto.TotalOutbound;
+            log.TotalCalls = dto.TotalCalls;
+            log.TotalTalkDuration = dto.TotalTalkDuration;
+
+            await _db.SaveChangesAsync();
+            return Ok(log);
+        }
     }
 }

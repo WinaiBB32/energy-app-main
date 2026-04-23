@@ -13,8 +13,8 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace EnergyApp.API.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    [Migration("20260405053530_AddBuildingRepairAndSparePartWorkflow")]
-    partial class AddBuildingRepairAndSparePartWorkflow
+    [Migration("20260423050312_AddBranchToFuelRecord")]
+    partial class AddBranchToFuelRecord
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -111,6 +111,16 @@ namespace EnergyApp.API.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp without time zone");
 
+                    b.Property<bool>("IsRead")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTime?>("ReadAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("ReadById")
+                        .IsRequired()
+                        .HasColumnType("text");
+
                     b.Property<string>("SenderEmail")
                         .IsRequired()
                         .HasColumnType("text");
@@ -185,12 +195,32 @@ namespace EnergyApp.API.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<decimal>("FtAmount")
+                        .HasColumnType("numeric");
+
                     b.Property<decimal>("FtRate")
+                        .HasColumnType("numeric");
+
+                    b.Property<string>("InvoiceNumber")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("MeterCode")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<decimal>("MonthlyServiceFee")
                         .HasColumnType("numeric");
 
                     b.Property<string>("Note")
                         .IsRequired()
                         .HasColumnType("text");
+
+                    b.Property<decimal>("OffPeakUnits")
+                        .HasColumnType("numeric");
+
+                    b.Property<decimal>("OnPeakUnits")
+                        .HasColumnType("numeric");
 
                     b.Property<decimal>("PeaAmount")
                         .HasColumnType("numeric");
@@ -287,7 +317,7 @@ namespace EnergyApp.API.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("ElectricityRecords");
+                    b.ToTable("ElectricityRecord");
                 });
 
             modelBuilder.Entity("EnergyApp.API.Models.FuelReceipt", b =>
@@ -343,6 +373,10 @@ namespace EnergyApp.API.Migrations
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
+
+                    b.Property<string>("Branch")
+                        .IsRequired()
+                        .HasColumnType("text");
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp without time zone");
@@ -621,6 +655,160 @@ namespace EnergyApp.API.Migrations
                     b.ToTable("MeetingRooms");
                 });
 
+            modelBuilder.Entity("EnergyApp.API.Models.Office.SarabanStat", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("BookName")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("BookType")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<Guid?>("DepartmentId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("ExternalDigitalCount")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("ExternalPaperCount")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("ForwardedCount")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("InternalDigitalCount")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("InternalPaperCount")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("ReceivedCount")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("ReceiverName")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime>("RecordMonth")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("RecordedBy")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("SarabanStats");
+                });
+
+            modelBuilder.Entity("EnergyApp.API.Models.Office.VehicleDepartment", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("character varying(150)");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("VehicleDepartments");
+                });
+
+            modelBuilder.Entity("EnergyApp.API.Models.Office.VehicleProvince", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("VehicleProvinces");
+                });
+
+            modelBuilder.Entity("EnergyApp.API.Models.Office.VehicleRecord", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Brand")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("Department")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("FaceScanId")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<string>("FullName")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("character varying(150)");
+
+                    b.Property<string>("LicensePlate")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<string>("Model")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<string>("PhoneNumber")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<string>("Position")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("Province")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<DateTime?>("UpdatedAtUtc")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("VehicleRecords");
+                });
+
             modelBuilder.Entity("EnergyApp.API.Models.PostalRecord", b =>
                 {
                     b.Property<Guid>("Id")
@@ -636,8 +824,26 @@ namespace EnergyApp.API.Migrations
                     b.Property<int>("EmsMail")
                         .HasColumnType("integer");
 
+                    b.Property<decimal>("EmsMailUnitPrice")
+                        .HasColumnType("numeric");
+
+                    b.Property<int>("IncomingEmsMail")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("IncomingNormalMail")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("IncomingRegisteredMail")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("IncomingTotalMail")
+                        .HasColumnType("integer");
+
                     b.Property<int>("NormalMail")
                         .HasColumnType("integer");
+
+                    b.Property<decimal>("NormalMailUnitPrice")
+                        .HasColumnType("numeric");
 
                     b.Property<DateTime>("RecordMonth")
                         .HasColumnType("timestamp without time zone");
@@ -648,6 +854,9 @@ namespace EnergyApp.API.Migrations
 
                     b.Property<int>("RegisteredMail")
                         .HasColumnType("integer");
+
+                    b.Property<decimal>("RegisteredMailUnitPrice")
+                        .HasColumnType("numeric");
 
                     b.Property<int>("TotalMail")
                         .HasColumnType("integer");
@@ -1152,6 +1361,69 @@ namespace EnergyApp.API.Migrations
                     b.ToTable("TelephoneRecords");
                 });
 
+            modelBuilder.Entity("EnergyApp.API.Models.TvDashboard", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("Description")
+                        .HasColumnType("text");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<int>("RefreshIntervalSeconds")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("SlideDurationSeconds")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("TvDashboards");
+                });
+
+            modelBuilder.Entity("EnergyApp.API.Models.TvDashboardWidget", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("IsVisible")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Label")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("TvDashboardId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("WidgetType")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TvDashboardId");
+
+                    b.ToTable("TvDashboardWidgets");
+                });
+
             modelBuilder.Entity("EnergyApp.API.Models.User", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1302,6 +1574,17 @@ namespace EnergyApp.API.Migrations
                     b.Navigation("SparePart");
                 });
 
+            modelBuilder.Entity("EnergyApp.API.Models.TvDashboardWidget", b =>
+                {
+                    b.HasOne("EnergyApp.API.Models.TvDashboard", "TvDashboard")
+                        .WithMany("Widgets")
+                        .HasForeignKey("TvDashboardId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("TvDashboard");
+                });
+
             modelBuilder.Entity("EnergyApp.API.Models.User", b =>
                 {
                     b.HasOne("EnergyApp.API.Models.Department", "Department")
@@ -1319,6 +1602,11 @@ namespace EnergyApp.API.Migrations
             modelBuilder.Entity("EnergyApp.API.Models.SparePartIssueRequest", b =>
                 {
                     b.Navigation("Items");
+                });
+
+            modelBuilder.Entity("EnergyApp.API.Models.TvDashboard", b =>
+                {
+                    b.Navigation("Widgets");
                 });
 #pragma warning restore 612, 618
         }

@@ -26,6 +26,7 @@ namespace EnergyApp.API.Controllers
             public decimal Liters { get; set; }
             public decimal TotalAmount { get; set; }
             public string GasStationCompany { get; set; } = string.Empty;
+            public string Branch { get; set; } = string.Empty;
             public string Note { get; set; } = string.Empty;
             public string RecordedBy { get; set; } = string.Empty;
         }
@@ -89,6 +90,7 @@ namespace EnergyApp.API.Controllers
                 Liters = req.Liters,
                 TotalAmount = req.TotalAmount,
                 GasStationCompany = req.GasStationCompany,
+                Branch = req.Branch,
                 Note = req.Note,
                 RecordedBy = req.RecordedBy
             };
@@ -114,6 +116,7 @@ namespace EnergyApp.API.Controllers
             record.Liters = req.Liters;
             record.TotalAmount = req.TotalAmount;
             record.GasStationCompany = req.GasStationCompany;
+            record.Branch = req.Branch;
             record.Note = req.Note;
             record.RecordedBy = req.RecordedBy;
 

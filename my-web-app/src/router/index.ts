@@ -170,7 +170,11 @@ const router = createRouter({
           component: () => import('../views/systems/ipphone/Upload.vue'),
           meta: { system: 'system6', requiresSuperAdmin: true },
         },
-        // Legacy redirect: old detail path → new directory system
+        // Legacy redirects: old ipphone paths → directory/maintenance systems
+        {
+          path: '/ipphone/manage',
+          redirect: '/directory/manage',
+        },
         {
           path: '/ipphone/directory/:id',
           redirect: (to) => `/directory/${to.params.id}`,
@@ -182,6 +186,12 @@ const router = createRouter({
           name: 'directory-list',
           component: () => import('../views/systems/directory/Directory.vue'),
           meta: { system: 'system12' },
+        },
+        {
+          path: '/directory/manage',
+          name: 'directory-manage',
+          component: () => import('../views/systems/directory/DirectoryManage.vue'),
+          meta: { system: 'system12', requiresAdmin: true },
         },
         {
           path: '/directory/:id',

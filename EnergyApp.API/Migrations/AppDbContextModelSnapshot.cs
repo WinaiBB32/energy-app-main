@@ -314,7 +314,7 @@ namespace EnergyApp.API.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("ElectricityRecords");
+                    b.ToTable("ElectricityRecord");
                 });
 
             modelBuilder.Entity("EnergyApp.API.Models.FuelReceipt", b =>
@@ -370,6 +370,10 @@ namespace EnergyApp.API.Migrations
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
+
+                    b.Property<string>("Branch")
+                        .IsRequired()
+                        .HasColumnType("text");
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp without time zone");
@@ -1354,6 +1358,69 @@ namespace EnergyApp.API.Migrations
                     b.ToTable("TelephoneRecords");
                 });
 
+            modelBuilder.Entity("EnergyApp.API.Models.TvDashboard", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("Description")
+                        .HasColumnType("text");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<int>("RefreshIntervalSeconds")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("SlideDurationSeconds")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("TvDashboards");
+                });
+
+            modelBuilder.Entity("EnergyApp.API.Models.TvDashboardWidget", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("IsVisible")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Label")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("TvDashboardId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("WidgetType")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TvDashboardId");
+
+                    b.ToTable("TvDashboardWidgets");
+                });
+
             modelBuilder.Entity("EnergyApp.API.Models.User", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1504,6 +1571,17 @@ namespace EnergyApp.API.Migrations
                     b.Navigation("SparePart");
                 });
 
+            modelBuilder.Entity("EnergyApp.API.Models.TvDashboardWidget", b =>
+                {
+                    b.HasOne("EnergyApp.API.Models.TvDashboard", "TvDashboard")
+                        .WithMany("Widgets")
+                        .HasForeignKey("TvDashboardId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("TvDashboard");
+                });
+
             modelBuilder.Entity("EnergyApp.API.Models.User", b =>
                 {
                     b.HasOne("EnergyApp.API.Models.Department", "Department")
@@ -1521,80 +1599,6 @@ namespace EnergyApp.API.Migrations
             modelBuilder.Entity("EnergyApp.API.Models.SparePartIssueRequest", b =>
                 {
                     b.Navigation("Items");
-                });
-
-            modelBuilder.Entity("EnergyApp.API.Models.TvDashboard", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp without time zone");
-
-                    b.Property<string>("Description")
-                        .HasColumnType("text");
-
-                    b.Property<bool>("IsActive")
-                        .HasColumnType("boolean");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<int>("RefreshIntervalSeconds")
-                        .HasColumnType("integer");
-
-                    b.Property<int>("SlideDurationSeconds")
-                        .HasColumnType("integer");
-
-                    b.Property<DateTime>("UpdatedAt")
-                        .HasColumnType("timestamp without time zone");
-
-                    b.HasKey("Id");
-
-                    b.ToTable("TvDashboards");
-                });
-
-            modelBuilder.Entity("EnergyApp.API.Models.TvDashboardWidget", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<bool>("IsVisible")
-                        .HasColumnType("boolean");
-
-                    b.Property<string>("Label")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<int>("SortOrder")
-                        .HasColumnType("integer");
-
-                    b.Property<Guid>("TvDashboardId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("WidgetType")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("TvDashboardId");
-
-                    b.ToTable("TvDashboardWidgets");
-                });
-
-            modelBuilder.Entity("EnergyApp.API.Models.TvDashboardWidget", b =>
-                {
-                    b.HasOne("EnergyApp.API.Models.TvDashboard", "TvDashboard")
-                        .WithMany("Widgets")
-                        .HasForeignKey("TvDashboardId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("TvDashboard");
                 });
 
             modelBuilder.Entity("EnergyApp.API.Models.TvDashboard", b =>

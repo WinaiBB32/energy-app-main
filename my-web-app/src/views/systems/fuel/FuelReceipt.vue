@@ -39,6 +39,8 @@ const blankEntry = () => ({
   bookNo: '',
   amount: null as number | null,
   driverName: '',
+  branch: '', // เพิ่ม field สาขา
+  liters: null as number | null, // เพิ่ม field ปริมาณลิตร
 })
 
 const entryDate = ref<Date | null>(new Date())
@@ -56,7 +58,8 @@ const submitForm = async () => {
   if (!entryDate.value || !entry.value.amount || !entry.value.detail) {
     errorMessage.value = 'กรุณากรอกข้อมูลที่จำเป็น (*) ให้ครบถ้วน'
     return
-  }
+    branch: entry.value.branch,
+    liters: entry.value.liters,
 
   const d = entryDate.value
   const singleEntry = {
@@ -88,7 +91,6 @@ const submitForm = async () => {
     isSubmitting.value = false
   }
 }
-
 </script>
 
 <template>
@@ -105,8 +107,12 @@ const submitForm = async () => {
     <Card class="shadow-sm border-none">
       <template #content>
         <form @submit.prevent="submitForm" class="flex flex-col gap-8">
-          <Message v-if="successMessage" severity="success" :closable="true">{{ successMessage }}</Message>
-          <Message v-if="errorMessage" severity="error" :closable="true">{{ errorMessage }}</Message>
+          <Message v-if="successMessage" severity="success" :closable="true">{{
+            successMessage
+          }}</Message>
+          <Message v-if="errorMessage" severity="error" :closable="true">{{
+            errorMessage
+          }}</Message>
 
           <!-- ข้อมูลใบรับรอง -->
           <div class="bg-red-50/30 p-4 rounded-lg border border-red-100 mt-2">
@@ -115,12 +121,15 @@ const submitForm = async () => {
             </h3>
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 items-end">
               <div class="flex flex-col gap-2">
-                <label class="font-semibold text-sm text-gray-700">วันที่ <span class="text-red-500">*</span></label>
+                <label class="font-semibold text-sm text-gray-700"
+                  >วันที่ <span class="text-red-500">*</span></label
+                >
                 <DatePicker v-model="entryDate" dateFormat="dd/mm/yy" class="w-full" showIcon />
               </div>
               <div class="flex flex-col gap-2 lg:col-span-2">
-                <label class="font-semibold text-sm text-gray-700">รายละเอียดรายจ่าย <span
-                    class="text-red-500">*</span></label>
+                <label class="font-semibold text-sm text-gray-700"
+                  >รายละเอียดรายจ่าย <span class="text-red-500">*</span></label
+                >
                 <InputText v-model="entry.detail" placeholder="ค่าผ่านทางพิเศษ" class="w-full" />
               </div>
               <div class="flex flex-col gap-2">
@@ -136,19 +145,54 @@ const submitForm = async () => {
                 <label class="font-semibold text-sm text-gray-700">เล่มที่</label>
                 <InputText v-model="entry.bookNo" placeholder="เล่มที่อ้างอิง" class="w-full" />
               </div>
+              <div class="flex flex-col gap-2">
+                <label class="font-semibold text-sm text-gray-700">สาขา</label>
+                <InputText
+                  v-model="entry.branch"
+                  placeholder="ชื่อสาขา/สถานีบริการ"
+                  class="w-full"
+                />
+              </div>
+              <div class="flex flex-col gap-2">
+                <label class="font-semibold text-sm text-gray-700"
+                  >ปริมาณ (ลิตร) <span class="text-red-500">*</span></label
+                >
+                <InputNumber
+                  v-model="entry.liters"
+                  :minFractionDigits="3"
+                  :maxFractionDigits="3"
+                  placeholder="0.000"
+                  class="w-full"
+                  :inputProps="{ class: 'font-bold text-lg text-blue-700' }"
+                />
+              </div>
               <div class="flex flex-col gap-2 lg:col-span-2">
-                <label class="font-semibold text-sm text-gray-700">จำนวนเงิน (บาท) <span
-                    class="text-red-500">*</span></label>
-                <InputNumber v-model="entry.amount" :minFractionDigits="2" :maxFractionDigits="2" placeholder="0.00"
-                  class="w-full" :inputProps="{ class: 'font-bold text-lg text-blue-700' }" />
+                <label class="font-semibold text-sm text-gray-700"
+                  >จำนวนเงิน (บาท) <span class="text-red-500">*</span></label
+                >
+                <InputNumber
+                  v-model="entry.amount"
+                  :minFractionDigits="2"
+                  :maxFractionDigits="2"
+                  placeholder="0.00"
+                  class="w-full"
+                  :inputProps="{ class: 'font-bold text-lg text-blue-700' }"
+                />
               </div>
             </div>
           </div>
 
           <!-- Actions -->
           <div class="flex justify-end gap-3 mt-2 pt-4 border-t border-gray-100">
-            <Button type="submit" label="บันทึกข้อมูล" icon="pi pi-save" severity="danger" class="px-8 py-3 text-lg"
-              :loading="isSubmitting" :disabled="!entry.amount" />
+            <Button
+              type="submit"
+              label="บันทึกข้อมูล"
+              icon="pi pi-save"
+              severity="danger"
+              class="px-8 py-3 text-lg"
+              :loading="isSubmitting"
+              :disabled="!entry.amount"
+            />
           </div>
         </form>
       </template>

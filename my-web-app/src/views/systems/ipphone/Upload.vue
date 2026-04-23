@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 
 defineOptions({ name: 'FileUpload' })
 import api from '@/services/api'
 import { useAuthStore } from '@/stores/auth'
+import { useAppToast } from '@/composables/useAppToast'
 import { logAudit } from '@/utils/auditLogger'
 import { toUtcDateOnly } from '@/utils/dateUtils'
 
@@ -15,6 +16,8 @@ import DataTable from 'primevue/datatable'
 import Column from 'primevue/column'
 import Tag from 'primevue/tag'
 import Dialog from 'primevue/dialog'
+import InputNumber from 'primevue/inputnumber'
+import InputText from 'primevue/inputtext'
 
 // ─── Interfaces ───────────────────────────────────────────────────────────────
 interface UploadStatRecord {
@@ -28,26 +31,47 @@ interface UploadStatRecord {
 
 interface ParsedRow {
   extension: string
-  // ─ Inbound ─────────────────────────────────────────────
-  answeredInbound: number      // B[1]  ตอบแล้ว
-  noAnswerInbound: number      // C[2]  ไม่มีคำตอบ = ไม่รับสาย
-  busyInbound: number          // D[3]  ไม่ว่าง = ไม่รับสาย
-  failedInbound: number        // E[4]  ล้มเหลว = Busy
-  voicemailInbound: number     // F[5]  วอยซ์เมล = Busy
-  totalInbound: number         // G[6]  รวมสายเข้า
-  // ─ Outbound ─────────────────────────────────────────
-  answeredOutbound: number     // H[7]  ตอบแล้ว
-  noAnswerOutbound: number     // I[8]  ไม่มีคำตอบ
-  busyOutbound: number         // J[9]  ไม่ว่าง
-  failedOutbound: number       // K[10] ล้มเหลว
-  voicemailOutbound: number    // L[11] วอยซ์เมล
-  totalOutbound: number        // M[12] รวมสายออก
-  totalCalls: number           // computed G+M
-  totalTalkDuration: string    // O[14]
+  answeredInbound: number
+  noAnswerInbound: number
+  busyInbound: number
+  failedInbound: number
+  voicemailInbound: number
+  totalInbound: number
+  answeredOutbound: number
+  noAnswerOutbound: number
+  busyOutbound: number
+  failedOutbound: number
+  voicemailOutbound: number
+  totalOutbound: number
+  totalCalls: number
+  totalTalkDuration: string
+}
+
+interface CallLogRecord {
+  id: string
+  statId: string
+  extension: string
+  reportMonth: string
+  answeredInbound: number
+  noAnswerInbound: number
+  busyInbound: number
+  failedInbound: number
+  voicemailInbound: number
+  totalInbound: number
+  answeredOutbound: number
+  noAnswerOutbound: number
+  busyOutbound: number
+  failedOutbound: number
+  voicemailOutbound: number
+  totalOutbound: number
+  totalCalls: number
+  totalTalkDuration: string
+  createdAt: string
 }
 
 // ─── State & Setup ────────────────────────────────────────────────────────────
 const authStore = useAuthStore()
+const toast = useAppToast()
 const currentUserName = computed(
   () => authStore.userProfile?.displayName || authStore.user?.email || 'ไม่ระบุชื่อ',
 )
@@ -69,7 +93,6 @@ onMounted(() => {
 
 // ─── CSV Template Download ──────────────────────────────────────────────────
 const downloadTemplate = (): void => {
-  // ตรงกับรูปแบบ export จากระบบ IP-Phone จริง (15 column A-O)
   const header = [
     'หมายเลขภายใน',
     'ตอบแล้ว(สายเข้า)',
@@ -97,7 +120,7 @@ const downloadTemplate = (): void => {
     '70131,80,10,0,0,0,90,20,5,0,0,0,25,115,02:10:30',
   ].join('\n')
 
-  const bom = '\uFEFF'
+  const bom = '﻿'
   const csv = bom + header + '\n' + sampleRows
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
   const url = URL.createObjectURL(blob)
@@ -140,7 +163,6 @@ const isUploading = ref<boolean>(false)
 const uploadSuccess = ref<string>('')
 const uploadError = ref<string>('')
 
-// Preview state
 const previewData = ref<ParsedRow[]>([])
 const showPreview = ref(false)
 const parseErrors = ref<string[]>([])
@@ -188,34 +210,18 @@ const parseFilePreview = (file: File): void => {
         if (!row) continue
         const cols = parseCSVRow(row)
 
-        // raw export จากระบบ IP-Phone มี 15 column (A-O)
         if (cols.length < 14) continue
 
-        // A: หมายเลขภายใน (อาจมี "-" ตามหลัง)
         const rawExt = cols[0] ?? ''
         const ext = rawExt.includes('-')
           ? (rawExt.split('-')[0] ?? '').trim()
           : rawExt.trim()
 
-        //  B[1]  ตอบแล้ว(สายเข้า)
-        //  C[2]  ไม่มีคำตอบ(สายเข้า) = ไม่รับสาย
-        //  D[3]  ไม่ว่าง(ขาเข้า) = ไม่รับสาย
-        //  E[4]  ล้มเหลว(ขาเข้า) = Busy
-        //  F[5]  วอยซ์เมล(ขาเข้า) = Busy
-        //  G[6]  รวม(สายเข้า)
-        //  H[7]  ตอบแล้ว(สายออก)
-        //  I[8]  ไม่มีคำตอบ(สายออก)
-        //  J[9]  ไม่ว่าง(ขาออก)
-        //  K[10] ล้มเหลว(ขาออก)
-        //  L[11] วอยซ์เมล(ขาออก)
-        //  M[12] รวม(สายออก)
-        //  N[13] รวมทั้งหมด
-        //  O[14] ระยะเวลาพูดคุย
         const answeredInbound   = Number(cols[1])  || 0
-        const noAnswerInbound   = Number(cols[2])  || 0  // ไม่รับสาย
-        const busyInbound       = Number(cols[3])  || 0  // ไม่รับสาย
-        const failedInbound     = Number(cols[4])  || 0  // Busy
-        const voicemailInbound  = Number(cols[5])  || 0  // Busy
+        const noAnswerInbound   = Number(cols[2])  || 0
+        const busyInbound       = Number(cols[3])  || 0
+        const failedInbound     = Number(cols[4])  || 0
+        const voicemailInbound  = Number(cols[5])  || 0
         const totalInbound      = Number(cols[6])  || 0
         const answeredOutbound  = Number(cols[7])  || 0
         const noAnswerOutbound  = Number(cols[8])  || 0
@@ -284,7 +290,6 @@ const handleUploadExcel = async (): Promise<void> => {
   isUploading.value = true
 
   try {
-    // Check duplicate
     const dupRes = await api.get('/IPPhoneMonthStat/check-duplicate', {
       params: { year: selectedDate.getFullYear(), month: selectedDate.getMonth() + 1 },
     })
@@ -352,11 +357,109 @@ const handleDeleteUpload = async (): Promise<void> => {
   }
 }
 
+// ─── View / Edit Logs ─────────────────────────────────────────────────────────
+const viewingStat = ref<UploadStatRecord | null>(null)
+const statLogs = ref<CallLogRecord[]>([])
+const isLoadingLogs = ref(false)
+const viewDialogVisible = computed({
+  get: () => !!viewingStat.value,
+  set: (v: boolean) => { if (!v) { viewingStat.value = null; statLogs.value = [] } },
+})
+
+const openViewDialog = async (stat: UploadStatRecord) => {
+  viewingStat.value = stat
+  isLoadingLogs.value = true
+  statLogs.value = []
+  try {
+    const res = await api.get(`/IPPhoneMonthStat/${stat.id}/logs`)
+    statLogs.value = res.data
+  } catch (e) {
+    toast.fromError(e, 'โหลดข้อมูล log ไม่สำเร็จ')
+  } finally {
+    isLoadingLogs.value = false
+  }
+}
+
+// ─── Edit individual log ───────────────────────────────────────────────────────
+interface EditForm {
+  answeredInbound: number
+  noAnswerInbound: number
+  busyInbound: number
+  failedInbound: number
+  voicemailInbound: number
+  totalInbound: number
+  answeredOutbound: number
+  noAnswerOutbound: number
+  busyOutbound: number
+  failedOutbound: number
+  voicemailOutbound: number
+  totalOutbound: number
+  totalCalls: number
+  totalTalkDuration: string
+}
+
+const editingLog = ref<CallLogRecord | null>(null)
+const editForm = ref<EditForm>({
+  answeredInbound: 0, noAnswerInbound: 0, busyInbound: 0, failedInbound: 0, voicemailInbound: 0,
+  totalInbound: 0,
+  answeredOutbound: 0, noAnswerOutbound: 0, busyOutbound: 0, failedOutbound: 0, voicemailOutbound: 0,
+  totalOutbound: 0,
+  totalCalls: 0,
+  totalTalkDuration: '',
+})
+const isSavingLog = ref(false)
+const editDialogVisible = computed({
+  get: () => !!editingLog.value,
+  set: (v: boolean) => { if (!v) editingLog.value = null },
+})
+
+const openEditLog = (log: CallLogRecord) => {
+  editingLog.value = log
+  editForm.value = {
+    answeredInbound: log.answeredInbound,
+    noAnswerInbound: log.noAnswerInbound,
+    busyInbound: log.busyInbound,
+    failedInbound: log.failedInbound,
+    voicemailInbound: log.voicemailInbound,
+    totalInbound: log.totalInbound,
+    answeredOutbound: log.answeredOutbound,
+    noAnswerOutbound: log.noAnswerOutbound,
+    busyOutbound: log.busyOutbound,
+    failedOutbound: log.failedOutbound,
+    voicemailOutbound: log.voicemailOutbound,
+    totalOutbound: log.totalOutbound,
+    totalCalls: log.totalCalls,
+    totalTalkDuration: log.totalTalkDuration,
+  }
+}
+
+// Auto-compute totalCalls when totalInbound/totalOutbound change
+watch(
+  () => [editForm.value.totalInbound, editForm.value.totalOutbound] as [number, number],
+  ([inb, out]) => { editForm.value.totalCalls = inb + out },
+)
+
+const saveEditLog = async () => {
+  if (!editingLog.value) return
+  isSavingLog.value = true
+  try {
+    const res = await api.put(`/IPPhoneMonthStat/logs/${editingLog.value.id}`, editForm.value)
+    const idx = statLogs.value.findIndex((l) => l.id === editingLog.value!.id)
+    if (idx !== -1) statLogs.value[idx] = { ...statLogs.value[idx], ...res.data }
+    toast.success('บันทึกการแก้ไขสำเร็จ')
+    editingLog.value = null
+  } catch (e) {
+    toast.fromError(e, 'บันทึกไม่สำเร็จ')
+  } finally {
+    isSavingLog.value = false
+  }
+}
+
 // ─── Helpers ───────────────────────────────────────────────────────────────────
 const formatThaiMonth = (dateStr: string | null | undefined): string =>
   dateStr ? new Date(dateStr).toLocaleDateString('th-TH', { year: 'numeric', month: 'long' }) : '-'
 
-const answerRate = (row: ParsedRow): string => {
+const answerRate = (row: { totalCalls: number; answeredInbound: number; answeredOutbound: number }): string => {
   const total = row.totalCalls
   if (!total) return '0%'
   const answered = row.answeredInbound + row.answeredOutbound
@@ -494,7 +597,6 @@ const answerRate = (row: ParsedRow): string => {
               </p>
             </div>
 
-            <!-- Preview summary -->
             <div v-if="showPreview" class="rounded-lg bg-teal-50 border border-teal-200 px-4 py-3">
               <p class="font-semibold text-teal-800 text-sm mb-1">
                 <i class="pi pi-check-circle mr-1"></i>อ่านไฟล์สำเร็จ
@@ -554,17 +656,28 @@ const answerRate = (row: ParsedRow): string => {
                 <Tag :value="`${sp.data.totalRecords} เบอร์`" severity="info" rounded class="text-[10px]" />
               </template>
             </Column>
-            <Column header="ลบ">
+            <Column header="จัดการ">
               <template #body="sp">
-                <Button
-                  icon="pi pi-trash"
-                  severity="danger"
-                  text
-                  rounded
-                  size="small"
-                  @click="confirmDeleteId = sp.data.id"
-                  v-tooltip.top="'ลบข้อมูลชุดนี้'"
-                />
+                <div class="flex items-center gap-1">
+                  <Button
+                    icon="pi pi-list"
+                    severity="secondary"
+                    text
+                    rounded
+                    size="small"
+                    @click="openViewDialog(sp.data)"
+                    v-tooltip.top="'ดู / แก้ไขรายการ'"
+                  />
+                  <Button
+                    icon="pi pi-trash"
+                    severity="danger"
+                    text
+                    rounded
+                    size="small"
+                    @click="confirmDeleteId = sp.data.id"
+                    v-tooltip.top="'ลบข้อมูลชุดนี้'"
+                  />
+                </div>
               </template>
             </Column>
           </DataTable>
@@ -572,7 +685,7 @@ const answerRate = (row: ParsedRow): string => {
       </Card>
     </div>
 
-    <!-- Preview Table -->
+    <!-- Preview Table (before upload) -->
     <Card v-if="showPreview && previewData.length > 0" class="shadow-sm border-none mt-6">
       <template #title>
         <div class="text-base font-bold text-gray-700">
@@ -608,6 +721,191 @@ const answerRate = (row: ParsedRow): string => {
         </DataTable>
       </template>
     </Card>
+
+    <!-- ── View / Edit Logs Dialog ────────────────────────────────────────────── -->
+    <Dialog
+      v-model:visible="viewDialogVisible"
+      modal
+      :header="`สถิติประจำ${viewingStat ? formatThaiMonth(viewingStat.reportMonth) : ''}`"
+      :style="{ width: '90vw', maxWidth: '1100px' }"
+      :draggable="false"
+    >
+      <div v-if="isLoadingLogs" class="flex justify-center py-12 text-gray-400">
+        <i class="pi pi-spin pi-spinner text-2xl mr-2"></i> กำลังโหลด...
+      </div>
+
+      <DataTable
+        v-else
+        :value="statLogs"
+        :rows="15"
+        paginator
+        stripedRows
+        responsiveLayout="scroll"
+        class="text-sm"
+        emptyMessage="ไม่มีข้อมูล"
+      >
+        <Column field="extension" header="เบอร์โทร" sortable>
+          <template #body="{ data }">
+            <span class="font-bold text-gray-800">{{ data.extension }}</span>
+          </template>
+        </Column>
+        <Column header="สายเข้า (รับ/ทั้งหมด)" sortable sort-field="totalInbound">
+          <template #body="{ data }">
+            <span class="text-green-700 font-bold">{{ data.answeredInbound }}</span>
+            <span class="text-gray-400 text-xs"> / {{ data.totalInbound }}</span>
+          </template>
+        </Column>
+        <Column header="สายออก (รับ/ทั้งหมด)" sortable sort-field="totalOutbound">
+          <template #body="{ data }">
+            <span class="text-blue-700 font-bold">{{ data.answeredOutbound }}</span>
+            <span class="text-gray-400 text-xs"> / {{ data.totalOutbound }}</span>
+          </template>
+        </Column>
+        <Column header="รวมสาย" sortable sort-field="totalCalls">
+          <template #body="{ data }">
+            <span class="font-bold">{{ data.totalCalls.toLocaleString() }}</span>
+          </template>
+        </Column>
+        <Column header="% รับสาย">
+          <template #body="{ data }">
+            <Tag
+              :value="answerRate(data)"
+              :severity="parseFloat(answerRate(data)) >= 80 ? 'success' : parseFloat(answerRate(data)) >= 50 ? 'warn' : 'danger'"
+              rounded
+            />
+          </template>
+        </Column>
+        <Column field="totalTalkDuration" header="เวลาสนทนา" />
+        <Column header="แก้ไข" style="width: 70px">
+          <template #body="{ data }">
+            <Button
+              icon="pi pi-pencil"
+              severity="secondary"
+              text
+              rounded
+              size="small"
+              @click="openEditLog(data)"
+              v-tooltip.top="'แก้ไขข้อมูลเบอร์นี้'"
+            />
+          </template>
+        </Column>
+      </DataTable>
+    </Dialog>
+
+    <!-- ── Edit Log Dialog ─────────────────────────────────────────────────────── -->
+    <Dialog
+      v-model:visible="editDialogVisible"
+      modal
+      :header="`แก้ไขสถิติ — เบอร์ ${editingLog?.extension}`"
+      :style="{ width: '560px' }"
+      :draggable="false"
+    >
+      <div class="flex flex-col gap-5 py-2">
+        <!-- สายเข้า -->
+        <div>
+          <p class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">
+            <i class="pi pi-arrow-down text-green-600 mr-1"></i>สายเข้า (Inbound)
+          </p>
+          <div class="grid grid-cols-2 gap-3">
+            <div class="flex flex-col gap-1">
+              <label class="text-xs text-gray-600">ตอบแล้ว</label>
+              <InputNumber v-model="editForm.answeredInbound" :min="0" showButtons fluid />
+            </div>
+            <div class="flex flex-col gap-1">
+              <label class="text-xs text-gray-600">ไม่มีคำตอบ</label>
+              <InputNumber v-model="editForm.noAnswerInbound" :min="0" showButtons fluid />
+            </div>
+            <div class="flex flex-col gap-1">
+              <label class="text-xs text-gray-600">ไม่ว่าง (Busy)</label>
+              <InputNumber v-model="editForm.busyInbound" :min="0" showButtons fluid />
+            </div>
+            <div class="flex flex-col gap-1">
+              <label class="text-xs text-gray-600">ล้มเหลว</label>
+              <InputNumber v-model="editForm.failedInbound" :min="0" showButtons fluid />
+            </div>
+            <div class="flex flex-col gap-1">
+              <label class="text-xs text-gray-600">วอยซ์เมล</label>
+              <InputNumber v-model="editForm.voicemailInbound" :min="0" showButtons fluid />
+            </div>
+            <div class="flex flex-col gap-1">
+              <label class="text-xs font-bold text-green-700">รวมสายเข้า</label>
+              <InputNumber v-model="editForm.totalInbound" :min="0" showButtons fluid class="font-bold" />
+            </div>
+          </div>
+        </div>
+
+        <hr class="border-gray-200" />
+
+        <!-- สายออก -->
+        <div>
+          <p class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">
+            <i class="pi pi-arrow-up text-blue-600 mr-1"></i>สายออก (Outbound)
+          </p>
+          <div class="grid grid-cols-2 gap-3">
+            <div class="flex flex-col gap-1">
+              <label class="text-xs text-gray-600">ตอบแล้ว</label>
+              <InputNumber v-model="editForm.answeredOutbound" :min="0" showButtons fluid />
+            </div>
+            <div class="flex flex-col gap-1">
+              <label class="text-xs text-gray-600">ไม่มีคำตอบ</label>
+              <InputNumber v-model="editForm.noAnswerOutbound" :min="0" showButtons fluid />
+            </div>
+            <div class="flex flex-col gap-1">
+              <label class="text-xs text-gray-600">ไม่ว่าง (Busy)</label>
+              <InputNumber v-model="editForm.busyOutbound" :min="0" showButtons fluid />
+            </div>
+            <div class="flex flex-col gap-1">
+              <label class="text-xs text-gray-600">ล้มเหลว</label>
+              <InputNumber v-model="editForm.failedOutbound" :min="0" showButtons fluid />
+            </div>
+            <div class="flex flex-col gap-1">
+              <label class="text-xs text-gray-600">วอยซ์เมล</label>
+              <InputNumber v-model="editForm.voicemailOutbound" :min="0" showButtons fluid />
+            </div>
+            <div class="flex flex-col gap-1">
+              <label class="text-xs font-bold text-blue-700">รวมสายออก</label>
+              <InputNumber v-model="editForm.totalOutbound" :min="0" showButtons fluid class="font-bold" />
+            </div>
+          </div>
+        </div>
+
+        <hr class="border-gray-200" />
+
+        <!-- ยอดรวม -->
+        <div class="grid grid-cols-2 gap-3">
+          <div class="flex flex-col gap-1">
+            <label class="text-xs font-bold text-gray-700">รวมทั้งหมด (คำนวณอัตโนมัติ)</label>
+            <InputNumber
+              v-model="editForm.totalCalls"
+              :min="0"
+              fluid
+              disabled
+              class="bg-gray-50"
+            />
+            <p class="text-[11px] text-gray-400">= รวมสายเข้า + รวมสายออก</p>
+          </div>
+          <div class="flex flex-col gap-1">
+            <label class="text-xs font-bold text-gray-700">เวลาสนทนารวม (HH:MM:SS)</label>
+            <InputText
+              v-model="editForm.totalTalkDuration"
+              placeholder="00:00:00"
+              fluid
+            />
+          </div>
+        </div>
+      </div>
+
+      <template #footer>
+        <Button label="ยกเลิก" severity="secondary" text @click="editingLog = null" />
+        <Button
+          label="บันทึกการแก้ไข"
+          icon="pi pi-save"
+          severity="success"
+          :loading="isSavingLog"
+          @click="saveEditLog"
+        />
+      </template>
+    </Dialog>
 
     <!-- Confirm Delete Dialog -->
     <Dialog v-model:visible="showDeleteDialog" modal header="ยืนยันการลบข้อมูล" :style="{ width: '400px' }">

@@ -32,21 +32,29 @@ const filterDeptId = ref('')
 const filteredRecords = computed(() =>
   historyRecords.value.filter((r) => {
     if (filterDateFrom.value) {
-      const from = new Date(filterDateFrom.value); from.setHours(0, 0, 0, 0)
+      const from = new Date(filterDateFrom.value)
+      from.setHours(0, 0, 0, 0)
       if (new Date(r.createdAt) < from) return false
     }
     if (filterDateTo.value) {
-      const to = new Date(filterDateTo.value); to.setHours(23, 59, 59, 999)
+      const to = new Date(filterDateTo.value)
+      to.setHours(23, 59, 59, 999)
       if (new Date(r.createdAt) > to) return false
     }
     if (filterDeptId.value && r.departmentId !== filterDeptId.value) return false
     return true
-  })
+  }),
 )
 
-const totalAmount = computed(() => filteredRecords.value.reduce((s, r) => s + (r.totalAmount ?? 0), 0))
+const totalAmount = computed(() =>
+  filteredRecords.value.reduce((s, r) => s + (r.totalAmount ?? 0), 0),
+)
 
-const clearFilters = () => { filterDateFrom.value = null; filterDateTo.value = null; filterDeptId.value = '' }
+const clearFilters = () => {
+  filterDateFrom.value = null
+  filterDateTo.value = null
+  filterDeptId.value = ''
+}
 
 // ─── Fetch ─────────────────────────────────────────────────────────────────
 onMounted(async () => {
@@ -58,10 +66,12 @@ onMounted(async () => {
       api.get('/FuelReceipt', { params }),
       api.get('/Department'),
     ])
-    historyRecords.value = (receiptsRes.data.items || []).map((r: FetchedReceipt & { entriesJson?: string }) => ({
-      ...r,
-      entries: r.entries ?? (r.entriesJson ? JSON.parse(r.entriesJson) : []),
-    }))
+    historyRecords.value = (receiptsRes.data.items || []).map(
+      (r: FetchedReceipt & { entriesJson?: string }) => ({
+        ...r,
+        entries: r.entries ?? (r.entriesJson ? JSON.parse(r.entriesJson) : []),
+      }),
+    )
     departments.value = deptsRes.data
   } catch {
     // แสดงหน้าว่างถ้าโหลดข้อมูลไม่สำเร็จ
@@ -72,14 +82,34 @@ onMounted(async () => {
 
 // ─── Helpers ───────────────────────────────────────────────────────────────
 const thaiMonths = [
-  'มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน',
-  'กรกฎาคม', 'สิงหาคม', 'กันยายน', 'ตุลาคม', 'พฤศจิกายน', 'ธันวาคม',
+  'มกราคม',
+  'กุมภาพันธ์',
+  'มีนาคม',
+  'เมษายน',
+  'พฤษภาคม',
+  'มิถุนายน',
+  'กรกฎาคม',
+  'สิงหาคม',
+  'กันยายน',
+  'ตุลาคม',
+  'พฤศจิกายน',
+  'ธันวาคม',
 ]
 const getDeptName = (id: string) => departments.value.find((x) => x.id === id)?.name || id
 const formatCurrency = (val: number | null | undefined) =>
-  val != null ? new Intl.NumberFormat('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(val) : '-'
+  val != null
+    ? new Intl.NumberFormat('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(
+        val,
+      )
+    : '-'
 const formatDate = (dateStr: string | null | undefined) =>
-  dateStr ? new Date(dateStr).toLocaleDateString('th-TH', { year: 'numeric', month: 'short', day: 'numeric' }) : '-'
+  dateStr
+    ? new Date(dateStr).toLocaleDateString('th-TH', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+      })
+    : '-'
 
 // ─── Detail / Delete ────────────────────────────────────────────────────────
 const selectedRecord = ref<FetchedReceipt | null>(null)
@@ -89,7 +119,7 @@ const isSaving = ref(false)
 
 const openDetail = (event: { data: FetchedReceipt }) => {
   selectedRecord.value = JSON.parse(JSON.stringify(event.data)) as FetchedReceipt
-  selectedRecord.value.entries.forEach(e => {
+  selectedRecord.value.entries.forEach((e) => {
     let mIndex = thaiMonths.indexOf(e.month)
     if (mIndex === -1) mIndex = 0
     let y = e.year || new Date().getFullYear() + 543
@@ -104,7 +134,7 @@ const saveEdit = async () => {
   if (!selectedRecord.value) return
   try {
     isSaving.value = true
-    selectedRecord.value.entries.forEach(e => {
+    selectedRecord.value.entries.forEach((e) => {
       if (e._editDate) {
         e.day = e._editDate.getDate()
         e.month = thaiMonths[e._editDate.getMonth()] || ''
@@ -122,8 +152,9 @@ const saveEdit = async () => {
       declarerDept: selectedRecord.value.declarerDept || '',
       note: selectedRecord.value.note || '',
     })
-    const index = historyRecords.value.findIndex(r => r.id === selectedRecord.value!.id)
-    if (index !== -1) historyRecords.value[index] = { ...historyRecords.value[index]!, ...selectedRecord.value }
+    const index = historyRecords.value.findIndex((r) => r.id === selectedRecord.value!.id)
+    if (index !== -1)
+      historyRecords.value[index] = { ...historyRecords.value[index]!, ...selectedRecord.value }
     isEditing.value = false
   } catch (err: unknown) {
     alert('เกิดข้อผิดพลาดในการบันทึก: ' + (err instanceof Error ? err.message : String(err)))
@@ -136,7 +167,7 @@ const deleteRecord = async () => {
   if (!selectedRecord.value) return
   if (!confirm('ยืนยันการลบข้อมูลนี้?')) return
   await api.delete(`/FuelReceipt/${selectedRecord.value.id}`)
-  historyRecords.value = historyRecords.value.filter(r => r.id !== selectedRecord.value!.id)
+  historyRecords.value = historyRecords.value.filter((r) => r.id !== selectedRecord.value!.id)
   detailVisible.value = false
   selectedRecord.value = null
 }
@@ -160,7 +191,9 @@ const deleteRecord = async () => {
           </h3>
           <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 items-end">
             <div class="flex flex-col gap-2">
-              <label class="text-sm font-semibold text-gray-700">วันที่เริ่มต้น (วันที่บันทึก)</label>
+              <label class="text-sm font-semibold text-gray-700"
+                >วันที่เริ่มต้น (วันที่บันทึก)</label
+              >
               <DatePicker v-model="filterDateFrom" dateFormat="dd/mm/yy" showIcon class="w-full" />
             </div>
             <div class="flex flex-col gap-2">
@@ -169,18 +202,30 @@ const deleteRecord = async () => {
             </div>
             <div v-if="currentUserRole === 'superadmin'" class="flex flex-col gap-2">
               <label class="text-sm font-semibold text-gray-700">หน่วยงาน</label>
-              <Select v-model="filterDeptId"
+              <Select
+                v-model="filterDeptId"
                 :options="[{ id: '', name: 'ทั้งหมด' }, ...departments]"
-                optionLabel="name" optionValue="id" class="w-full" />
+                optionLabel="name"
+                optionValue="id"
+                class="w-full"
+              />
             </div>
             <div class="flex items-end">
-              <Button label="ล้างตัวกรอง" icon="pi pi-times" severity="secondary" text @click="clearFilters" />
+              <Button
+                label="ล้างตัวกรอง"
+                icon="pi pi-times"
+                severity="secondary"
+                text
+                @click="clearFilters"
+              />
             </div>
           </div>
         </div>
 
         <!-- Summary -->
-        <div class="bg-red-50 border border-red-100 rounded-xl p-4 flex flex-wrap gap-6 items-center mb-4">
+        <div
+          class="bg-red-50 border border-red-100 rounded-xl p-4 flex flex-wrap gap-6 items-center mb-4"
+        >
           <div>
             <p class="text-xs text-gray-500">รายการที่แสดง</p>
             <p class="font-bold text-xl text-gray-800">{{ filteredRecords.length }} บิล</p>
@@ -195,7 +240,8 @@ const deleteRecord = async () => {
         <DataTable
           :value="filteredRecords"
           :loading="isLoading"
-          paginator :rows="15"
+          paginator
+          :rows="15"
           stripedRows
           emptyMessage="ไม่พบข้อมูล"
           selectionMode="single"
@@ -205,7 +251,9 @@ const deleteRecord = async () => {
           <Column header="วันที่บันทึก / ผู้บันทึก">
             <template #body="sp">
               <div class="font-semibold text-gray-800">{{ formatDate(sp.data.createdAt) }}</div>
-              <div class="text-xs text-gray-500"><i class="pi pi-user mr-1"></i>{{ sp.data.recordedByName }}</div>
+              <div class="text-xs text-gray-500">
+                <i class="pi pi-user mr-1"></i>{{ sp.data.recordedByName }}
+              </div>
             </template>
           </Column>
           <Column v-if="currentUserRole === 'superadmin'" header="หน่วยงาน">
@@ -218,10 +266,12 @@ const deleteRecord = async () => {
           </Column>
           <Column header="รวมยอดเงิน">
             <template #body="sp">
-              <span class="font-bold text-red-600 text-lg">{{ formatCurrency(sp.data.totalAmount) }}</span>
+              <span class="font-bold text-red-600 text-lg">{{
+                formatCurrency(sp.data.totalAmount)
+              }}</span>
             </template>
           </Column>
-          <Column header="" style="width:3rem">
+          <Column header="" style="width: 3rem">
             <template #body><i class="pi pi-chevron-right text-gray-400"></i></template>
           </Column>
         </DataTable>
@@ -229,8 +279,13 @@ const deleteRecord = async () => {
     </Card>
 
     <!-- Detail Dialog -->
-    <Dialog v-model:visible="detailVisible" modal header="รายละเอียดบันทึกรายจ่าย"
-      :style="{ width: '800px' }" :draggable="false">
+    <Dialog
+      v-model:visible="detailVisible"
+      modal
+      header="รายละเอียดบันทึกรายจ่าย"
+      :style="{ width: '800px' }"
+      :draggable="false"
+    >
       <div v-if="selectedRecord" class="flex flex-col gap-4">
         <div class="grid grid-cols-2 gap-3 text-sm">
           <div class="bg-gray-50 rounded-lg p-3">
@@ -251,6 +306,7 @@ const deleteRecord = async () => {
               <th class="border px-2 py-1.5 text-center">เดือน</th>
               <th class="border px-2 py-1.5 text-center">ปี</th>
               <th class="border px-2 py-1.5">รายละเอียด</th>
+              <th class="border px-2 py-1.5 text-center">สาขา</th>
               <th class="border px-2 py-1.5 text-right">จำนวนเงิน</th>
               <th class="border px-2 py-1.5 text-center">พขร.</th>
             </tr>
@@ -262,17 +318,26 @@ const deleteRecord = async () => {
               <td class="border px-2 py-1.5 text-center">{{ e.year }}</td>
               <td class="border px-2 py-1.5">
                 {{ e.detail }}
-                <span v-if="e.receiptNo" class="text-gray-500 text-xs text-nowrap"> เลขที่ {{ e.receiptNo }}</span>
-                <span v-if="e.bookNo" class="text-gray-500 text-xs text-nowrap"> เล่มที่ {{ e.bookNo }}</span>
+                <span v-if="e.receiptNo" class="text-gray-500 text-xs text-nowrap">
+                  เลขที่ {{ e.receiptNo }}</span
+                >
+                <span v-if="e.bookNo" class="text-gray-500 text-xs text-nowrap">
+                  เล่มที่ {{ e.bookNo }}</span
+                >
               </td>
-              <td class="border px-2 py-1.5 text-right font-semibold">{{ formatCurrency(e.amount) }}</td>
+              <td class="border px-2 py-1.5 text-center">{{ e.branch }}</td>
+              <td class="border px-2 py-1.5 text-right font-semibold">
+                {{ formatCurrency(e.amount) }}
+              </td>
               <td class="border px-2 py-1.5 text-center">{{ e.driverName }}</td>
             </tr>
           </tbody>
           <tfoot>
             <tr class="bg-red-50">
               <td colspan="4" class="border px-2 py-1.5 text-center font-bold">รวมทั้งสิ้น</td>
-              <td class="border px-2 py-1.5 text-right font-bold text-red-700">{{ formatCurrency(selectedRecord.totalAmount) }}</td>
+              <td class="border px-2 py-1.5 text-right font-bold text-red-700">
+                {{ formatCurrency(selectedRecord.totalAmount) }}
+              </td>
               <td class="border px-2 py-1.5"></td>
             </tr>
           </tfoot>
@@ -280,17 +345,26 @@ const deleteRecord = async () => {
 
         <!-- Editing Mode -->
         <div v-else class="flex flex-col gap-4">
-          <div v-for="(e, i) in selectedRecord.entries" :key="i" class="p-4 rounded-xl border border-blue-100 bg-blue-50/30 flex flex-col gap-4">
+          <div
+            v-for="(e, i) in selectedRecord.entries"
+            :key="i"
+            class="p-4 rounded-xl border border-blue-100 bg-blue-50/30 flex flex-col gap-4"
+          >
             <h4 class="font-bold text-blue-800 border-b border-blue-100 pb-2">
-              <i class="pi pi-receipt mr-2"></i>แก้ไขรายการจ่าย <span v-if="selectedRecord.entries.length > 1">#{{ i+1 }}</span>
+              <i class="pi pi-receipt mr-2"></i>แก้ไขรายการจ่าย
+              <span v-if="selectedRecord.entries.length > 1">#{{ i + 1 }}</span>
             </h4>
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 items-end">
               <div class="flex flex-col gap-2">
-                <label class="font-semibold text-sm text-gray-700">วันที่ <span class="text-red-500">*</span></label>
+                <label class="font-semibold text-sm text-gray-700"
+                  >วันที่ <span class="text-red-500">*</span></label
+                >
                 <DatePicker v-model="e._editDate" dateFormat="dd/mm/yy" class="w-full" showIcon />
               </div>
               <div class="flex flex-col gap-2 lg:col-span-2">
-                <label class="font-semibold text-sm text-gray-700">รายละเอียดรายจ่าย <span class="text-red-500">*</span></label>
+                <label class="font-semibold text-sm text-gray-700"
+                  >รายละเอียดรายจ่าย <span class="text-red-500">*</span></label
+                >
                 <InputText v-model="e.detail" placeholder="ค่าผ่านทางพิเศษ" class="w-full" />
               </div>
               <div class="flex flex-col gap-2">
@@ -305,19 +379,42 @@ const deleteRecord = async () => {
                 <label class="font-semibold text-sm text-gray-700">เล่มที่</label>
                 <InputText v-model="e.bookNo" placeholder="เล่มที่อ้างอิง" class="w-full" />
               </div>
+              <div class="flex flex-col gap-2">
+                <label class="font-semibold text-sm text-gray-700">สาขา</label>
+                <InputText v-model="e.branch" placeholder="ชื่อสาขา/สถานีบริการ" class="w-full" />
+              </div>
               <div class="flex flex-col gap-2 lg:col-span-2">
-                <label class="font-semibold text-sm text-gray-700">จำนวนเงิน (บาท) <span class="text-red-500">*</span></label>
-                <InputNumber v-model="e.amount" :minFractionDigits="2" :maxFractionDigits="2" placeholder="0.00" class="w-full" :inputProps="{ class: 'font-bold text-lg text-blue-700' }" />
+                <label class="font-semibold text-sm text-gray-700"
+                  >จำนวนเงิน (บาท) <span class="text-red-500">*</span></label
+                >
+                <InputNumber
+                  v-model="e.amount"
+                  :minFractionDigits="2"
+                  :maxFractionDigits="2"
+                  placeholder="0.00"
+                  class="w-full"
+                  :inputProps="{ class: 'font-bold text-lg text-blue-700' }"
+                />
               </div>
             </div>
           </div>
-          <div class="flex items-center justify-between p-3 rounded-xl bg-red-50 border border-red-100">
+          <div
+            class="flex items-center justify-between p-3 rounded-xl bg-red-50 border border-red-100"
+          >
             <span class="font-bold text-gray-700">ยอดรวมสุทธิ</span>
-            <span class="font-bold text-red-700 text-lg">{{ formatCurrency(selectedRecord.entries.reduce((a,c) => a + (c.amount || 0), 0)) }} บาท</span>
+            <span class="font-bold text-red-700 text-lg"
+              >{{
+                formatCurrency(selectedRecord.entries.reduce((a, c) => a + (c.amount || 0), 0))
+              }}
+              บาท</span
+            >
           </div>
         </div>
 
-        <div v-if="selectedRecord.note || isEditing" class="bg-amber-50 rounded-lg p-3 border border-amber-100 text-sm">
+        <div
+          v-if="selectedRecord.note || isEditing"
+          class="bg-amber-50 rounded-lg p-3 border border-amber-100 text-sm"
+        >
           <p class="text-gray-500 text-xs mb-1">หมายเหตุ</p>
           <p v-if="!isEditing">{{ selectedRecord.note }}</p>
           <Textarea v-else v-model="selectedRecord.note" rows="2" class="w-full text-xs p-2" />
@@ -325,12 +422,24 @@ const deleteRecord = async () => {
       </div>
       <template #footer>
         <template v-if="!isEditing">
-          <Button label="แก้ไข" icon="pi pi-file-edit" severity="info" text @click="isEditing = true" />
+          <Button
+            label="แก้ไข"
+            icon="pi pi-file-edit"
+            severity="info"
+            text
+            @click="isEditing = true"
+          />
           <Button label="ลบ" icon="pi pi-trash" severity="danger" text @click="deleteRecord" />
           <Button label="ปิด" severity="secondary" text @click="detailVisible = false" />
         </template>
         <template v-else>
-          <Button label="บันทึก" icon="pi pi-save" severity="success" :loading="isSaving" @click="saveEdit" />
+          <Button
+            label="บันทึก"
+            icon="pi pi-save"
+            severity="success"
+            :loading="isSaving"
+            @click="saveEdit"
+          />
           <Button label="ยกเลิก" severity="secondary" text @click="isEditing = false" />
         </template>
       </template>

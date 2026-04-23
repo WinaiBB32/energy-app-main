@@ -14,6 +14,7 @@ namespace EnergyApp.API.Models
         public decimal Liters { get; set; }
         public decimal TotalAmount { get; set; }
         public string GasStationCompany { get; set; } = string.Empty;
+        public string Branch { get; set; } = string.Empty;
         public string Note { get; set; } = string.Empty;
         public string RecordedBy { get; set; } = string.Empty;
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;

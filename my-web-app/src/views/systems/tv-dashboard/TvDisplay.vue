@@ -17,6 +17,7 @@ interface WidgetData {
   label: string
   sortOrder: number
   data: Record<string, number>
+  [key: string]: any
 }
 
 interface SummaryResponse {
@@ -65,14 +66,9 @@ const WIDGET_META: Record<
 
 // --------------- State ---------------
 // KPI Card & Trend Chart
-const kpi = ref({
-  totalExpense: 0,
-  totalPeaUnit: 0,
-  totalSolar: 0,
-  solarSavings: 0,
-})
-const peaUnitTrendChartData = ref()
-const peaUnitTrendChartOptions = ref()
+const kpiByType = ref<Record<string, any>>({})
+const chartDataByType = ref<Record<string, any>>({})
+const chartOptionsByType = ref<Record<string, any>>({})
 const summary = ref<SummaryResponse | null>(null)
 const isLoading = ref(true)
 const hasError = ref(false)
@@ -109,23 +105,26 @@ function loadSelectedWidgets() {
 }
 loadSelectedWidgets()
 
-// --- Widgets ที่เติมให้ครบ เฉพาะที่เลือก ---
-const filledWidgets = computed(() => {
-  if (!summary.value) return []
+// --- Widgets แยกตามระบบ (Section) ---
+const SYSTEMS = [
+  { type: 'electricity', label: 'ระบบไฟฟ้า', color: 'border-blue-500' },
+  { type: 'solar', label: 'โซลาร์เซลล์', color: 'border-yellow-400' },
+  { type: 'water', label: 'ระบบน้ำประปา', color: 'border-cyan-500' },
+  { type: 'fuel', label: 'ระบบน้ำมันเชื้อเพลิง', color: 'border-pink-500' },
+  { type: 'maintenance', label: 'ซ่อมบำรุง', color: 'border-orange-500' },
+  { type: 'meeting', label: 'ห้องประชุม', color: 'border-indigo-500' },
+  { type: 'postal', label: 'ไปรษณีย์', color: 'border-blue-400' },
+  { type: 'saraban', label: 'สารบรรณ', color: 'border-purple-400' },
+]
+
+const widgetsByType = computed<Record<string, WidgetData>>(() => {
+  if (!summary.value) return {}
   const widgets = summary.value.widgets || []
-  // Map widgetType -> widget
-  const widgetMap = Object.fromEntries(widgets.map((w) => [w.widgetType, w]))
-  // เฉพาะ widget ที่เลือก
-  return selectedWidgetTypes.value.map((type, idx) => {
-    if (widgetMap[type]) return widgetMap[type]
-    // สร้าง widget เปล่าๆ
-    return {
-      widgetType: type,
-      label: WIDGET_META[type]?.icon ? getWidgetLabel(type) : type,
-      sortOrder: idx,
-      data: {},
-    }
+  const map: Record<string, WidgetData> = {}
+  widgets.forEach((w) => {
+    map[w.widgetType] = w
   })
+  return map
 })
 
 // --- ดึง label widget ตามประเภท ---
@@ -225,35 +224,33 @@ const fetchSummary = async () => {
       fetchLatest('/FuelRecord'),
       api.get('/ElectricityBill/monthly-unit-trend'),
     ])
-    // KPI Card (แบบ dashboard หลัก)
+    // KPI & Chart per system
+    // Electricity
     let totalExpense = 0,
       totalPeaUnit = 0,
-      totalSolar = 0
+      onPeak = 0,
+      offPeak = 0
     elecItems.forEach((r: any) => {
       totalExpense += r.peaAmount || 0
       totalPeaUnit += r.peaUnitUsed || 0
+      onPeak += r.onPeakUnits || 0
+      offPeak += r.offPeakUnits || 0
     })
-    solarItems.forEach((r: any) => {
-      totalSolar += r.solarUnitProduced || 0
-    })
-    const avgCostPerUnit = totalPeaUnit > 0 ? totalExpense / totalPeaUnit : 0
-    const solarSavings = totalSolar * avgCostPerUnit
-    kpi.value = { totalExpense, totalPeaUnit, totalSolar, solarSavings }
-    // กราฟแนวโน้ม (Bar Chart)
-    const trend = peaTrendRes.data || []
-    peaUnitTrendChartData.value = {
-      labels: trend.map((x: any) => x.label),
+    kpiByType.value['electricity'] = { totalExpense, totalPeaUnit, onPeak, offPeak }
+    const elecTrend = peaTrendRes.data || []
+    chartDataByType.value['electricity'] = {
+      labels: elecTrend.map((x: any) => x.label),
       datasets: [
         {
           type: 'bar',
           label: 'หน่วยที่ซื้อ กฟภ. (Unit)',
           backgroundColor: '#3b82f6',
           borderRadius: 4,
-          data: trend.map((x: any) => Number(x.totalUnit) || 0),
+          data: elecTrend.map((x: any) => Number(x.totalUnit) || 0),
         },
       ],
     }
-    peaUnitTrendChartOptions.value = {
+    chartOptionsByType.value['electricity'] = {
       maintainAspectRatio: false,
       aspectRatio: 0.8,
       plugins: { legend: { display: false } },
@@ -266,61 +263,88 @@ const fetchSummary = async () => {
         },
       },
     }
-    // Map ข้อมูลเป็น widget (เหมือนเดิม)
-    const widgets = []
-    let totalAmount = 0,
-      totalKwh = 0,
-      onPeak = 0,
-      offPeak = 0
-    elecItems.forEach((r: any) => {
-      totalAmount += r.peaAmount || 0
-      totalKwh += r.peaUnitUsed || 0
-      onPeak += r.onPeakUnits || 0
-      offPeak += r.offPeakUnits || 0
-    })
-    widgets.push({
-      widgetType: 'electricity',
-      label: 'ค่าไฟฟ้า',
-      sortOrder: 0,
-      data: { totalAmount, totalKwh, onPeak, offPeak },
-    })
-    let totalProductionKwh = 0,
+    // Solar
+    let totalSolar = 0,
       totalSelfUseKwh = 0,
       toGrid = 0
     solarItems.forEach((r: any) => {
-      totalProductionKwh += r.solarUnitProduced || 0
+      totalSolar += r.solarUnitProduced || 0
       totalSelfUseKwh += r.toHomeWh ? r.toHomeWh / 1000 : 0
       toGrid += r.toGridWh ? r.toGridWh / 1000 : 0
     })
-    widgets.push({
-      widgetType: 'solar',
-      label: 'โซลาร์เซลล์',
-      sortOrder: 1,
-      data: { totalProductionKwh, totalSelfUseKwh, toGrid },
-    })
+    kpiByType.value['solar'] = { totalSolar, totalSelfUseKwh, toGrid }
+    // (ตัวอย่าง: ไม่มี trend chart สำหรับ solar, ถ้ามีข้อมูลเพิ่มค่อยเติม)
+    // Water
     let waterTotalAmount = 0,
       waterTotalUnit = 0
     waterItems.forEach((r: any) => {
       waterTotalAmount += r.totalAmount || 0
       waterTotalUnit += r.totalUnit || 0
     })
-    widgets.push({
-      widgetType: 'water',
-      label: 'ค่าน้ำประปา',
-      sortOrder: 2,
-      data: { totalAmount: waterTotalAmount, totalUnit: waterTotalUnit },
-    })
+    kpiByType.value['water'] = { waterTotalAmount, waterTotalUnit }
+    // Fuel
     let fuelTotalAmount = 0,
       fuelTotalLiters = 0
     fuelItems.forEach((r: any) => {
       fuelTotalAmount += r.totalAmount || 0
       fuelTotalLiters += r.totalLiters || 0
     })
+    kpiByType.value['fuel'] = { fuelTotalAmount, fuelTotalLiters }
+    // Map ข้อมูลเป็น widget (เหมือนเดิม)
+    const widgets = []
+    let totalAmount = 0,
+      totalKwh = 0
+    elecItems.forEach((r: any) => {
+      totalAmount += r.peaAmount || 0
+      totalKwh += r.peaUnitUsed || 0
+    })
+    widgets.push({
+      widgetType: 'electricity',
+      label: 'ค่าไฟฟ้า',
+      sortOrder: 0,
+      data: { totalAmount, totalKwh },
+    })
+    let totalProductionKwhWidget = 0,
+      solarSelfUseKwhWidget = 0,
+      solarToGridWidget = 0
+    solarItems.forEach((r: any) => {
+      totalProductionKwhWidget += r.solarUnitProduced || 0
+      solarSelfUseKwhWidget += r.toHomeWh ? r.toHomeWh / 1000 : 0
+      solarToGridWidget += r.toGridWh ? r.toGridWh / 1000 : 0
+    })
+    widgets.push({
+      widgetType: 'solar',
+      label: 'โซลาร์เซลล์',
+      sortOrder: 1,
+      data: {
+        totalProductionKwh: totalProductionKwhWidget,
+        totalSelfUseKwh: solarSelfUseKwhWidget,
+        toGrid: solarToGridWidget,
+      },
+    })
+    let waterWidgetAmount = 0,
+      waterWidgetUnit = 0
+    waterItems.forEach((r: any) => {
+      waterWidgetAmount += r.totalAmount || 0
+      waterWidgetUnit += r.totalUnit || 0
+    })
+    widgets.push({
+      widgetType: 'water',
+      label: 'ค่าน้ำประปา',
+      sortOrder: 2,
+      data: { totalAmount: waterWidgetAmount, totalUnit: waterWidgetUnit },
+    })
+    let fuelWidgetAmount = 0,
+      fuelWidgetLiters = 0
+    fuelItems.forEach((r: any) => {
+      fuelWidgetAmount += r.totalAmount || 0
+      fuelWidgetLiters += r.totalLiters || 0
+    })
     widgets.push({
       widgetType: 'fuel',
       label: 'น้ำมันเชื้อเพลิง',
       sortOrder: 3,
-      data: { totalAmount: fuelTotalAmount, totalLiters: fuelTotalLiters },
+      data: { totalAmount: fuelWidgetAmount, totalLiters: fuelWidgetLiters },
     })
     summary.value = {
       id: 'tv-dashboard',
@@ -464,12 +488,16 @@ const getMetrics = (widget: WidgetData): Metric[] => {
   }
 }
 
-const currentWidget = computed(() => filledWidgets.value[currentSlide.value])
-const currentMeta = computed(() =>
-  currentWidget.value
-    ? (WIDGET_META[currentWidget.value.widgetType] ?? WIDGET_META.electricity)
-    : null,
-)
+// Slide dots: เฉพาะ widget ที่เลือกและมีข้อมูลจริง
+const displayedWidgetTypes = computed(() => {
+  return SYSTEMS.map((sys) => sys.type).filter(
+    (type) => selectedWidgetTypes.value.includes(type) && widgetsByType.value[type],
+  )
+})
+const currentMeta = computed(() => {
+  const type = displayedWidgetTypes.value[currentSlide.value]
+  return type ? (WIDGET_META[type] ?? WIDGET_META.electricity) : null
+})
 </script>
 
 <template>
@@ -511,94 +539,135 @@ const currentMeta = computed(() =>
         <p class="text-white/40 text-sm">ระบบจะลองใหม่อัตโนมัติ</p>
       </div>
       <template v-else>
-        <!-- KPI Card Section -->
-        <section
-          class="w-full max-w-6xl grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-6 mb-2 md:mb-4"
-        >
-          <KpiCard
-            label="ค่าไฟรวม (กฟภ.)"
-            :value="fmtBaht(kpi.totalExpense)"
-            card-class="tv-kpi-card"
-          />
-          <KpiCard
-            label="ซื้อไฟฟ้า (กฟภ.)"
-            :value="fmt(kpi.totalPeaUnit, 0)"
-            sub-label="Unit"
-            card-class="tv-kpi-card"
-          />
-          <KpiCard
-            label="ผลิตจาก Solar"
-            :value="fmt(kpi.totalSolar, 0)"
-            sub-label="kWh"
-            card-class="tv-kpi-card"
-          />
-          <KpiCard
-            label="ประหยัดจาก Solar"
-            :value="fmtBaht(kpi.solarSavings)"
-            card-class="tv-kpi-card"
-          />
-        </section>
-        <!-- Trend Chart Section -->
-        <section
-          class="w-full max-w-6xl bg-white/10 rounded-2xl p-2 xs:p-4 md:p-6 mb-2 md:mb-6 shadow-lg"
-        >
-          <h3 class="text-white/90 text-base md:text-lg font-bold mb-2 md:mb-4">
-            แนวโน้มหน่วยไฟฟ้าที่ซื้อ (12 เดือน)
-          </h3>
-          <div class="w-full" style="min-width: 0">
-            <Chart
-              type="bar"
-              :data="peaUnitTrendChartData"
-              :options="peaUnitTrendChartOptions"
-              style="width: 100%; min-height: 180px; max-height: 340px"
-            />
-          </div>
-        </section>
-        <!-- System Detail Cards -->
-        <section
-          class="w-full max-w-6xl grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 md:gap-6"
-        >
-          <div
-            v-for="widget in filledWidgets"
-            :key="widget.widgetType"
-            class="tv-system-card rounded-2xl p-4 flex flex-col items-center shadow-lg"
-            :style="`background: linear-gradient(135deg, ${WIDGET_META[widget.widgetType]?.gradientFrom ?? '#222'} 0%, ${WIDGET_META[widget.widgetType]?.gradientTo ?? '#111'} 100%)`"
+        <section v-for="sys in SYSTEMS" :key="sys.type" class="w-full max-w-7xl mb-8">
+          <template
+            v-if="
+              selectedWidgetTypes.includes(sys.type) &&
+              widgetsByType.value &&
+              widgetsByType.value[sys.type]
+            "
           >
+            <div :class="`mb-4 border-l-8 pl-4 ${sys.color}`">
+              <h2 class="text-white text-2xl font-bold drop-shadow mb-1">{{ sys.label }}</h2>
+              <p class="text-white/60 text-xs md:text-sm mb-2">
+                ข้อมูลเดือน {{ currentMonthLabel }}
+              </p>
+            </div>
             <div
-              class="w-14 h-14 md:w-20 md:h-20 rounded-full flex items-center justify-center mb-3 shadow-xl"
-              :style="`background: ${WIDGET_META[widget.widgetType]?.color ?? '#fff'}22; border: 2px solid ${WIDGET_META[widget.widgetType]?.color ?? '#fff'}55`"
+              class="tv-system-card rounded-2xl p-4 flex flex-col items-center shadow-lg"
+              :style="`background: linear-gradient(135deg, ${WIDGET_META[sys.type]?.gradientFrom ?? '#222'} 0%, ${WIDGET_META[sys.type]?.gradientTo ?? '#111'} 100%)`"
             >
-              <span
-                class="pi text-3xl md:text-5xl"
-                :class="WIDGET_META[widget.widgetType]?.icon"
-                :style="`color: ${WIDGET_META[widget.widgetType]?.color ?? '#fff'}`"
-              />
-            </div>
-            <h4 class="text-white text-lg md:text-xl font-bold mb-1 drop-shadow">
-              {{ widget.label }}
-            </h4>
-            <p class="text-white/60 text-xs md:text-sm mb-2">ข้อมูลเดือน {{ currentMonthLabel }}</p>
-            <div v-if="widgetHasError(widget)" class="flex flex-col items-center opacity-60">
-              <span class="pi pi-database text-2xl md:text-3xl text-white/40 mb-2" />
-              <p class="text-white/50 text-sm md:text-base">ไม่สามารถโหลดข้อมูลได้</p>
-            </div>
-            <div v-else class="w-full grid grid-cols-1 gap-2">
               <div
-                v-for="(metric, mi) in getMetrics(widget)"
-                :key="mi"
-                class="flex flex-col items-center"
+                class="w-14 h-14 md:w-20 md:h-20 rounded-full flex items-center justify-center mb-3 shadow-xl"
+                :style="`background: ${WIDGET_META[sys.type]?.color ?? '#fff'}22; border: 2px solid ${WIDGET_META[sys.type]?.color ?? '#fff'}55`"
               >
                 <span
-                  class="text-white font-bold text-xl md:text-2xl"
-                  :class="metric.accent ? 'text-2xl md:text-3xl text-yellow-300' : ''"
-                  >{{ metric.value }}</span
+                  class="pi text-3xl md:text-5xl"
+                  :class="WIDGET_META[sys.type]?.icon"
+                  :style="`color: ${WIDGET_META[sys.type]?.color ?? '#fff'}`"
+                />
+              </div>
+              <h4 class="text-white text-lg md:text-xl font-bold mb-1 drop-shadow">
+                {{ getWidgetLabel(sys.type) }}
+              </h4>
+              <div
+                v-if="
+                  widgetsByType.value &&
+                  widgetsByType.value[sys.type] &&
+                  widgetHasError(widgetsByType.value[sys.type])
+                "
+                class="flex flex-col items-center opacity-60"
+              >
+                <span class="pi pi-database text-2xl md:text-3xl text-white/40 mb-2" />
+                <p class="text-white/50 text-sm md:text-base">ไม่สามารถโหลดข้อมูลได้</p>
+              </div>
+              <div
+                v-else-if="widgetsByType.value && widgetsByType.value[sys.type]"
+                class="w-full grid grid-cols-1 gap-2"
+              >
+                <div
+                  v-for="(metric, mi) in getMetrics(widgetsByType.value[sys.type])"
+                  :key="mi"
+                  class="flex flex-col items-center"
                 >
-                <span class="text-white/70 text-xs md:text-sm"
-                  >{{ metric.label }} <span v-if="metric.unit">({{ metric.unit }})</span></span
-                >
+                  <span
+                    class="text-white font-bold text-xl md:text-2xl"
+                    :class="metric.accent ? 'text-2xl md:text-3xl text-yellow-300' : ''"
+                    >{{ metric.value }}</span
+                  >
+                  <span class="text-white/70 text-xs md:text-sm"
+                    >{{ metric.label }} <span v-if="metric.unit">({{ metric.unit }})</span></span
+                  >
+                </div>
               </div>
             </div>
-          </div>
+          </template>
+        </section>
+
+        <!-- System Sections: แยกแต่ละระบบ ไม่รวมกัน -->
+        <section v-for="sys in SYSTEMS" :key="sys.type" class="w-full max-w-7xl mb-8">
+          <template
+            v-if="
+              selectedWidgetTypes.includes(sys.type) &&
+              widgetsByType.value &&
+              widgetsByType.value[sys.type]
+            "
+          >
+            <div :class="`mb-4 border-l-8 pl-4 ${sys.color}`">
+              <h2 class="text-white text-2xl font-bold drop-shadow mb-1">{{ sys.label }}</h2>
+              <p class="text-white/60 text-xs md:text-sm mb-2">
+                ข้อมูลเดือน {{ currentMonthLabel }}
+              </p>
+            </div>
+            <div
+              class="tv-system-card rounded-2xl p-4 flex flex-col items-center shadow-lg"
+              :style="`background: linear-gradient(135deg, ${WIDGET_META[sys.type]?.gradientFrom ?? '#222'} 0%, ${WIDGET_META[sys.type]?.gradientTo ?? '#111'} 100%)`"
+            >
+              <div
+                class="w-14 h-14 md:w-20 md:h-20 rounded-full flex items-center justify-center mb-3 shadow-xl"
+                :style="`background: ${WIDGET_META[sys.type]?.color ?? '#fff'}22; border: 2px solid ${WIDGET_META[sys.type]?.color ?? '#fff'}55`"
+              >
+                <span
+                  class="pi text-3xl md:text-5xl"
+                  :class="WIDGET_META[sys.type]?.icon"
+                  :style="`color: ${WIDGET_META[sys.type]?.color ?? '#fff'}`"
+                />
+              </div>
+              <h4 class="text-white text-lg md:text-xl font-bold mb-1 drop-shadow">
+                {{ getWidgetLabel(sys.type) }}
+              </h4>
+              <div
+                v-if="
+                  widgetsByType.value &&
+                  widgetsByType.value[sys.type] &&
+                  widgetHasError(widgetsByType.value[sys.type])
+                "
+                class="flex flex-col items-center opacity-60"
+              >
+                <span class="pi pi-database text-2xl md:text-3xl text-white/40 mb-2" />
+                <p class="text-white/50 text-sm md:text-base">ไม่สามารถโหลดข้อมูลได้</p>
+              </div>
+              <div
+                v-else-if="widgetsByType.value && widgetsByType.value[sys.type]"
+                class="w-full grid grid-cols-1 gap-2"
+              >
+                <div
+                  v-for="(metric, mi) in getMetrics(widgetsByType.value[sys.type])"
+                  :key="mi"
+                  class="flex flex-col items-center"
+                >
+                  <span
+                    class="text-white font-bold text-xl md:text-2xl"
+                    :class="metric.accent ? 'text-2xl md:text-3xl text-yellow-300' : ''"
+                    >{{ metric.value }}</span
+                  >
+                  <span class="text-white/70 text-xs md:text-sm"
+                    >{{ metric.label }} <span v-if="metric.unit">({{ metric.unit }})</span></span
+                  >
+                </div>
+              </div>
+            </div>
+          </template>
         </section>
       </template>
     </main>
@@ -613,17 +682,17 @@ const currentMeta = computed(() =>
       </div>
       <div class="flex items-center justify-center gap-1 md:gap-2">
         <button
-          v-for="(widget, i) in filledWidgets"
-          :key="i"
+          v-for="(type, i) in displayedWidgetTypes"
+          :key="type"
           class="rounded-full transition-all duration-300"
           :class="i === currentSlide ? 'w-8 h-3' : 'w-3 h-3'"
           :style="`background: ${i === currentSlide ? (currentMeta?.color ?? '#818CF8') : 'rgba(255,255,255,0.25)'}`"
           @click="goTo(i)"
-          :title="widget.label"
+          :title="getWidgetLabel(type)"
         />
       </div>
       <p class="text-center text-white/30 text-xs mt-1 md:mt-2">
-        {{ currentSlide + 1 }} / {{ filledWidgets.length }} — คลิกจุดเพื่อข้ามสไลด์
+        {{ currentSlide + 1 }} / {{ displayedWidgetTypes.length }} — คลิกจุดเพื่อข้ามสไลด์
       </p>
     </footer>
   </div>

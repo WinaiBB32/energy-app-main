@@ -25,6 +25,22 @@ namespace EnergyApp.API.Controllers
             public string RecordedByUid { get; set; } = string.Empty;
         }
 
+        // --- FuelReceiptEntryDto structure ---
+        // [
+        //   {
+        //     "day": 1,
+        //     "month": "เมษายน",
+        //     "year": 2567,
+        //     "detail": "...",
+        //     "receiptNo": "...",
+        //     "bookNo": "...",
+        //     "amount": 123.45,
+        //     "driverName": "...",
+        //     "branch": "...",           // สาขา
+        //     "liters": 12.345            // ปริมาณลิตร (ทศนิยม 3)
+        //   }
+        // ]
+
         [HttpGet]
         public async Task<IActionResult> Get(
             [FromQuery] Guid? departmentId,
@@ -57,6 +73,18 @@ namespace EnergyApp.API.Controllers
         [HttpPost]
         public async Task<IActionResult> Create([FromBody] FuelReceiptDto req)
         {
+            // Validate EntriesJson structure
+            var entries = System.Text.Json.JsonSerializer.Deserialize<List<DTOs.Office.FuelReceiptEntryDto>>(req.EntriesJson);
+            if (entries == null || entries.Count == 0)
+                return BadRequest("ต้องระบุข้อมูลรายการน้ำมันอย่างน้อย 1 รายการ");
+            // Optionally: Validate branch and liters
+            foreach (var entry in entries)
+            {
+                if (string.IsNullOrWhiteSpace(entry.Branch))
+                    return BadRequest("กรุณาระบุสาขา");
+                if (entry.Liters <= 0)
+                    return BadRequest("กรุณาระบุปริมาณลิตรให้ถูกต้อง (> 0)");
+            }
             var record = new FuelReceipt
             {
                 DepartmentId = req.DepartmentId,
@@ -79,6 +107,18 @@ namespace EnergyApp.API.Controllers
         {
             var record = await _context.FuelReceipts.FindAsync(id);
             if (record == null) return NotFound();
+
+            // Validate EntriesJson structure
+            var entries = System.Text.Json.JsonSerializer.Deserialize<List<DTOs.Office.FuelReceiptEntryDto>>(req.EntriesJson);
+            if (entries == null || entries.Count == 0)
+                return BadRequest("ต้องระบุข้อมูลรายการน้ำมันอย่างน้อย 1 รายการ");
+            foreach (var entry in entries)
+            {
+                if (string.IsNullOrWhiteSpace(entry.Branch))
+                    return BadRequest("กรุณาระบุสาขา");
+                if (entry.Liters <= 0)
+                    return BadRequest("กรุณาระบุปริมาณลิตรให้ถูกต้อง (> 0)");
+            }
 
             record.DepartmentId = req.DepartmentId;
             record.EntriesJson = req.EntriesJson;
