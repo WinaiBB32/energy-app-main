@@ -58,8 +58,7 @@ const submitForm = async () => {
   if (!entryDate.value || !entry.value.amount || !entry.value.detail) {
     errorMessage.value = 'กรุณากรอกข้อมูลที่จำเป็น (*) ให้ครบถ้วน'
     return
-    branch: entry.value.branch,
-    liters: entry.value.liters,
+  }
 
   const d = entryDate.value
   const singleEntry = {
