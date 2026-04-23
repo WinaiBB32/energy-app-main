@@ -312,7 +312,7 @@ const submitForm = async () => {
                 >
                 <InputNumber
                   v-model="formData.liters"
-                  :minFractionDigits="0"
+                  :minFractionDigits="3"
                   :maxFractionDigits="3"
                   placeholder="0.000"
                   suffix=" ลิตร"
@@ -333,14 +333,6 @@ const submitForm = async () => {
                 />
               </div>
               <div class="flex flex-col gap-2 lg:col-span-2">
-                <label class="font-semibold text-sm text-gray-700">สาขา/สถานีบริการ</label>
-                <InputText
-                  v-model="formData.branch"
-                  placeholder="เช่น สาขาโลตัส บางใหญ่"
-                  class="w-full"
-                />
-              </div>
-              <div class="flex flex-col gap-2 lg:col-span-2">
                 <label class="font-semibold text-sm text-gray-700">บริษัทจำหน่ายน้ำมัน</label>
                 <InputText
                   v-model="formData.gasStationCompany"
@@ -348,6 +340,15 @@ const submitForm = async () => {
                   class="w-full"
                 />
               </div>
+              <div class="flex flex-col gap-2 lg:col-span-2">
+                <label class="font-semibold text-sm text-gray-700">สาขา/สถานีบริการ</label>
+                <InputText
+                  v-model="formData.branch"
+                  placeholder="เช่น สาขาโลตัส บางใหญ่"
+                  class="w-full"
+                />
+              </div>
+
               <div class="lg:col-span-4 flex justify-end">
                 <div class="text-sm bg-white border border-gray-200 px-4 py-2 rounded-md shadow-sm">
                   <span class="text-gray-500 mr-2">ราคาเฉลี่ยต่อลิตร:</span>

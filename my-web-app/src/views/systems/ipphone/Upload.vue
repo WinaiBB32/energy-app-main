@@ -229,19 +229,12 @@ const parseFilePreview = (file: File): void => {
         const failedOutbound    = Number(cols[10]) || 0
         const voicemailOutbound = Number(cols[11]) || 0
         const totalOutbound     = Number(cols[12]) || 0
-        const totalCallsRaw     = Number(cols[13]) || 0
+        const totalCalls        = Number(cols[13]) || 0
         const totalTalkDuration = (cols[14] ?? '00:00:00').trim()
 
         if (!ext) {
           errors.push(`แถว ${i + 1}: ไม่มีหมายเลขเบอร์โทร (extension)`)
           continue
-        }
-
-        const computedTotal = totalInbound + totalOutbound
-        if (totalCallsRaw !== computedTotal && computedTotal > 0) {
-          errors.push(
-            `แถว ${i + 1} (${ext}): คอลัมน์ N (${totalCallsRaw}) ไม่ตรงกับ G+M (${computedTotal}) — จะใช้ค่าคำนวณ G+M แทน`,
-          )
         }
 
         parsed.push({
@@ -258,7 +251,7 @@ const parseFilePreview = (file: File): void => {
           failedOutbound,
           voicemailOutbound,
           totalOutbound,
-          totalCalls: computedTotal > 0 ? computedTotal : totalCallsRaw,
+          totalCalls,
           totalTalkDuration,
         })
       }
@@ -496,37 +489,29 @@ const answerRate = (row: { totalCalls: number; answeredInbound: number; answered
             </thead>
             <tbody>
               <tr v-for="col in [
-                { col:'A', name:'หมายเลขภายใน',           used:true  },
-                { col:'B', name:'ตอบแล้ว(สายเข้า)',        used:true  },
-                { col:'C', name:'ไม่มีคำตอบ(สายเข้า)',     used:false },
-                { col:'D', name:'ไปรษา(สายเข้า)',           used:false },
-                { col:'E', name:'สั่งเลย(สายเข้า)',         used:false },
-                { col:'F', name:'วอยซ์เมล(สายเข้า)',       used:false },
-                { col:'G', name:'รวม(สายเข้า)',             used:true  },
-                { col:'H', name:'ตอบแล้ว(สายออก)',         used:true  },
-                { col:'I', name:'ไม่มีคำตอบ(สายออก)',      used:false },
-                { col:'J', name:'ไปรษา(สายออก)',            used:false },
-                { col:'K', name:'สั่งเลย(สายออก)',          used:false },
-                { col:'L', name:'วอยซ์เมล(สายออก)',        used:false },
-                { col:'M', name:'รวม(สายออก)',              used:true  },
-                { col:'N', name:'รวม (ทั้งหมด)',            used:true  },
-                { col:'O', name:'ระยะเวลาพูดคุยทั้งหมด',  used:true  },
-              ]" :key="col.col" :class="col.used ? 'bg-emerald-50 hover:bg-emerald-100' : 'bg-gray-50'">
-                <td class="border border-gray-200 px-3 py-1.5 font-mono font-bold text-center" :class="col.used ? 'text-teal-700' : 'text-gray-300'">{{ col.col }}</td>
-                <td class="border border-gray-200 px-3 py-1.5" :class="col.used ? 'text-gray-800 font-semibold' : 'text-gray-400'">{{ col.name }}</td>
+                { col:'A', name:'หมายเลขภายใน',           field:'extension'           },
+                { col:'B', name:'ตอบแล้ว(สายเข้า)',        field:'answeredInbound'     },
+                { col:'C', name:'ไม่มีคำตอบ(สายเข้า)',     field:'noAnswerInbound'     },
+                { col:'D', name:'ไม่ว่าง(สายเข้า)',         field:'busyInbound'         },
+                { col:'E', name:'ล้มเหลว(สายเข้า)',         field:'failedInbound'       },
+                { col:'F', name:'วอยซ์เมล(สายเข้า)',       field:'voicemailInbound'    },
+                { col:'G', name:'รวม(สายเข้า)',             field:'totalInbound'        },
+                { col:'H', name:'ตอบแล้ว(สายออก)',         field:'answeredOutbound'    },
+                { col:'I', name:'ไม่มีคำตอบ(สายออก)',      field:'noAnswerOutbound'    },
+                { col:'J', name:'ไม่ว่าง(สายออก)',          field:'busyOutbound'        },
+                { col:'K', name:'ล้มเหลว(สายออก)',          field:'failedOutbound'      },
+                { col:'L', name:'วอยซ์เมล(สายออก)',        field:'voicemailOutbound'   },
+                { col:'M', name:'รวม(สายออก)',              field:'totalOutbound'       },
+                { col:'N', name:'รวม (ทั้งหมด)',            field:'totalCalls'          },
+                { col:'O', name:'ระยะเวลาพูดคุยทั้งหมด',  field:'totalTalkDuration'   },
+              ]" :key="col.col" class="bg-emerald-50 hover:bg-emerald-100">
+                <td class="border border-gray-200 px-3 py-1.5 font-mono font-bold text-center text-teal-700">{{ col.col }}</td>
+                <td class="border border-gray-200 px-3 py-1.5 text-gray-800 font-semibold">{{ col.name }}</td>
                 <td class="border border-gray-200 px-3 py-1.5 text-center">
-                  <span v-if="col.used" class="text-emerald-600 font-bold text-xs bg-emerald-100 px-2 py-0.5 rounded-full">✓ ใช้</span>
-                  <span v-else class="text-gray-300 text-xs">-</span>
+                  <span class="text-emerald-600 font-bold text-xs bg-emerald-100 px-2 py-0.5 rounded-full">✓ ใช้</span>
                 </td>
-                <td class="border border-gray-200 px-3 py-1.5 font-mono text-xs">
-                  <span v-if="col.col==='A'" class="text-blue-700">extension</span>
-                  <span v-else-if="col.col==='B'" class="text-blue-700">answeredInbound</span>
-                  <span v-else-if="col.col==='G'" class="text-blue-700">totalInbound</span>
-                  <span v-else-if="col.col==='H'" class="text-blue-700">answeredOutbound</span>
-                  <span v-else-if="col.col==='M'" class="text-blue-700">totalOutbound</span>
-                  <span v-else-if="col.col==='N'" class="text-amber-600">totalCalls (คำนวณ G+M แทน)</span>
-                  <span v-else-if="col.col==='O'" class="text-blue-700">totalTalkDuration</span>
-                  <span v-else class="text-gray-300">ไม่บันทึก</span>
+                <td class="border border-gray-200 px-3 py-1.5 font-mono text-xs text-blue-700">
+                  {{ col.field }}
                 </td>
               </tr>
             </tbody>
@@ -543,11 +528,6 @@ const answerRate = (row: { totalCalls: number; answeredInbound: number; answered
           />
           <span class="text-xs text-gray-400">ไฟล์ตัวอย่าง 15 column ตรงกับรายงาน IP-Phone จริง</span>
         </div>
-        <p class="text-xs text-amber-600 mt-2 font-medium">
-          <i class="pi pi-exclamation-triangle mr-1"></i>
-          ระบบจะใช้ <strong>G+M (รวมสายเข้า + รวมสายออก)</strong> เป็นยอดรวม ไม่ใช้คอลัมน์ N โดยตรง
-          เพื่อป้องกันการนับซ้ำ
-        </p>
       </template>
     </Card>
 
