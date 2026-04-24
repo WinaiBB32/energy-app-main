@@ -50,7 +50,7 @@ const getThisYearRange = (): Date[] => {
     return [first, last]
 }
 const selectedDateRange = ref<Date[] | null>(getThisYearRange())
-const selectedBookNames = ref<string[]>([])
+const selectedBookNames = ref<string[]>(['สำนักงานคณะกรรมการอาหารและยา'])
 const selectedPersonNames = ref<string[]>([])
 
 const thaiMonthShort = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.']

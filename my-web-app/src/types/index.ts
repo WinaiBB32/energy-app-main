@@ -224,26 +224,6 @@ export interface FetchedTelephoneRecord {
   createdAt: string
 }
 
-// ─── Saraban ──────────────────────────────────────────────────────────────────
-
-export interface SarabanRecord {
-  id?: string
-  docType: 'BOOK' | 'PERSON'
-  docNumber: string
-  subject: string
-  fromOrganization: string
-  toOrganization?: string
-  receivedDate: Date | null
-  dueDate?: Date | null
-  priority: string
-  status: string
-  assignedTo?: string
-  note?: string
-  recordedBy: string
-  departmentId: string
-  createdAt: string | null
-}
-
 // ─── IP Phone ─────────────────────────────────────────────────────────────────
 
 export interface LinkedUser {

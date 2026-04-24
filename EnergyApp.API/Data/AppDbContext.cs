@@ -21,7 +21,6 @@ namespace EnergyApp.API.Data
         public DbSet<FuelRecord> FuelRecords { get; set; }
         public DbSet<FuelReceipt> FuelReceipts { get; set; }
         public DbSet<TelephoneRecord> TelephoneRecords { get; set; }
-        public DbSet<SarabanRecord> SarabanRecords { get; set; }
         public DbSet<IPPhoneDirectory> IPPhoneDirectories { get; set; }
         public DbSet<ServiceRequest> ServiceRequests { get; set; }
         public DbSet<ChatMessage> ChatMessages { get; set; }

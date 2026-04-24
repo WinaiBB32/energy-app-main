@@ -863,69 +863,6 @@ namespace EnergyApp.API.Migrations
                     b.ToTable("PostalRecords");
                 });
 
-            modelBuilder.Entity("EnergyApp.API.Models.SarabanRecord", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("AssignedTo")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp without time zone");
-
-                    b.Property<Guid?>("DepartmentId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("DocNumber")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("DocType")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<DateTime?>("DueDate")
-                        .HasColumnType("timestamp without time zone");
-
-                    b.Property<string>("FromOrganization")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("Note")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("Priority")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<DateTime?>("ReceivedDate")
-                        .HasColumnType("timestamp without time zone");
-
-                    b.Property<string>("RecordedBy")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("Subject")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("ToOrganization")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.HasKey("Id");
-
-                    b.ToTable("SarabanRecords");
-                });
-
             modelBuilder.Entity("EnergyApp.API.Models.ServiceRequest", b =>
                 {
                     b.Property<Guid>("Id")

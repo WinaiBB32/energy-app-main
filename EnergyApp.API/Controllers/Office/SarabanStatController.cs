@@ -28,6 +28,22 @@ namespace EnergyApp.API.Controllers.Office
             public string RecordedBy { get; set; } = string.Empty;
         }
 
+        [HttpGet("booknames")]
+        public async Task<IActionResult> GetBookNames([FromQuery] Guid? departmentId)
+        {
+            var query = _context.SarabanStats.AsQueryable();
+            if (departmentId.HasValue)
+                query = query.Where(r => r.DepartmentId == departmentId);
+
+            var names = await query
+                .Select(r => r.BookName)
+                .Distinct()
+                .OrderBy(n => n)
+                .ToListAsync();
+
+            return Ok(names);
+        }
+
         [HttpGet]
         public async Task<IActionResult> Get(
             [FromQuery] Guid? departmentId,
@@ -45,7 +61,7 @@ namespace EnergyApp.API.Controllers.Office
             if (!string.IsNullOrEmpty(bookType))
                 query = query.Where(r => r.BookType == bookType);
             if (!string.IsNullOrEmpty(bookName))
-                query = query.Where(r => r.BookName == bookName);
+                query = query.Where(r => r.BookName.Contains(bookName));
             if (year.HasValue)
                 query = query.Where(r => r.RecordMonth.Year == year.Value);
             if (month.HasValue)
@@ -53,8 +69,8 @@ namespace EnergyApp.API.Controllers.Office
 
             var total = await query.CountAsync();
             var items = await query
-                .OrderByDescending(r => r.RecordMonth)
-                .ThenBy(r => r.BookName)
+                .OrderByDescending(r => r.CreatedAt)
+                .ThenByDescending(r => r.RecordMonth)
                 .Skip(skip)
                 .Take(take)
                 .ToListAsync();
