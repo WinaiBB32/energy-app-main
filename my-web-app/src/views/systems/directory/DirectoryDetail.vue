@@ -64,7 +64,7 @@ onMounted(async () => {
   try {
     const [deptsResponse, dirResponse] = await Promise.all([
         api.get('/Department'),
-        api.get(`/IPPhoneDirectory/${directoryId}`)
+        api.get(`/Directory/${directoryId}`)
     ]);
 
     departments.value = deptsResponse.data || [];

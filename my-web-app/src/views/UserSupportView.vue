@@ -125,7 +125,7 @@ onMounted(async () => {
 
   // 2. โหลด IP Phone directories ที่ผูกกับ user นี้
   try {
-    const res = await api.get<LinkedDirectory[]>('/IPPhoneDirectory', {
+    const res = await api.get<LinkedDirectory[]>('/Directory', {
       params: { linkedEmail: email },
     })
     linkedDirectories.value = res.data ?? []
@@ -140,7 +140,7 @@ onMounted(async () => {
         const lastSeen = getLastSeen(dir.id)
         try {
           const msgRes = await api.get<{ senderId: string; createdAt: string | null }[]>(
-            `/IPPhoneDirectory/${dir.id}/messages`,
+            `/Directory/${dir.id}/messages`,
             { params: { limit: 1, orderBy: 'createdAt_desc' } },
           )
           const latest = msgRes.data?.[0]

@@ -91,7 +91,7 @@ onMounted(async () => {
   }
 
   try {
-    const extRes = await api.get('/IPPhoneDirectory', { params: { take: '1000' } })
+    const extRes = await api.get('/Directory', { params: { take: '1000' } })
     const rows: Extension[] = extRes.data.items ?? extRes.data
     rows.sort((a, b) =>
       (a.ipPhoneNumber || '').localeCompare(b.ipPhoneNumber || '', undefined, { numeric: true }),
@@ -144,7 +144,7 @@ async function saveMapping() {
       .filter(Boolean) as LinkedUser[]
 
     const extNum = selectedExt.value.ipPhoneNumber
-    await api.put(`/IPPhoneDirectory/${selectedExt.value.id}`, {
+    await api.put(`/Directory/${selectedExt.value.id}`, {
       ...selectedExt.value,
       linkedUsers: linked,
       linkedUserEmails: linked.map((u) => u.email),

@@ -6,13 +6,13 @@ using Microsoft.EntityFrameworkCore;
 namespace EnergyApp.API.Controllers
 {
     [ApiController]
-    [Route("api/v1/[controller]")]
-    public class IPPhoneDirectoryController : ControllerBase
+    [Route("api/v1/Directory")]
+    public class DirectoryController : ControllerBase
     {
         private readonly AppDbContext _context;
-        public IPPhoneDirectoryController(AppDbContext context) { _context = context; }
+        public DirectoryController(AppDbContext context) { _context = context; }
 
-        public class IPPhoneDirectoryDto
+        public class DirectoryEntryDto
         {
             public string OwnerName { get; set; } = string.Empty;
             public string Location { get; set; } = string.Empty;
@@ -69,7 +69,7 @@ namespace EnergyApp.API.Controllers
         }
 
         [HttpPost]
-        public async Task<IActionResult> Create([FromBody] IPPhoneDirectoryDto req)
+        public async Task<IActionResult> Create([FromBody] DirectoryEntryDto req)
         {
             var record = new IPPhoneDirectory
             {
@@ -86,11 +86,11 @@ namespace EnergyApp.API.Controllers
             };
             _context.IPPhoneDirectories.Add(record);
             await _context.SaveChangesAsync();
-            return Ok(new { message = "บันทึกข้อมูล IP Phone สำเร็จ", id = record.Id });
+            return Ok(new { message = "บันทึกรายชื่อสำเร็จ", id = record.Id });
         }
 
         [HttpPut("{id}")]
-        public async Task<IActionResult> Update(Guid id, [FromBody] IPPhoneDirectoryDto req)
+        public async Task<IActionResult> Update(Guid id, [FromBody] DirectoryEntryDto req)
         {
             var record = await _context.IPPhoneDirectories.FindAsync(id);
             if (record == null) return NotFound();
@@ -107,7 +107,7 @@ namespace EnergyApp.API.Controllers
             record.IsPublished = req.IsPublished;
 
             await _context.SaveChangesAsync();
-            return Ok(new { message = "แก้ไขข้อมูล IP Phone สำเร็จ" });
+            return Ok(new { message = "แก้ไขรายชื่อสำเร็จ" });
         }
 
         [HttpDelete("{id}")]
