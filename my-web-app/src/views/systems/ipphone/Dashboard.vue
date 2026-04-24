@@ -84,6 +84,16 @@ const getLastMonthRange = (): Date[] => {
 const selectedDateRange = ref<Date[] | null>(getLastMonthRange())
 const filterExt = ref<string>('')
 const filterDept = ref<string>('')
+// สถานที่สำหรับกรอง OSS
+const ossLocationOptions = [
+  { value: '', label: 'ทั้งหมด' },
+  { value: 'One Stop Service', label: 'One Stop Service' },
+  {
+    value: 'กองผลิตภัณฑ์สุขภาพนวัตกรรมและการบริการ',
+    label: 'กองผลิตภัณฑ์สุขภาพนวัตกรรมและการบริการ',
+  },
+]
+const filterOssLocation = ref('')
 const deptList = ref<{ id: string; name: string }[]>([])
 const thaiMonthShort = [
   'ม.ค.',
@@ -167,20 +177,94 @@ const pinnedRankChartOptions = ref<object | undefined>(undefined)
 
 // ─── OSS (One Stop Service) Extensions (Tab 2) ───────────────────────────────
 const OSS_EXTENSIONS = [
-  '79901', '79902', '97627', '79909', '79910', '79911', '79912', '79913', '79914', '79915',
-  '79916', '79917', '79918', '79919', '79920', '79921', '79922', '79923', '79924', '79925',
-  '79926', '79927', '79928', '79929', '79930', '79931', '79932', '79933', '79934', '79935',
-  '79936', '79937', '79938', '71801', '71807', '97430', '71803', '71804', '97630', '97628',
-  '71802', '71819', '71805', '71806', '71821', '19998', '71822', '71812', '71813', '71815',
-  '71816', '71817', '71818', '98042', '71820', '71808', '71809', '71810', '71811', '71814',
+  '79901',
+  '79902',
+  '97627',
+  '79909',
+  '79910',
+  '79911',
+  '79912',
+  '79913',
+  '79914',
+  '79915',
+  '79916',
+  '79917',
+  '79918',
+  '79919',
+  '79920',
+  '79921',
+  '79922',
+  '79923',
+  '79924',
+  '79925',
+  '79926',
+  '79927',
+  '79928',
+  '79929',
+  '79930',
+  '79931',
+  '79932',
+  '79933',
+  '79934',
+  '79935',
+  '79936',
+  '79937',
+  '79938',
+  '71801',
+  '71807',
+  '97430',
+  '71803',
+  '71804',
+  '97630',
+  '97628',
+  '71802',
+  '71819',
+  '71805',
+  '71806',
+  '71821',
+  '19998',
+  '71822',
+  '71812',
+  '71813',
+  '71815',
+  '71816',
+  '71817',
+  '71818',
+  '98042',
+  '71820',
+  '71808',
+  '71809',
+  '71810',
+  '71811',
+  '71814',
 ]
+
+// กรอง OSS EXTENSIONS ตามสถานที่ (ใช้กับทุก chart/summary ใน OSS tab)
+const filteredOssExtensions = computed(() => {
+  const extFilter = filterExt.value.trim()
+  const locationFilter = filterOssLocation.value
+  return OSS_EXTENSIONS.filter((ext) => {
+    if (extFilter && !ext.includes(extFilter)) return false
+    if (!locationFilter) return true
+    const info = directoryMap.value[ext]
+    if (!info) return false
+    // กรองตาม location (หรือ สถานที่ติดตั้ง) ถ้ามี, fallback ownerName
+    // สมมุติว่าฟิลด์ใน directoryMap คือ location หรือ installLocation
+    if ('location' in info && info.location) {
+      return info.location === locationFilter
+    }
+    if ('installLocation' in info && info.installLocation) {
+      return info.installLocation === locationFilter
+    }
+    return info.ownerName === locationFilter
+  })
+})
 
 const ossExtStats = computed((): ExtStat[] => {
   const startDate = selectedDateRange.value?.[0] || null
   let endDate = selectedDateRange.value?.[1] ? new Date(selectedDateRange.value[1]) : null
   if (endDate) endDate = new Date(endDate.getFullYear(), endDate.getMonth() + 1, 0, 23, 59, 59, 999)
-
-  return OSS_EXTENSIONS.map((ext) => {
+  return filteredOssExtensions.value.map((ext) => {
     const logsForExt = rawLogs.value.filter((l) => {
       if (l.extension !== ext || !l.reportMonth) return false
       const d = new Date(l.reportMonth)
@@ -189,8 +273,14 @@ const ossExtStats = computed((): ExtStat[] => {
       return true
     })
     const totalCalls = logsForExt.reduce((s, l) => s + (l.totalCalls || 0), 0)
-    const answered = logsForExt.reduce((s, l) => s + (l.answeredInbound || 0) + (l.answeredOutbound || 0), 0)
-    const missed = logsForExt.reduce((s, l) => s + (l.noAnswerInbound || 0) + (l.busyInbound || 0), 0)
+    const answered = logsForExt.reduce(
+      (s, l) => s + (l.answeredInbound || 0) + (l.answeredOutbound || 0),
+      0,
+    )
+    const missed = logsForExt.reduce(
+      (s, l) => s + (l.noAnswerInbound || 0) + (l.busyInbound || 0),
+      0,
+    )
     return {
       extension: ext,
       ownerName: directoryMap.value[ext]?.ownerName || '-',
@@ -209,7 +299,9 @@ const ossCombinedStats = computed(() => {
   const answered = stats.reduce((s, e) => s + e.answered, 0)
   const missed = stats.reduce((s, e) => s + e.missed, 0)
   return {
-    totalCalls, answered, missed,
+    totalCalls,
+    answered,
+    missed,
     answerRate: totalCalls > 0 ? (answered / totalCalls) * 100 : 0,
     missRate: totalCalls > 0 ? (missed / totalCalls) * 100 : 0,
   }
@@ -224,12 +316,14 @@ const ossRateChartOptions = ref<object | undefined>(undefined)
 
 const buildOssCharts = () => {
   const startDate: Date | null = selectedDateRange.value?.[0] || null
-  let endDate: Date | null = selectedDateRange.value?.[1] ? new Date(selectedDateRange.value[1]) : null
+  let endDate: Date | null = selectedDateRange.value?.[1]
+    ? new Date(selectedDateRange.value[1])
+    : null
   if (endDate) endDate = new Date(endDate.getFullYear(), endDate.getMonth() + 1, 0, 23, 59, 59, 999)
 
   const monthlyTotals: Record<string, number> = {}
   rawLogs.value.forEach((log) => {
-    if (!OSS_EXTENSIONS.includes(log.extension) || !log.reportMonth) return
+    if (!filteredOssExtensions.value.includes(log.extension) || !log.reportMonth) return
     const d = new Date(log.reportMonth)
     if (startDate && d < startDate) return
     if (endDate && d > endDate) return
@@ -240,7 +334,14 @@ const buildOssCharts = () => {
   const sortedKeys = Object.keys(monthlyTotals).sort()
   ossTrendChartData.value = {
     labels: sortedKeys.map((k) => formatChartLabel(k)),
-    datasets: [{ type: 'bar', label: 'สายทั้งหมด OSS (ครั้ง)', backgroundColor: '#8b5cf6', data: sortedKeys.map((k) => monthlyTotals[k] || 0) }],
+    datasets: [
+      {
+        type: 'bar',
+        label: 'สายทั้งหมด OSS (ครั้ง)',
+        backgroundColor: '#8b5cf6',
+        data: sortedKeys.map((k) => monthlyTotals[k] || 0),
+      },
+    ],
   }
   ossTrendChartOptions.value = {
     maintainAspectRatio: false,
@@ -248,10 +349,19 @@ const buildOssCharts = () => {
     scales: { y: { title: { display: true, text: 'จำนวนสาย (ครั้ง)' } } },
   }
 
-  const sorted = [...ossExtStats.value].sort((a, b) => b.totalCalls - a.totalCalls).filter(s => s.totalCalls > 0).slice(0, 20)
+  const sorted = [...ossExtStats.value]
+    .sort((a, b) => b.totalCalls - a.totalCalls)
+    .filter((s) => s.totalCalls > 0)
+    .slice(0, 20)
   ossRankChartData.value = {
     labels: sorted.map((s) => s.extension),
-    datasets: [{ label: 'สายทั้งหมด (ครั้ง)', data: sorted.map((s) => s.totalCalls), backgroundColor: '#8b5cf6' }],
+    datasets: [
+      {
+        label: 'สายทั้งหมด (ครั้ง)',
+        data: sorted.map((s) => s.totalCalls),
+        backgroundColor: '#8b5cf6',
+      },
+    ],
   }
   ossRankChartOptions.value = {
     indexAxis: 'y',
@@ -260,12 +370,23 @@ const buildOssCharts = () => {
     scales: { x: { title: { display: true, text: 'จำนวนสาย' } } },
   }
 
-  const topByTotal = [...ossExtStats.value].filter(s => s.totalCalls > 0).sort((a, b) => b.totalCalls - a.totalCalls).slice(0, 15)
+  const topByTotal = [...ossExtStats.value]
+    .filter((s) => s.totalCalls > 0)
+    .sort((a, b) => b.totalCalls - a.totalCalls)
+    .slice(0, 15)
   ossRateChartData.value = {
     labels: topByTotal.map((s) => s.extension),
     datasets: [
-      { label: 'รับสาย (%)', data: topByTotal.map((s) => parseFloat(s.answerRate.toFixed(1))), backgroundColor: '#10b981' },
-      { label: 'ไม่รับสาย(สายซ่อน) (%)', data: topByTotal.map((s) => parseFloat(s.missRate.toFixed(1))), backgroundColor: '#ef4444' },
+      {
+        label: 'รับสาย (%)',
+        data: topByTotal.map((s) => parseFloat(s.answerRate.toFixed(1))),
+        backgroundColor: '#10b981',
+      },
+      {
+        label: 'ไม่รับสาย(สายซ่อน) (%)',
+        data: topByTotal.map((s) => parseFloat(s.missRate.toFixed(1))),
+        backgroundColor: '#ef4444',
+      },
     ],
   }
   ossRateChartOptions.value = {
@@ -411,6 +532,9 @@ const fetchData = async (): Promise<void> => {
         map[d.ipPhoneNumber] = {
           ownerName: d.ownerName ?? d.ipPhoneNumber,
           departmentId: d.departmentId ?? '',
+          // เพิ่มเติมฟิลด์ location/สถานที่ติดตั้ง ถ้ามีใน d
+          ...(d.location ? { location: d.location } : {}),
+          ...(d.installLocation ? { installLocation: d.installLocation } : {}),
         }
     }
     directoryMap.value = map
@@ -439,8 +563,11 @@ onMounted(async () => {
   }
   await fetchData()
 })
+
 watch(selectedDateRange, () => fetchData())
 watch([filterExt, filterDept], () => processData())
+// Watch OSS location filter to update charts/summary/table
+watch(filterOssLocation, () => buildOssCharts())
 
 // ─── 4. Data Processing ───────────────────────────────────────────────────────
 const processData = (): void => {
@@ -1116,32 +1243,69 @@ const setupCharts = (
             <i class="pi pi-spin pi-spinner text-4xl text-gray-400"></i>
           </div>
           <div v-else>
+            <!-- Filter Bar for OSS Location (move to top) -->
+            <div class="flex flex-wrap gap-2 mb-4">
+              <div class="flex flex-col gap-1">
+                <label class="text-xs font-semibold text-gray-500">กรองตามสถานที่</label>
+                <Select
+                  v-model="filterOssLocation"
+                  :options="ossLocationOptions"
+                  optionLabel="label"
+                  optionValue="value"
+                  class="w-64"
+                  placeholder="-- ทั้งหมด --"
+                />
+              </div>
+            </div>
+
             <!-- Summary banner -->
-            <div class="my-4 bg-linear-to-r from-violet-600 to-purple-500 rounded-2xl p-5 text-white shadow-md">
+            <div
+              class="my-4 bg-linear-to-r from-violet-600 to-purple-500 rounded-2xl p-5 text-white shadow-md"
+            >
               <p class="text-violet-100 text-xs font-semibold uppercase tracking-wider mb-3">
-                <i class="pi pi-headphones mr-1"></i>สถิติภาพรวม One Stop Service ({{ OSS_EXTENSIONS.length }} เบอร์)
+                <i class="pi pi-headphones mr-1"></i>สถิติภาพรวม One Stop Service ({{
+                  OSS_EXTENSIONS.length
+                }}
+                เบอร์)
               </p>
               <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <div class="bg-white/15 rounded-xl p-3 text-center">
                   <p class="text-violet-100 text-[10px] uppercase font-semibold">สายทั้งหมด</p>
-                  <p class="text-3xl font-black mt-1">{{ ossCombinedStats.totalCalls.toLocaleString() }}</p>
+                  <p class="text-3xl font-black mt-1">
+                    {{ ossCombinedStats.totalCalls.toLocaleString() }}
+                  </p>
                 </div>
                 <div class="bg-white/15 rounded-xl p-3 text-center">
                   <p class="text-violet-100 text-[10px] uppercase font-semibold">รับสาย</p>
-                  <p class="text-3xl font-black mt-1 text-green-200">{{ ossCombinedStats.answered.toLocaleString() }}</p>
-                  <p class="text-xs text-green-200 font-bold">{{ ossCombinedStats.answerRate.toFixed(1) }}%</p>
+                  <p class="text-3xl font-black mt-1 text-green-200">
+                    {{ ossCombinedStats.answered.toLocaleString() }}
+                  </p>
+                  <p class="text-xs text-green-200 font-bold">
+                    {{ ossCombinedStats.answerRate.toFixed(1) }}%
+                  </p>
                 </div>
                 <div class="bg-white/15 rounded-xl p-3 text-center">
-                  <p class="text-violet-100 text-[10px] uppercase font-semibold">ไม่รับสาย(สายซ่อน)</p>
-                  <p class="text-3xl font-black mt-1 text-red-200">{{ ossCombinedStats.missed.toLocaleString() }}</p>
-                  <p class="text-xs text-red-200 font-bold">{{ ossCombinedStats.missRate.toFixed(1) }}%</p>
+                  <p class="text-violet-100 text-[10px] uppercase font-semibold">
+                    ไม่รับสาย(สายซ่อน)
+                  </p>
+                  <p class="text-3xl font-black mt-1 text-red-200">
+                    {{ ossCombinedStats.missed.toLocaleString() }}
+                  </p>
+                  <p class="text-xs text-red-200 font-bold">
+                    {{ ossCombinedStats.missRate.toFixed(1) }}%
+                  </p>
                 </div>
                 <div class="bg-white/15 rounded-xl p-3 text-center">
                   <p class="text-violet-100 text-[10px] uppercase font-semibold">อัตรารับสาย</p>
                   <div class="mt-2 bg-white/20 rounded-full h-2">
-                    <div class="bg-green-300 h-2 rounded-full" :style="{ width: ossCombinedStats.answerRate.toFixed(0) + '%' }"></div>
+                    <div
+                      class="bg-green-300 h-2 rounded-full"
+                      :style="{ width: ossCombinedStats.answerRate.toFixed(0) + '%' }"
+                    ></div>
                   </div>
-                  <p class="text-xl font-black mt-1 text-green-200">{{ ossCombinedStats.answerRate.toFixed(1) }}%</p>
+                  <p class="text-xl font-black mt-1 text-green-200">
+                    {{ ossCombinedStats.answerRate.toFixed(1) }}%
+                  </p>
                 </div>
               </div>
             </div>
@@ -1149,48 +1313,83 @@ const setupCharts = (
             <!-- Charts row -->
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
               <Card>
-                <template #title><div class="text-base font-bold text-gray-700"><i class="pi pi-chart-bar text-violet-500 mr-2"></i>แนวโน้มสายทั้งหมดรายเดือน</div></template>
+                <template #title
+                  ><div class="text-base font-bold text-gray-700">
+                    <i class="pi pi-chart-bar text-violet-500 mr-2"></i>แนวโน้มสายทั้งหมดรายเดือน
+                  </div></template
+                >
                 <template #content>
                   <div class="h-64 relative">
-                    <Chart type="bar" :data="ossTrendChartData" :options="ossTrendChartOptions" class="h-full" />
+                    <Chart
+                      type="bar"
+                      :data="ossTrendChartData"
+                      :options="ossTrendChartOptions"
+                      class="h-full"
+                    />
                   </div>
                 </template>
               </Card>
               <Card>
-                <template #title><div class="text-base font-bold text-gray-700"><i class="pi pi-sort-amount-down text-violet-500 mr-2"></i>Top 20 เบอร์ที่มีสายสูงสุด</div></template>
+                <template #title
+                  ><div class="text-base font-bold text-gray-700">
+                    <i class="pi pi-sort-amount-down text-violet-500 mr-2"></i>Top 10
+                    เบอร์ที่มีสายสูงสุด
+                  </div></template
+                >
                 <template #content>
                   <div class="h-64 relative">
-                    <Chart type="bar" :data="ossRankChartData" :options="ossRankChartOptions" class="h-full" />
+                    <Chart
+                      type="bar"
+                      :data="ossRankChartData"
+                      :options="ossRankChartOptions"
+                      class="h-full"
+                    />
                   </div>
                 </template>
               </Card>
             </div>
             <Card class="mb-6">
-              <template #title><div class="text-base font-bold text-gray-700"><i class="pi pi-percentage text-green-500 mr-2"></i>อัตรารับสาย/ไม่รับสาย (Top 15 เบอร์)</div></template>
+              <template #title
+                ><div class="text-base font-bold text-gray-700">
+                  <i class="pi pi-percentage text-green-500 mr-2"></i>อัตรารับสาย/ไม่รับสาย (Top 15
+                  เบอร์)
+                </div></template
+              >
               <template #content>
                 <div class="h-64 relative">
-                  <Chart type="bar" :data="ossRateChartData" :options="ossRateChartOptions" class="h-full" />
+                  <Chart
+                    type="bar"
+                    :data="ossRateChartData"
+                    :options="ossRateChartOptions"
+                    class="h-full"
+                  />
                 </div>
               </template>
             </Card>
 
-            <!-- DataTable: all OSS extensions -->
             <Card>
-              <template #title><div class="text-base font-bold text-gray-700"><i class="pi pi-table text-violet-500 mr-2"></i>รายละเอียดทุกเบอร์ One Stop Service</div></template>
+              <template #title>
+                <div class="text-base font-bold text-gray-700">
+                  <i class="pi pi-table text-violet-500 mr-2"></i>รายละเอียดทุกเบอร์ One Stop
+                  Service
+                </div>
+              </template>
               <template #content>
                 <DataTable
-                  :value="ossExtStats"
+                  :value="[...ossExtStats].sort((a, b) => b.answerRate - a.answerRate)"
                   :rows="20"
                   paginator
                   stripedRows
-                  sortField="totalCalls"
+                  sortField="answerRate"
                   :sortOrder="-1"
                   responsiveLayout="scroll"
                   class="text-sm"
                 >
                   <Column field="extension" header="เบอร์" sortable style="width: 100px">
                     <template #body="{ data }">
-                      <span class="font-bold text-violet-600 tracking-wider">{{ data.extension }}</span>
+                      <span class="font-bold text-violet-600 tracking-wider">{{
+                        data.extension
+                      }}</span>
                     </template>
                   </Column>
                   <Column field="ownerName" header="ผู้รับผิดชอบ" sortable style="min-width: 160px">
@@ -1200,26 +1399,37 @@ const setupCharts = (
                   </Column>
                   <Column field="totalCalls" header="สายทั้งหมด" sortable style="width: 120px">
                     <template #body="{ data }">
-                      <span class="font-bold text-gray-800">{{ data.totalCalls.toLocaleString() }}</span>
+                      <span class="font-bold text-gray-800">{{
+                        data.totalCalls.toLocaleString()
+                      }}</span>
                     </template>
                   </Column>
                   <Column field="answered" header="รับสาย" sortable style="width: 100px">
                     <template #body="{ data }">
-                      <span class="text-green-600 font-semibold">{{ data.answered.toLocaleString() }}</span>
+                      <span class="text-green-600 font-semibold">{{
+                        data.answered.toLocaleString()
+                      }}</span>
                     </template>
                   </Column>
                   <Column field="missed" header="ไม่รับสาย(สายซ่อน)" sortable style="width: 120px">
                     <template #body="{ data }">
-                      <span class="text-red-500 font-semibold">{{ data.missed.toLocaleString() }}</span>
+                      <span class="text-red-500 font-semibold">{{
+                        data.missed.toLocaleString()
+                      }}</span>
                     </template>
                   </Column>
                   <Column field="answerRate" header="อัตรารับสาย" sortable style="width: 140px">
                     <template #body="{ data }">
                       <div v-if="data.totalCalls > 0" class="flex items-center gap-2">
                         <div class="flex-1 bg-gray-100 rounded-full h-1.5">
-                          <div class="bg-green-500 h-1.5 rounded-full" :style="{ width: data.answerRate.toFixed(0) + '%' }"></div>
+                          <div
+                            class="bg-green-500 h-1.5 rounded-full"
+                            :style="{ width: data.answerRate.toFixed(0) + '%' }"
+                          ></div>
                         </div>
-                        <span class="text-xs font-bold text-green-600 w-10 text-right">{{ data.answerRate.toFixed(1) }}%</span>
+                        <span class="text-xs font-bold text-green-600 w-10 text-right"
+                          >{{ data.answerRate.toFixed(1) }}%</span
+                        >
                       </div>
                       <span v-else class="text-gray-400 text-xs">ไม่มีข้อมูล</span>
                     </template>
