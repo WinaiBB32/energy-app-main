@@ -37,6 +37,12 @@ const router = createRouter({
       meta: { requiresAuth: true },
     },
     {
+      path: '/tv-display/:id',
+      name: 'tv-display',
+      component: () => import('../views/systems/tv-dashboard/TvDisplay.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
       path: '/system',
       component: () => import('../components/layout/AppLayout.vue'),
       meta: { requiresAuth: true },
@@ -164,7 +170,11 @@ const router = createRouter({
           component: () => import('../views/systems/ipphone/Upload.vue'),
           meta: { system: 'system6', requiresSuperAdmin: true },
         },
-        // Legacy redirect: old detail path → new directory system
+        // Legacy redirects: old ipphone paths → directory/maintenance systems
+        {
+          path: '/ipphone/manage',
+          redirect: '/directory/manage',
+        },
         {
           path: '/ipphone/directory/:id',
           redirect: (to) => `/directory/${to.params.id}`,
@@ -176,6 +186,12 @@ const router = createRouter({
           name: 'directory-list',
           component: () => import('../views/systems/directory/Directory.vue'),
           meta: { system: 'system12' },
+        },
+        {
+          path: '/directory/manage',
+          name: 'directory-manage',
+          component: () => import('../views/systems/directory/DirectoryManage.vue'),
+          meta: { system: 'system12', requiresAdmin: true },
         },
         {
           path: '/directory/:id',
@@ -335,6 +351,26 @@ const router = createRouter({
           name: 'vehicle-provinces',
           component: () => import('../views/systems/office/VehicleProvinceManagement.vue'),
           meta: { system: 'system11' },
+        },
+
+        // --- TV Dashboard ---
+        {
+          path: '/tv-dashboard',
+          name: 'tv-dashboard',
+          component: () => import('../views/systems/tv-dashboard/TvManage.vue'),
+          meta: { system: 'system13', requiresSuperAdmin: true },
+        },
+        {
+          path: '/tv-dashboard/new',
+          name: 'tv-dashboard-new',
+          component: () => import('../views/systems/tv-dashboard/TvEdit.vue'),
+          meta: { system: 'system13', requiresSuperAdmin: true },
+        },
+        {
+          path: '/tv-dashboard/:id/edit',
+          name: 'tv-dashboard-edit',
+          component: () => import('../views/systems/tv-dashboard/TvEdit.vue'),
+          meta: { system: 'system13', requiresSuperAdmin: true },
         },
 
         // --- จัดการหลังบ้าน (SuperAdmin) ---

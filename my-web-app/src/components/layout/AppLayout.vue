@@ -199,7 +199,7 @@ const sidebarMenus = computed(() => {
     const menus = [
       { name: 'ภาพรวมสถิติการโทร', icon: 'pi pi-chart-bar', path: '/ipphone/dashboard' },
     ]
-    if (isSystemAdmin('ipphone') || isSuperAdmin.value) {
+    if (isSuperAdmin.value) {
       menus.push({ name: 'นำเข้าสถิติ (CSV)', icon: 'pi pi-cloud-upload', path: '/ipphone/upload' })
       menus.push({ name: 'ผูกผู้ใช้ - เบอร์โทร', icon: 'pi pi-link', path: '/ipphone/mapping' })
     }
@@ -208,8 +208,11 @@ const sidebarMenus = computed(() => {
   if (route.path.startsWith('/directory')) {
     const menus = [
       { name: 'สมุดโทรศัพท์องค์กร', icon: 'pi pi-address-book', path: '/directory' },
-      { name: 'แชทกับผู้รับผิดชอบ', icon: 'pi pi-comments', path: '/support' },
     ]
+    if (isSystemAdmin('directory') || isSuperAdmin.value) {
+      menus.push({ name: 'จัดการรายชื่อโทรศัพท์', icon: 'pi pi-phone', path: '/directory/manage' })
+    }
+    menus.push({ name: 'แชทกับผู้รับผิดชอบ', icon: 'pi pi-comments', path: '/support' })
     return menus
   }
   if (route.path.startsWith('/maintenance')) {

@@ -193,11 +193,15 @@ namespace EnergyApp.API.Controllers
         /// <summary>
         /// อัปโหลดข้อมูล Solar (รองรับเฉพาะ .csv เท่านั้น และตรวจสอบความปลอดภัย)
         /// </summary>
+        public class CsvUploadRequest { public IFormFile File { get; set; } = null!; }
+
         [HttpPost("upload")]
         [RequestSizeLimit(2 * 1024 * 1024)] // จำกัดขนาดไฟล์ 2MB
-        public async Task<IActionResult> UploadCsv([FromForm] IFormFile file)
+        [Consumes("multipart/form-data")]
+        public async Task<IActionResult> UploadCsv([FromForm] CsvUploadRequest request)
         {
             // 1. ตรวจสอบ Content-Type และนามสกุลไฟล์
+            var file = request.File;
             if (file == null || file.Length == 0)
                 return BadRequest(new { message = "กรุณาเลือกไฟล์ .csv" });
             if (!file.FileName.EndsWith(".csv", StringComparison.OrdinalIgnoreCase))

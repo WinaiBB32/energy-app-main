@@ -52,7 +52,7 @@ namespace EnergyApp.API.Controllers
             [FromQuery] string? fromDate,
             [FromQuery] string? toDate)
         {
-            var query = _context.ElectricityRecords.AsQueryable();
+            var query = _context.ElectricityRecord.AsQueryable();
             if (buildingId.HasValue)
                 query = query.Where(r => r.BuildingId == buildingId);
             if (!string.IsNullOrEmpty(type))
@@ -96,7 +96,7 @@ namespace EnergyApp.API.Controllers
             [FromQuery] int skip = 0,
             [FromQuery] int take = 50)
         {
-            var query = _context.ElectricityRecords.AsQueryable();
+            var query = _context.ElectricityRecord.AsQueryable();
 
             if (buildingId.HasValue)
                 query = query.Where(r => r.BuildingId == buildingId);
@@ -133,7 +133,7 @@ namespace EnergyApp.API.Controllers
         [HttpGet("{id}")]
         public async Task<IActionResult> GetById(Guid id)
         {
-            var item = await _context.ElectricityRecords.FindAsync(id);
+            var item = await _context.ElectricityRecord.FindAsync(id);
             if (item == null) return NotFound();
             return Ok(item);
         }
@@ -165,7 +165,7 @@ namespace EnergyApp.API.Controllers
                 RecordedBy = req.RecordedBy,
                 DepartmentId = req.DepartmentId,
             };
-            _context.ElectricityRecords.Add(record);
+            _context.ElectricityRecord.Add(record);
             await _context.SaveChangesAsync();
             return Ok(new { message = "บันทึกข้อมูลไฟฟ้าสำเร็จ", id = record.Id });
         }
@@ -173,7 +173,7 @@ namespace EnergyApp.API.Controllers
         [HttpPut("{id}")]
         public async Task<IActionResult> Update(Guid id, [FromBody] ElectricityRecordDto req)
         {
-            var record = await _context.ElectricityRecords.FindAsync(id);
+            var record = await _context.ElectricityRecord.FindAsync(id);
             if (record == null) return NotFound();
 
             // ไม่อัปเดต Type เพื่อป้องกันการเปลี่ยนประเภทโดยไม่ตั้งใจ
@@ -205,9 +205,9 @@ namespace EnergyApp.API.Controllers
         [HttpDelete("{id}")]
         public async Task<IActionResult> Delete(Guid id)
         {
-            var record = await _context.ElectricityRecords.FindAsync(id);
+            var record = await _context.ElectricityRecord.FindAsync(id);
             if (record == null) return NotFound();
-            _context.ElectricityRecords.Remove(record);
+            _context.ElectricityRecord.Remove(record);
             await _context.SaveChangesAsync();
             return Ok(new { message = "ลบสำเร็จ" });
         }

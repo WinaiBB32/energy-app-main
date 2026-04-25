@@ -176,6 +176,7 @@ export interface OmitReceiptEntry {
   bookNo: string
   amount: number | null
   driverName: string
+  branch?: string
 }
 
 export interface ReceiptEntry extends OmitReceiptEntry {
@@ -221,26 +222,6 @@ export interface FetchedTelephoneRecord {
   totalAmount: number
   recordedBy: string
   createdAt: string
-}
-
-// ─── Saraban ──────────────────────────────────────────────────────────────────
-
-export interface SarabanRecord {
-  id?: string
-  docType: 'BOOK' | 'PERSON'
-  docNumber: string
-  subject: string
-  fromOrganization: string
-  toOrganization?: string
-  receivedDate: Date | null
-  dueDate?: Date | null
-  priority: string
-  status: string
-  assignedTo?: string
-  note?: string
-  recordedBy: string
-  departmentId: string
-  createdAt: string | null
 }
 
 // ─── IP Phone ─────────────────────────────────────────────────────────────────

@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5008/api/v1'
 const TIMEOUT_MS = 10000
 
@@ -73,11 +74,18 @@ async function request<T = any>(
     if (qs) fullUrl += `?${qs}`
   }
 
+  const isFormData = body instanceof FormData
   const options: RequestInit = {
     method,
-    headers: buildHeaders(url, config?.headers),
+    headers: isFormData
+      ? buildHeaders(url, config?.headers) // will not force Content-Type for FormData
+      : buildHeaders(url, config?.headers),
   }
-  if (body !== undefined) {
+  if (isFormData) {
+    // Let browser set Content-Type with boundary automatically
+    ;(options.headers as Headers).delete('Content-Type')
+    options.body = body
+  } else if (body !== undefined) {
     options.body = JSON.stringify(body)
   }
 

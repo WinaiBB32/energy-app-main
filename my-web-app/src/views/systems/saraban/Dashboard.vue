@@ -45,10 +45,12 @@ const isLoading = ref(true)
 // ─── Filters ──────────────────────────────────────────────────────────────────
 const getThisYearRange = (): Date[] => {
     const now = new Date()
-    return [new Date(now.getFullYear(), 0, 1), new Date(now.getFullYear(), 11, 31)]
+    const first = new Date(now.getFullYear(), now.getMonth() - 1, 1)
+    const last = new Date(now.getFullYear(), now.getMonth(), 0)
+    return [first, last]
 }
 const selectedDateRange = ref<Date[] | null>(getThisYearRange())
-const selectedBookNames = ref<string[]>([])
+const selectedBookNames = ref<string[]>(['สำนักงานคณะกรรมการอาหารและยา'])
 const selectedPersonNames = ref<string[]>([])
 
 const thaiMonthShort = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.']

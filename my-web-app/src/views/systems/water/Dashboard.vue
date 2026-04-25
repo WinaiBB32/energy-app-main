@@ -59,6 +59,8 @@ const dateRangeLabel = computed(() => {
 
 const trendChartData = ref()
 const trendChartOptions = ref()
+const unitTrendChartData = ref()
+const unitTrendChartOptions = ref()
 const breakdownChartData = ref()
 const breakdownChartOptions = ref()
 const buildingChartData = ref()
@@ -73,7 +75,7 @@ const getBuildingName = (id: string): string => buildings.value.find((x) => x.id
 const fetchBuildings = async () => {
     try {
         const { data } = await api.get('/Building');
-        buildings.value = data.items || [];
+        buildings.value = Array.isArray(data) ? data : (data.items || []);
     } catch (error) {
         toast.fromError(error, 'ไม่สามารถโหลดข้อมูลอาคารได้')
     }
@@ -174,6 +176,37 @@ const setupCharts = (
   const sortedKeys = Object.keys(monthlyData).sort()
   const labels = sortedKeys.map((key) => formatChartLabel(key))
 
+  const expenseData = sortedKeys.map((key) => monthlyData[key]?.expense ?? 0)
+  const unitData = sortedKeys.map((key) => monthlyData[key]?.unit ?? 0)
+  const maxExpense = Math.max(...expenseData, 1)
+  const maxUnit = Math.max(...unitData, 1)
+
+  unitTrendChartData.value = {
+    labels,
+    datasets: [
+      {
+        type: 'bar',
+        label: 'ปริมาณน้ำ (ลบ.ม.)',
+        backgroundColor: '#38bdf8',
+        borderRadius: 4,
+        data: unitData,
+      },
+    ],
+  }
+  unitTrendChartOptions.value = {
+    maintainAspectRatio: false,
+    plugins: { legend: { labels: { color: '#495057' } } },
+    scales: {
+      x: { grid: { display: false } },
+      y: {
+        display: true,
+        title: { display: true, text: 'ลบ.ม.' },
+        min: 0,
+        max: Math.ceil(maxUnit * 1.5),
+      },
+    },
+  }
+
   trendChartData.value = {
     labels,
     datasets: [
@@ -182,18 +215,7 @@ const setupCharts = (
         label: 'ยอดรวมสุทธิ (บาท)',
         backgroundColor: '#0ea5e9',
         borderRadius: 4,
-        yAxisID: 'y',
-        data: sortedKeys.map((key) => monthlyData[key]?.expense ?? 0),
-      },
-      {
-        type: 'line',
-        label: 'ปริมาณน้ำที่ใช้ (ลบ.ม.)',
-        borderColor: '#0284c7',
-        backgroundColor: '#0284c7',
-        borderWidth: 3,
-        tension: 0.4,
-        yAxisID: 'y1',
-        data: sortedKeys.map((key) => monthlyData[key]?.unit ?? 0),
+        data: expenseData,
       },
     ],
   }
@@ -208,13 +230,8 @@ const setupCharts = (
         display: true,
         position: 'left',
         title: { display: true, text: 'จำนวนเงิน (บาท)' },
-      },
-      y1: {
-        type: 'linear',
-        display: true,
-        position: 'right',
-        title: { display: true, text: 'ปริมาณ (ลบ.ม.)' },
-        grid: { drawOnChartArea: false },
+        min: 0,
+        max: Math.ceil(maxExpense * 1.5),
       },
     },
   }
@@ -335,7 +352,7 @@ const formatCurrency = (val: number): string =>
             <div
               class="w-10 h-10 bg-blue-50 rounded-full flex items-center justify-center text-blue-500"
             >
-              <i class="pi pi-tint"></i>
+              <i class="pi pi-wave-pulse"></i>
             </div>
           </div>
         </template>
@@ -363,8 +380,8 @@ const formatCurrency = (val: number): string =>
       </Card>
     </div>
 
-    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
-      <Card class="shadow-sm border-none lg:col-span-2">
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+      <Card class="shadow-sm border-none">
         <template #title
           ><div class="text-lg font-bold text-gray-700">
             แนวโน้มการใช้น้ำประปารายเดือน
@@ -388,6 +405,24 @@ const formatCurrency = (val: number): string =>
               :options="trendChartOptions"
               class="h-full w-full"
             />
+          </div>
+        </template>
+      </Card>
+
+      <Card class="shadow-sm border-none">
+        <template #title
+          ><div class="text-lg font-bold text-gray-700">แนวโน้มปริมาณน้ำรายเดือน (ลบ.ม.)</div></template
+        >
+        <template #content>
+          <div v-if="isLoading" class="h-80 flex items-center justify-center">
+            <i class="pi pi-spin pi-spinner text-4xl text-sky-500"></i>
+          </div>
+          <div v-else-if="!unitTrendChartData?.labels?.length" class="h-80 flex flex-col items-center justify-center text-gray-400">
+            <i class="pi pi-box text-3xl mb-2"></i>
+            <p>ไม่มีข้อมูล</p>
+          </div>
+          <div v-else class="h-80 relative">
+            <Chart type="bar" :data="unitTrendChartData" :options="unitTrendChartOptions" class="h-full w-full" />
           </div>
         </template>
       </Card>

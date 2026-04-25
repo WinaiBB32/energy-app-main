@@ -12,6 +12,7 @@ const toast = useAppToast()
 import Card from 'primevue/card'
 import InputNumber from 'primevue/inputnumber'
 import InputText from 'primevue/inputtext'
+import AutoComplete from 'primevue/autocomplete'
 import DatePicker from 'primevue/datepicker'
 import Select from 'primevue/select'
 import Button from 'primevue/button'
@@ -64,6 +65,7 @@ const take = 20
 // --- History Filters ---
 const filterDeptId = ref('')
 const filterBookType = ref('')
+const filterBookName = ref('')
 const filterYear = ref<number | null>(null)
 
 // ─── Form (Add new) ───────────────────────────────────────────────────────────
@@ -84,6 +86,27 @@ const formData = ref({
 const isSubmitting = ref(false)
 const successMessage = ref('')
 const errorMessage = ref('')
+
+// ─── BookName AutoComplete ────────────────────────────────────────────────────
+const allBookNames = ref<string[]>([])
+const bookNameSuggestions = ref<string[]>([])
+
+const fetchBookNames = async () => {
+  try {
+    const deptId = (!isSuperAdmin.value && currentUserDepartment.value) ? currentUserDepartment.value : undefined
+    const { data } = await api.get('/SarabanStat/booknames', { params: deptId ? { departmentId: deptId } : {} })
+    allBookNames.value = data
+  } catch (e) {
+    console.warn('fetchBookNames failed:', e)
+  }
+}
+
+const searchBookName = (event: { query: string }) => {
+  const q = event.query.toLowerCase()
+  bookNameSuggestions.value = q
+    ? allBookNames.value.filter(n => n.toLowerCase().includes(q))
+    : [...allBookNames.value]
+}
 
 const bookTypeOptions = [
   { label: 'ทะเบียนหนังสือรับ', value: 'received' },
@@ -260,6 +283,7 @@ const fetchHistory = async (loadMore = false): Promise<void> => {
 
     if (saveDeptId) params.departmentId = saveDeptId
     if (filterBookType.value) params.bookType = filterBookType.value
+    if (filterBookName.value.trim()) params.bookName = filterBookName.value.trim()
     if (filterYear.value) params.year = filterYear.value
 
     const response = await api.get('/SarabanStat', { params })
@@ -287,10 +311,11 @@ const handleFilterChange = () => {
   fetchHistory(false)
 }
 
-watch([filterDeptId, filterBookType, filterYear], handleFilterChange)
+watch([filterDeptId, filterBookType, filterBookName, filterYear], handleFilterChange)
 
 onMounted(async () => {
   handleFilterChange()
+  fetchBookNames()
   try {
     const deptRes = await api.get('/Department')
     departments.value = deptRes.data
@@ -648,7 +673,9 @@ const clearCsv = () => {
                         <i class="pi pi-book mr-1 text-purple-500"></i>ชื่อเล่มทะเบียน
                         <span class="text-red-500">*</span>
                       </label>
-                      <InputText v-model="formData.bookName" placeholder="เช่น ทะเบียนหนังสือรับ 2568" class="w-full" />
+                      <AutoComplete v-model="formData.bookName" :suggestions="bookNameSuggestions"
+                        @complete="searchBookName" placeholder="เช่น ทะเบียนหนังสือรับ 2568"
+                        class="w-full" inputClass="w-full" dropdown />
                     </div>
                     <div class="flex flex-col gap-2 lg:col-span-4">
                       <label class="font-semibold text-sm text-gray-700">
@@ -752,6 +779,10 @@ const clearCsv = () => {
                   <label class="text-xs font-semibold text-gray-500">ประเภทเล่มทะเบียน</label>
                   <Select v-model="filterBookType" :options="[{label:'ทุกประเภท',value:''},...bookTypeOptions]"
                     optionLabel="label" optionValue="value" class="w-full" />
+                </div>
+                <div class="flex flex-col gap-1 min-w-[180px]">
+                  <label class="text-xs font-semibold text-gray-500">ชื่อเล่มทะเบียน</label>
+                  <InputText v-model="filterBookName" placeholder="ค้นหาชื่อเล่ม..." class="w-full" />
                 </div>
                 <div class="flex flex-col gap-1 min-w-[130px]">
                   <label class="text-xs font-semibold text-gray-500">ปี</label>
@@ -894,7 +925,9 @@ const clearCsv = () => {
                         <i class="pi pi-book mr-1 text-purple-500"></i>ชื่อเล่มทะเบียน
                         <span class="text-red-500">*</span>
                       </label>
-                      <InputText v-model="reportMeta.bookName" placeholder="เช่น ทะเบียนหนังสือรับ 2568" class="w-full" />
+                      <AutoComplete v-model="reportMeta.bookName" :suggestions="bookNameSuggestions"
+                        @complete="searchBookName" placeholder="เช่น ทะเบียนหนังสือรับ 2568"
+                        class="w-full" inputClass="w-full" dropdown />
                     </div>
                   </div>
                   <Message v-if="reportMetaError" severity="error" class="mt-2">{{ reportMetaError }}</Message>
@@ -1086,7 +1119,8 @@ const clearCsv = () => {
           </div>
           <div class="flex flex-col gap-2 col-span-2">
             <label class="text-sm font-semibold text-gray-700">ชื่อเล่มทะเบียน <span class="text-red-500">*</span></label>
-            <InputText v-model="editForm.bookName" class="w-full" />
+            <AutoComplete v-model="editForm.bookName" :suggestions="bookNameSuggestions"
+              @complete="searchBookName" class="w-full" inputClass="w-full" dropdown />
           </div>
           <div class="flex flex-col gap-2 col-span-2">
             <label class="text-sm font-semibold text-gray-700">รายชื่อผู้รับ</label>

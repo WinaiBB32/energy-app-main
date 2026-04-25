@@ -45,13 +45,13 @@ namespace EnergyApp.API.Controllers
             if (!string.IsNullOrEmpty(fromDate) && DateTime.TryParse(fromDate, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var fd))
             {
                 var fdu = fd.ToUniversalTime();
-                query = query.Where(r => r.CreatedAt >= fdu);
+                query = query.Where(r => r.BillingCycle != null && r.BillingCycle >= fdu);
             }
 
             if (!string.IsNullOrEmpty(toDate) && DateTime.TryParse(toDate, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var td))
             {
                 var tdu = td.ToUniversalTime();
-                query = query.Where(r => r.CreatedAt <= tdu);
+                query = query.Where(r => r.BillingCycle != null && r.BillingCycle <= tdu);
             }
 
             var total = await query.CountAsync();
