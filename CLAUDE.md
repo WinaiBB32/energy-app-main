@@ -5,7 +5,7 @@
 - Backend: ASP.NET Core 8 REST API + SignalR
 - Frontend: Vue 3 SPA
 - Database: PostgreSQL
-- Deploy: Windows Server, Nginx reverse proxy
+- Deploy: Windows Server, XAMPP (Apache สำหรับ Frontend) + Nginx (proxy API)
 
 ---
 
@@ -54,6 +54,8 @@ energy-app-main/
 │   └── src/
 │       ├── views/          ← แยกตามระบบงาน (systems/, admin/, auth/)
 │       ├── stores/auth.ts  ← Pinia auth store
+│       ├── stores/vehicleStore.ts ← Pinia vehicle store
+│       ├── stores/vehicleMasterStore.ts ← Pinia vehicle master data store
 │       ├── services/api.ts ← Axios instance (baseURL จาก VITE_API_URL)
 │       ├── services/realtime.ts ← SignalR client
 │       ├── composables/    ← useAuth, usePermissions, useAppToast
@@ -104,6 +106,7 @@ energy-app-main/
 | `SparePartTransaction` | SparePartTransactions |
 | `SparePartIssueRequest` | SparePartIssueRequests |
 | `SparePartIssueRequestItem` | SparePartIssueRequestItems |
+| `RepairRequestStatus` | (enum/constant) |
 
 ### Office (ระบบสำนักงาน)
 | Model | Table |
@@ -112,7 +115,11 @@ energy-app-main/
 | `MeetingRecord` | MeetingRecords |
 | `PostalRecord` | PostalRecords |
 | `SarabanRecord` | SarabanRecords |
+| `SarabanStat` | SarabanStats |
 | `VehicleRecord` | VehicleRecords |
+| `VehicleDepartment` | VehicleDepartments |
+| `VehicleProvince` | VehicleProvinces |
+| `CarRecord` | CarRecords |
 
 ---
 
@@ -147,6 +154,8 @@ UserStatus: pending → approved/rejected → active
 | `postal/` | ไปรษณีย์/พัสดุ |
 | `saraban/` | สารบรรณ |
 | `building-maintenance/` | ซ่อมบำรุงอาคาร |
+| `directory/` | สมุดโทรศัพท์/ทำเนียบ |
+| `office/` | งานสำนักงานทั่วไป |
 
 ---
 
@@ -171,13 +180,12 @@ deploy.bat
   → dotnet publish (output: publish/api/)
 
 Server layout:
-  frontend → C:\energy-app\frontend\   (served by Nginx)
-  api      → C:\energy-app\api\        (Windows Service)
+  frontend → C:\xampp\htdocs\energy-app\  (served by Apache/XAMPP port 8080)
+  api      → C:\energy-app\api\           (Windows Service)
 
-Nginx: port 8080
-  /energy-app/  → serve static files
-  /api/         → proxy to localhost:5008
-  /hubs/        → proxy WebSocket to localhost:5008
+Nginx: proxy only
+  /api/   → proxy to localhost:5008
+  /hubs/  → proxy WebSocket to localhost:5008
 
 Restart API: sc stop EnergyAppAPI && sc start EnergyAppAPI
 ```

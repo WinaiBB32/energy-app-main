@@ -11,12 +11,26 @@
 ## โครงสร้างโปรเจกต์
 
 ```
-EnergyAppWorkspace/
-├── EnergyApp.API/        # Backend (.NET 8 API)
-├── my-web-app/           # Frontend (Vue 3)
-├── deploy.bat            # Script build + package สำหรับ Deploy
-├── install-service.bat   # Script ติดตั้ง Windows Service บน Server
-├── nginx.conf            # Config nginx สำหรับ Server
+energy-app-main/
+├── EnergyApp.API/          # Backend (.NET 8 API)
+│   ├── Controllers/        # แยกตามระบบงาน (Admin, Auth, Core, Energy, Communication, Maintenance, Office)
+│   ├── Models/             # แยกตามระบบงาน
+│   ├── DTOs/               # Data Transfer Objects
+│   ├── Data/               # AppDbContext.cs
+│   ├── Hubs/               # SignalR (MaintenanceHub.cs)
+│   ├── Services/           # SystemErrorLogStore
+│   ├── Migrations/         # EF Core migrations
+│   └── Program.cs
+├── my-web-app/             # Frontend (Vue 3 + TypeScript)
+│   └── src/
+│       ├── views/          # แยกตามระบบงาน (systems/, admin/, auth/)
+│       ├── stores/         # Pinia stores (auth, vehicle, vehicleMaster)
+│       ├── services/       # api.ts (Axios), realtime.ts (SignalR)
+│       ├── composables/    # useAuth, usePermissions, useAppToast
+│       └── router/
+├── deploy.bat              # Script build + package สำหรับ Deploy
+├── nginx.conf              # Config Nginx สำหรับ Server
+├── EnergyAppWorkspace.sln  # Visual Studio solution
 └── README.md
 ```
 
@@ -43,7 +57,7 @@ EnergyAppWorkspace/
 ### Server (Windows Server)
 1. .NET 8 Runtime (ไม่ต้อง SDK)
 2. PostgreSQL 15+
-3. XAMPP (สำหรับ Apache เสิร์ฟ Frontend) หรือ nginx
+3. XAMPP (Apache เสิร์ฟ Frontend) + Nginx (proxy API)
 
 ---
 
@@ -103,16 +117,15 @@ cd EnergyAppWorkspace
 deploy.bat
 ```
 
-สคริปต์จะ build frontend + publish API แล้วรวมไฟล์ไว้ที่ `C:\deploy-output\`
+สคริปต์จะ build frontend + publish API แล้วรวมไฟล์ไว้ที่ `publish/`
 
 ### ขั้นตอนที่ 2 — Copy ไฟล์ไปที่ Server
 
 | จาก (Dev) | ไปที่ (Server) |
 |---|---|
-| `C:\deploy-output\frontend\` | `C:\energy-app\frontend\` |
-| `C:\deploy-output\api\` | `C:\energy-app\api\` |
-| `C:\deploy-output\nginx.conf` | `C:\nginx\conf\nginx.conf` |
-| `install-service.bat` | ที่ไหนก็ได้บน Server |
+| `my-web-app/dist/` | `C:\energy-app\frontend\` |
+| `publish/api/` | `C:\energy-app\api\` |
+| `nginx.conf` | `C:\nginx\conf\nginx.conf` |
 
 ### ขั้นตอนที่ 3 — ตั้งค่า appsettings.Production.json บน Server
 
@@ -129,23 +142,21 @@ deploy.bat
 }
 ```
 
-### ขั้นตอนที่ 4 — รัน API บน Server
+### ขั้นตอนที่ 4 — ติดตั้ง API เป็น Windows Service (Admin)
 
-```bat
-cd C:\energy-app\api
-set ASPNETCORE_ENVIRONMENT=Production
-dotnet EnergyApp.API.dll
-```
-
-ติดตั้งเป็น Windows Service (รันตลอด ไม่ต้องเปิด cmd ค้าง) — รันด้วย Admin:
 ```bat
 sc create EnergyAppAPI binPath= "C:\energy-app\api\EnergyApp.API.exe --environment Production" start= auto DisplayName= "EnergyApp API"
 sc start EnergyAppAPI
 ```
 
+หยุด/เริ่มใหม่:
+```bat
+sc stop EnergyAppAPI && sc start EnergyAppAPI
+```
+
 ### ขั้นตอนที่ 5 — ติดตั้ง Frontend บน XAMPP
 
-1. Copy ไฟล์จาก `C:\deploy-output\frontend\` ไปที่ `C:\xampp\htdocs\energy-app\`
+1. Copy ไฟล์จาก `my-web-app/dist/` ไปที่ `C:\xampp\htdocs\energy-app\`
 2. สร้างไฟล์ `C:\xampp\htdocs\energy-app\.htaccess`:
 
 ```apache
